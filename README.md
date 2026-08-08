@@ -1,5 +1,5 @@
-# Placeholder Project
-Welcome to the Placeholder repository! This document outlines our project architecture, Git workflow, database setup, local run instructions, and deployment processes.
+# TutorFlow Project
+Welcome to the TutorFlow repository! This document outlines our project architecture, Git workflow, database setup, local run instructions, and deployment processes.
 
 ## Team Members
 * **Mogomotsi Motoma (2898909)**

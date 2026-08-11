@@ -5,7 +5,7 @@ Welcome to the TutorFlow repository! This document outlines our project architec
 * **Mogomotsi Motoma (2898909)**
 * **Nduvho Mulaudzi (2801257)** 
 * **Kgaogelo Mohlala (2836959)**
-* **Ndumiso Skhosana (2871036)** 
+* **Ndumiso Skhosana (2871037)** 
 * **Nhlamulo Mabuza (2819916)**
 * **Tlhalefo Sebaeng (2436512)**
 

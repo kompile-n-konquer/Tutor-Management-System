@@ -3,62 +3,22 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlserver"
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  STUDENT
-  TUTOR
-  LECTURER
-  TA
-  ADMIN
-}
-
-enum ApplicationStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum TutorStatus {
-  AVAILABLE
-  ASSIGNED
-  INACTIVE
-}
-
-enum AssignmentStatus {
-  PENDING
-  ACTIVE
-  COMPLETED
-}
-
-enum TimesheetStatus {
-  DRAFT
-  SUBMITTED
-  APPROVED
-  REJECTED
-}
-
-enum OverflowStatus {
-  OPEN
-  CLAIMED
-  CLOSED
-}
-
-enum TaskType {
-  TUTORING
-  MARKING
-  INVIGILATION
-  ADMIN
-}
-
-enum SessionStatus {
-  SCHEDULED
-  COMPLETED
-  CANCELLED
-  EXCUSED
-}
+// NOTE: SQL Server does not support native enum types via Prisma.
+// The following were converted from `enum` to `String`. Allowed values
+// must be validated at the application layer:
+//
+// UserRole:           STUDENT | TUTOR | LECTURER | TA | ADMIN
+// ApplicationStatus:  PENDING | APPROVED | REJECTED
+// TutorStatus:        AVAILABLE | ASSIGNED | INACTIVE
+// AssignmentStatus:   PENDING | ACTIVE | COMPLETED
+// TimesheetStatus:    DRAFT | SUBMITTED | APPROVED | REJECTED
+// OverflowStatus:     OPEN | CLAIMED | CLOSED
+// TaskType:           TUTORING | MARKING | INVIGILATION | ADMIN
+// SessionStatus:      SCHEDULED | COMPLETED | CANCELLED | EXCUSED
 
 model User {
   id             Int      @id @default(autoincrement())
@@ -71,7 +31,7 @@ model User {
   password       String
   phoneNumber    String?
 
-  role           UserRole
+  role           String
   isActive       Boolean  @default(true)
 
   createdAt      DateTime @default(now())
@@ -91,7 +51,7 @@ model Tutor {
   availableHours   Int
   currentHours     Int      @default(0)
 
-  status           TutorStatus
+  status           String
   approvedAt       DateTime?
 
   user             User @relation(fields: [userId], references: [id])
@@ -127,13 +87,13 @@ model Applicant {
 
   availability      String?
 
-  status            ApplicationStatus @default(PENDING)
+  status            String @default("PENDING")
 
   appliedAt         DateTime @default(now())
   reviewedAt        DateTime?
 
   user              User @relation(fields: [userId], references: [id])
-  course            Course @relation(fields: [courseId], references: [id])
+  course            Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Course {
@@ -164,10 +124,10 @@ model TutorAssignment {
 
   semester         String
 
-  status           AssignmentStatus
+  status           String
 
   tutor            Tutor @relation(fields: [tutorId], references: [id])
-  course           Course @relation(fields: [courseId], references: [id])
+  course           Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   sessions         Session[]
 }
 
@@ -192,7 +152,7 @@ model Timesheet {
   totalHours    Float
   totalAmount   Float?
 
-  status        TimesheetStatus @default(DRAFT)
+  status        String @default("DRAFT")
 
   submittedAt   DateTime?
   approvedAt    DateTime?
@@ -212,14 +172,14 @@ model TimesheetEntry {
   endTime     DateTime
   duration    Float
 
-  taskType    TaskType
+  taskType    String
   description String
 
   supervisor  String
   isApproved  Boolean @default(false)
 
   timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
-  course      Course    @relation(fields: [courseId], references: [id])
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Session {
@@ -228,7 +188,7 @@ model Session {
   date           DateTime
   startTime      DateTime
   endTime        DateTime
-  status         SessionStatus @default(SCHEDULED)
+  status         String @default("SCHEDULED")
   excuseReason   String?
 
   assignment     TutorAssignment @relation(fields: [assignmentId], references: [id])
@@ -260,9 +220,9 @@ model OverflowWork {
 
   claimedBy     Int?
 
-  status        OverflowStatus
+  status        String
 
-  course        Course @relation(fields: [courseId], references: [id])
+  course        Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  tutor         Tutor? @relation(fields: [claimedBy], references: [id])
+  tutor         Tutor? @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }

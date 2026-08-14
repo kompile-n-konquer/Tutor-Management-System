@@ -12,8 +12,56 @@ Welcome to the TutorFlow repository! This document outlines our project architec
 
 ## Project Structure
 
-
-
+```text
+Tutor-Management-System/
+├── README.md
+├── .gitignore
+├── .gitea/
+│   └── workflows/
+│       ├── deploy-docs.yml
+│       └── test.yml
+├── backend/
+│   └── .gitkeep
+├── docs/
+│   ├── docs/
+│   │   └── intro.mdx
+│   ├── src/
+│   │   ├── components/
+│   │   │   └── HomepageFeatures/
+│   │   │       ├── index.js
+│   │   │       └── styles.module.css
+│   │   ├── css/
+│   │   │   └── custom.css
+│   │   └── pages/
+│   │       ├── index.js
+│   │       ├── index.module.css
+│   │       └── markdown-page.mdx
+│   ├── static/
+│   │   └── img/
+│   ├── docusaurus.config.js
+│   ├── package.json
+│   ├── README.md
+│   └── sidebars.js
+└── frontend/
+    ├── .gitignore
+    ├── eslint.config.js
+    ├── index.html
+    ├── package.json
+    ├── README.md
+    ├── tsconfig.app.json
+    ├── tsconfig.json
+    ├── tsconfig.node.json
+    ├── vite.config.ts
+    ├── __tests__/
+    │   └── placeholder.test.js
+    ├── public/
+    └── src/
+        ├── App.css
+        ├── App.tsx
+        ├── assets/
+        ├── index.css
+        └── main.tsx
+```
 
 ---
 
@@ -83,10 +131,23 @@ Follow these step-by-step procedures to boot the server instance
 ### 2. Launching
 
 # CI/CD Pipeline
+
+## Runners
+Our CI/CD pipelines run on **Gitea Actions**, which — unlike GitHub Actions — does not provide free
+hosted runners. Jobs only execute while a registered runner is online.
+
+* **Current runner:** hosted on Nduvho's machine. If it's offline (laptop asleep/closed), any pending
+  PR checks or docs deploys will show as **"Waiting to run"** until it reconnects.
+* **Starting the runner:** run `./act_runner daemon` from wherever `act_runner` is installed, and leave
+  the process running.
+* **Adding another runner:** anyone can register a second runner from Repo Settings → Actions →
+  Runners → Create new Runner, to reduce this single point of failure. Not required for the pipeline
+  to work, but recommended if "Waiting to run" stalls become frequent.
+
 ## Application Deployment
 The repository is configured for automated deployment to MS Azure.
-* **Trigger:** The CI/CD pipeline is triggered automatically via GitHub Actions whenever a Pull Request is successfully merged into the `main` branch.
-* **Testing:** The pipeline will first execute our comprehensive Jest automated verification scripts. If any validation step returns a fault, **the deployment sequence will be blocked automatically**.
+* **Trigger:** The CI/CD pipeline is triggered automatically via Gitea Actions whenever a Pull Request is successfully merged into the `main` branch.
+* **Testing:** The pipeline will first execute our Vitest automated verification scripts. If any validation step returns a fault, **the deployment sequence will be blocked automatically**.
 * **Deployment:** If the verification scripts complete without issue, the structural additions are safely compiled, packed, and released into our live Azure App Service environment.
 
 ## Updating the Documentation

@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  TUTOR
+  LECTURER
+  TA
+  ADMIN
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TutorStatus {
+  AVAILABLE
+  ASSIGNED
+  INACTIVE
+}
+
+enum AssignmentStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum OverflowStatus {
+  OPEN
+  CLAIMED
+  CLOSED
+}
+
+enum TaskType {
+  TUTORING
+  MARKING
+  INVIGILATION
+  ADMIN
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  EXCUSED
+}
+
+model User {
+  id             Int      @id @default(autoincrement())
+  studentNumber  String?  @unique
+  employeeNumber String?  @unique
+
+  firstName      String
+  lastName       String
+  email          String   @unique
+  password       String
+  phoneNumber    String?
+
+  role           UserRole
+  isActive       Boolean  @default(true)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tutor          Tutor?
+  lecturer       Lecturer?
+  applications   Applicant[]
+}
+
+model Tutor {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @unique
+
+  hourlyRate       Float?
+  maxHoursPerWeek  Int
+  availableHours   Int
+  currentHours     Int      @default(0)
+
+  status           TutorStatus
+  approvedAt       DateTime?
+
+  user             User @relation(fields: [userId], references: [id])
+
+  availability     Availability[]
+  assignments      TutorAssignment[]
+  timesheets       Timesheet[]
+  overflowClaims   OverflowWork[]
+}
+
+model Lecturer {
+  id             Int @id @default(autoincrement())
+  userId         Int @unique
+
+  department     String
+  officeLocation String?
+  officeHours    String?
+
+  user           User @relation(fields: [userId], references: [id])
+
+  courses        Course[]
+}
+
+model Applicant {
+  id                Int @id @default(autoincrement())
+
+  userId            Int
+  courseId          Int
+
+  courseMark        Float
+
+  transcriptPath    String?
+
+  availability      String?
+
+  status            ApplicationStatus @default(PENDING)
+
+  appliedAt         DateTime @default(now())
+  reviewedAt        DateTime?
+
+  user              User @relation(fields: [userId], references: [id])
+  course            Course @relation(fields: [courseId], references: [id])
+}
+
+model Course {
+  id          Int    @id @default(autoincrement())
+  courseCode  String @unique
+  courseName  String
+  minimumMark Float
+
+  lecturerId  Int
+
+  lecturer    Lecturer @relation(fields: [lecturerId], references: [id])
+  applications Applicant[]
+  assignments TutorAssignment[]
+  overflowWork OverflowWork[]
+
+  timesheetEntries TimesheetEntry[]
+
+  slots       CourseSlot[]
+}
+
+model TutorAssignment {
+  id               Int @id @default(autoincrement())
+
+  tutorId          Int
+  courseId         Int
+
+  allocatedHours   Int
+
+  semester         String
+
+  status           AssignmentStatus
+
+  tutor            Tutor @relation(fields: [tutorId], references: [id])
+  course           Course @relation(fields: [courseId], references: [id])
+  sessions         Session[]
+}
+
+model Availability {
+  id          Int @id @default(autoincrement())
+
+  tutorId     Int
+
+  dayOfWeek   String
+
+  startTime   DateTime
+  endTime     DateTime
+
+  tutor       Tutor @relation(fields: [tutorId], references: [id])
+}
+
+model Timesheet {
+  id            Int      @id @default(autoincrement())
+  tutorId       Int
+
+  payrollNumber String?
+  totalHours    Float
+  totalAmount   Float?
+
+  status        TimesheetStatus @default(DRAFT)
+
+  submittedAt   DateTime?
+  approvedAt    DateTime?
+
+  tutor         Tutor @relation(fields: [tutorId], references: [id])
+  entries       TimesheetEntry[]
+}
+
+model TimesheetEntry {
+  id          Int @id @default(autoincrement())
+
+  timesheetId Int
+  courseId    Int
+
+  workDate    DateTime
+  startTime   DateTime
+  endTime     DateTime
+  duration    Float
+
+  taskType    TaskType
+  description String
+
+  supervisor  String
+  isApproved  Boolean @default(false)
+
+  timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
+  course      Course    @relation(fields: [courseId], references: [id])
+}
+
+model Session {
+  id             Int      @id @default(autoincrement())
+  assignmentId   Int
+  date           DateTime
+  startTime      DateTime
+  endTime        DateTime
+  status         SessionStatus @default(SCHEDULED)
+  excuseReason   String?
+
+  assignment     TutorAssignment @relation(fields: [assignmentId], references: [id])
+}
+
+model CourseSlot {
+  id          Int    @id @default(autoincrement())
+  courseId    Int
+
+  dayOfWeek   Int      
+  startMinute Int      
+  endMinute   Int
+
+  course      Course @relation(fields: [courseId], references: [id])
+
+  @@index([courseId, dayOfWeek])
+}
+
+model OverflowWork {
+  id            Int @id @default(autoincrement())
+
+  courseId      Int
+
+  description   String
+
+  hours         Int
+
+  postedBy      Int
+
+  claimedBy     Int?
+
+  status        OverflowStatus
+
+  course        Course @relation(fields: [courseId], references: [id])
+
+  tutor         Tutor? @relation(fields: [claimedBy], references: [id])
+}

@@ -1,3 +1,4 @@
+import { describe, test, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ToggleButton from './ToggleButton';
 
@@ -38,7 +39,7 @@ describe('ToggleButton', () => {
   });
 
   test('calls onToggle callback with the new state', () => {
-    const handleToggle = jest.fn();
+    const handleToggle = vi.fn();
     render(<ToggleButton onToggle={handleToggle} />);
 
     fireEvent.click(screen.getByRole('button'));

@@ -27,7 +27,7 @@ const Login = () => {
 
     const handleLoginWithGoogle = async (event) => {
         event.preventDefault();
-        const response = await signInWithPopup(auth, provider);
+        const response = await execute(() => signInWithPopup(auth, provider));
         if (response) navigate('/home');
     };
 

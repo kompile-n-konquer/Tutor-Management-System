@@ -3,3 +3,51 @@ sidebar_position: 2
 title: Architecture
 description: How the frontend, backend, and database fit together
 ---
+
+## Authentication
+
+This section explains why Firebase was chosen as the authentication service since as per the project requirements
+we are not supposed to write our own
+
+### What is it?
+
+Firebase is a platform developed by Google that offers a collection of services and tools for building, running,
+and scaling applications. Its services include authentication, databases, cloud storage, hosting, analytics, and
+application monitoring. Firebase provides SDKs for platforms including Web, Android, iOS, Flutter, Unity, and C++.
+
+For this application, Firebase Authentication is used specifically to manage user authentication and account-related
+functionality, while the application's own backend and database remain responsible for application-specific user data and business logic
+
+**Read the official reference:** [Firebase Documentation — Overview](https://firebase.google.com/docs)
+
+### Why Firebase Authentication Was Chosen
+
+#### 1. Generous Free Tier
+
+Firebase Authentication is attractive for an application with limited initial usage because most Authentication functionality is
+available at no-cost. The products can be used in production applications and do not require a payment method. This provides a
+cost-effective way to implement production authentication without having to pay for authentication infrastructure from the outset.
+
+#### 2. Support for Multiple Authentication Providers
+
+Firebase provides built-in support for numerous authentication methods (such as google, apple, etc...) This allows the application
+to support multiple authentication methods without implementing each authentication protocol independently.
+
+#### 3. Ability to Link Multiple Providers to the Same Account
+
+Firebase allows multiple authentication providers to be linked to a single Firebase user. This gives users flexibility in how
+they access their account while maintaining a single application identity.
+
+#### 4. Reduced Development and Maintenance Effort
+
+Firebase Authentication provides SDKs that are easy to work with which allows us to integrate authentication without implementing
+the underlying infrastructure there by reducing development and maintenance efforts.
+
+#### 5. Large Ecosystem and Community
+
+The extensive official documentation and a large developer ecosystem makes it easier to find solutions to common implementation problems.
+
+#### 6. Easy Integration with a Custom Backend
+
+Firebase provides authentication tokens that can be verified by backend services, allowing the backend to establish the identity of the
+authenticated user. This means we can retain our existing backend architecture while delegating authentication to Firebase

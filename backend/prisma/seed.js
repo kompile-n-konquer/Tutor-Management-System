@@ -4,28 +4,15 @@ const prisma = new PrismaClient();
 
 async function main() {
   const user1 = await prisma.user.upsert({
-    where: { email: "kaygee@wits.ac.za" },
+    where: { email: "master@wits.ac.za" },
     update: {},
     create: {
-      firstName: "Kaygee",
-      lastName: "Mogomotsi",
-      email: "kaygee@wits.ac.za",
+      firstName: "Tlhalefo",
+      lastName: "The_master",
+      email: "master@wits.ac.za",
       password: "placeholder123",
       role: "STUDENT",
       studentNumber: "2500000",
-    },
-  });
-
-  const user2 = await prisma.user.upsert({
-    where: { email: "testtutor@wits.ac.za" },
-    update: {},
-    create: {
-      firstName: "Test",
-      lastName: "Tutor",
-      email: "testtutor@wits.ac.za",
-      password: "placeholder123",
-      role: "TUTOR",
-      employeeNumber: "EMP001",
     },
   });
 

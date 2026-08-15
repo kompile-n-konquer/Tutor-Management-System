@@ -9,8 +9,9 @@ import ErrorMessage from '../../../components/error-message/ErrorMessage.jsx';
 import Button from '../../../components/button/Button.jsx';
 import AuthQuestion from '../auth-question/AuthQuestion.jsx';
 import AuthForm from '../auth-form/AuthForm.jsx';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth } from '../../../firebase/firebase.js';
+import provider from '../../../firebase/googleProvider.js';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -21,6 +22,12 @@ const Login = () => {
         event.preventDefault();
         setError('');
         const response = await execute(() => signInWithEmailAndPassword(auth, data.email, data.password));
+        if (response) navigate('/home');
+    };
+
+    const handleLoginWithGoogle = async (event) => {
+        event.preventDefault();
+        const response = await signInWithPopup(auth, provider);
         if (response) navigate('/home');
     };
 
@@ -75,6 +82,7 @@ const Login = () => {
             <AuthQuestion onClick={() => navigate('/signup')} linkText="Signup">
                 Don't have an account?
             </AuthQuestion>
+            <Button onClick={handleLoginWithGoogle}>Login with google</Button>
         </>
     );
 };

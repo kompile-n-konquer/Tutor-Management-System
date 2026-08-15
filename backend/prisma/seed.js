@@ -3,20 +3,20 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 async function main() {
-  const user1 = await prisma.user.upsert({
-    where: { email: "master@wits.ac.za" },
+  const user = await prisma.user.upsert({
+    where: { email: "kg.newuser@wits.ac.za" },
     update: {},
     create: {
-      firstName: "Tlhalefo",
-      lastName: "The_master",
-      email: "master@wits.ac.za",
-      password: "placeholder123",
-      role: "STUDENT",
-      studentNumber: "2500000",
+      firstName: "Kgaogelo",
+      lastName: "Testuser",
+      email: "kg.newuser@wits.ac.za",
+      role: "LECTURER",
+      employeeNumber: "KG-EMP003",
+      studentNumber: "N/A-KG003",
     },
   });
 
-  console.log("Seeded users:", user1, user2);
+  console.log("Seeded user:", user);
 }
 
 main()

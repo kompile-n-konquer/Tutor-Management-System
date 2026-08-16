@@ -1,30 +1,81 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import useAsync from "../hooks/useAsync.js";
+import isValidEmail from "../utils/validEmail.js";
+import ErrorMessage from "../components/error-message/ErrorMessage.jsx";
+
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase/firebase.js";
+
 export default function SignUp() {
   const navigate = useNavigate();
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Firebase/authentication state
+  const { setError, execute, isLoading, error } = useAsync();
 
+  // Form state
   const [firstName, setFirstName] = useState("");
   const [surname, setSurname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  function handleSubmit(e) {
+  // Password visibility state
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // =========================================
+  // HANDLE SIGN UP
+  // =========================================
+
+  async function handleSubmit(e) {
     e.preventDefault();
 
-    // Temporary frontend-only behaviour.
-    // Real account creation can be connected later.
+    setError("");
+
+    // Check that the passwords match
     if (password !== confirmPassword) {
-      alert("Passwords do not match.");
+      setError("Passwords do not match.");
       return;
     }
 
-    navigate("/login");
+    // Create the Firebase account
+    // First name and surname are currently only collected
+    // by the frontend. The existing authentication system
+    // only creates the account using email + password.
+    const response = await execute(() =>
+      createUserWithEmailAndPassword(auth, email, password)
+    );
+
+    // Keep the authentication page's existing behaviour
+    if (response) {
+      navigate("/tutor-dashboard");
+    }
   }
+
+  // =========================================
+  // HANDLE INPUT CHANGES
+  // =========================================
+
+  function handleInputChange(setter) {
+    return (e) => {
+      setError("");
+      setter(e.target.value);
+    };
+  }
+
+  // =========================================
+  // FORM VALIDATION
+  // =========================================
+
+  const disableButton =
+    !firstName ||
+    !surname ||
+    !email ||
+    !password ||
+    !confirmPassword ||
+    !isValidEmail(email);
 
   return (
     <div className="bg-background min-h-screen text-on-surface font-body-md flex antialiased">
@@ -33,6 +84,7 @@ export default function SignUp() {
         {/* =========================================
             BRAND PANEL - LEFT
         ========================================== */}
+
         <div className="hidden lg:flex lg:w-1/2 relative bg-primary-container overflow-hidden p-margin-page flex-col justify-between">
 
           {/* Decorative background */}
@@ -47,6 +99,7 @@ export default function SignUp() {
           {/* Logo */}
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-stack-lg">
+
               <span className="material-symbols-outlined text-[32px] text-primary-fixed">
                 school
               </span>
@@ -54,11 +107,13 @@ export default function SignUp() {
               <h1 className="font-headline-lg text-headline-lg text-on-primary font-bold tracking-tight">
                 CSAM Portal
               </h1>
+
             </div>
           </div>
 
           {/* Main message */}
           <div className="relative z-10 max-w-md">
+
             <h2 className="font-display text-display text-on-primary mb-stack-md leading-tight">
               Join the Academic Nexus.
             </h2>
@@ -67,11 +122,14 @@ export default function SignUp() {
               Register to manage your scheduling, track academic progress,
               and connect with the computer science faculty network.
             </p>
+
           </div>
 
           {/* Support */}
           <div className="relative z-10 flex gap-4 text-primary-fixed-dim">
+
             <div className="flex flex-col gap-1">
+
               <span className="font-label-caps text-label-caps uppercase opacity-70">
                 Support
               </span>
@@ -79,13 +137,16 @@ export default function SignUp() {
               <span className="font-body-sm text-body-sm">
                 csam.help@university.edu
               </span>
+
             </div>
+
           </div>
         </div>
 
         {/* =========================================
             REGISTRATION FORM - RIGHT
         ========================================== */}
+
         <div className="flex w-full lg:w-1/2 items-center justify-center p-margin-page bg-surface-container-lowest shadow-[-20px_0_40px_rgba(0,0,0,0.05)] relative z-20">
 
           <div className="w-full max-w-[440px] space-y-stack-lg">
@@ -95,6 +156,7 @@ export default function SignUp() {
 
               {/* Mobile logo */}
               <div className="flex items-center justify-center lg:hidden gap-2 mb-stack-md">
+
                 <span className="material-symbols-outlined text-[32px] text-primary">
                   school
                 </span>
@@ -102,16 +164,23 @@ export default function SignUp() {
                 <h1 className="font-headline-md text-headline-md text-primary font-bold">
                   CSAM Portal
                 </h1>
+
               </div>
-                <Link
-                    to="/"
-                    className="inline-flex items-center gap-1 mt-3 text-primary hover:text-primary-container transition-colors font-body-sm"
-                >
-                    <span className="material-symbols-outlined text-[18px]">
-                        arrow_back
-                    </span>
-                        Back to Home
-                </Link>
+
+              {/* Back to Home */}
+              <Link
+                to="/"
+                className="inline-flex items-center gap-1 mt-3 text-primary hover:text-primary-container transition-colors font-body-sm"
+              >
+
+                <span className="material-symbols-outlined text-[18px]">
+                  arrow_back
+                </span>
+
+                Back to Home
+
+              </Link>
+
               <h2 className="font-headline-lg text-headline-lg text-on-surface">
                 Create an Account
               </h2>
@@ -119,9 +188,13 @@ export default function SignUp() {
               <p className="font-body-sm text-body-sm text-on-surface-variant">
                 Enter your details below to request access.
               </p>
+
             </div>
 
-            {/* Form */}
+            {/* =========================================
+                FORM
+            ========================================== */}
+
             <form
               onSubmit={handleSubmit}
               className="space-y-stack-md mt-stack-lg"
@@ -131,6 +204,7 @@ export default function SignUp() {
               <div className="grid grid-cols-2 gap-stack-md">
 
                 <div className="space-y-1">
+
                   <label
                     className="font-label-caps text-label-caps text-on-surface-variant block"
                     htmlFor="firstName"
@@ -145,12 +219,14 @@ export default function SignUp() {
                     placeholder="Alan"
                     required
                     value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    onChange={handleInputChange(setFirstName)}
                     className="w-full rounded-DEFAULT border-outline-variant bg-surface px-4 py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm"
                   />
+
                 </div>
 
                 <div className="space-y-1">
+
                   <label
                     className="font-label-caps text-label-caps text-on-surface-variant block"
                     htmlFor="surname"
@@ -165,15 +241,17 @@ export default function SignUp() {
                     placeholder="Turing"
                     required
                     value={surname}
-                    onChange={(e) => setSurname(e.target.value)}
+                    onChange={handleInputChange(setSurname)}
                     className="w-full rounded-DEFAULT border-outline-variant bg-surface px-4 py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm"
                   />
+
                 </div>
 
               </div>
 
               {/* Email */}
               <div className="space-y-1">
+
                 <label
                   className="font-label-caps text-label-caps text-on-surface-variant block"
                   htmlFor="email"
@@ -196,15 +274,17 @@ export default function SignUp() {
                     placeholder="alan.turing@university.edu"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={handleInputChange(setEmail)}
                     className="w-full rounded-DEFAULT border-outline-variant bg-surface pl-10 pr-4 py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm"
                   />
 
                 </div>
+
               </div>
 
               {/* Password */}
               <div className="space-y-1">
+
                 <label
                   className="font-label-caps text-label-caps text-on-surface-variant block"
                   htmlFor="password"
@@ -227,25 +307,33 @@ export default function SignUp() {
                     placeholder="••••••••"
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={handleInputChange(setPassword)}
                     className="w-full rounded-DEFAULT border-outline-variant bg-surface pl-10 pr-10 py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm"
                   />
 
                   <button
                     type="button"
-                    onClick={() => setShowPassword((value) => !value)}
+                    onClick={() =>
+                      setShowPassword((value) => !value)
+                    }
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-outline hover:text-primary transition-colors"
                   >
+
                     <span className="material-symbols-outlined text-lg">
-                      {showPassword ? "visibility" : "visibility_off"}
+                      {showPassword
+                        ? "visibility"
+                        : "visibility_off"}
                     </span>
+
                   </button>
 
                 </div>
+
               </div>
 
               {/* Confirm Password */}
               <div className="space-y-1">
+
                 <label
                   className="font-label-caps text-label-caps text-on-surface-variant block"
                   htmlFor="confirmPassword"
@@ -264,50 +352,75 @@ export default function SignUp() {
                   <input
                     id="confirmPassword"
                     name="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
+                    type={
+                      showConfirmPassword
+                        ? "text"
+                        : "password"
+                    }
                     placeholder="••••••••"
                     required
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={handleInputChange(setConfirmPassword)}
                     className="w-full rounded-DEFAULT border-outline-variant bg-surface pl-10 pr-10 py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm"
                   />
 
                   <button
                     type="button"
                     onClick={() =>
-                      setShowConfirmPassword((value) => !value)
+                      setShowConfirmPassword(
+                        (value) => !value
+                      )
                     }
                     className="absolute inset-y-0 right-0 flex items-center pr-3 text-outline hover:text-primary transition-colors"
                   >
+
                     <span className="material-symbols-outlined text-lg">
                       {showConfirmPassword
                         ? "visibility"
                         : "visibility_off"}
                     </span>
+
                   </button>
 
                 </div>
+
               </div>
+
+              {/* Firebase error */}
+              {error && (
+                <ErrorMessage>
+                  {error}
+                </ErrorMessage>
+              )}
 
               {/* Sign Up Button */}
               <div className="pt-stack-sm">
+
                 <button
                   type="submit"
-                  className="w-full bg-primary-container text-on-primary rounded-DEFAULT px-4 py-3 font-label-caps text-label-caps uppercase hover:bg-primary hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 group"
+                  disabled={disableButton || isLoading}
+                  className="w-full bg-primary-container text-on-primary rounded-DEFAULT px-4 py-3 font-label-caps text-label-caps uppercase hover:bg-primary hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Sign Up
 
-                  <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
-                    arrow_forward
-                  </span>
+                  {isLoading ? "Creating Account..." : "Sign Up"}
+
+                  {!isLoading && (
+                    <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
+                      arrow_forward
+                    </span>
+                  )}
+
                 </button>
+
               </div>
 
             </form>
 
             {/* Login link */}
             <div className="text-center pt-stack-md border-t border-surface-variant mt-stack-lg">
+
               <p className="font-body-sm text-body-sm text-on-surface-variant">
+
                 Already have an account?
 
                 <Link
@@ -316,11 +429,15 @@ export default function SignUp() {
                 >
                   Log In
                 </Link>
+
               </p>
+
             </div>
 
           </div>
+
         </div>
+
       </div>
     </div>
   );

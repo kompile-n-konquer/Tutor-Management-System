@@ -14,7 +14,7 @@ export const NAV_LINKS = [
 
 export const FOOTER_LINKS = [
   { to: "/settings", icon: "settings", label: "Settings" },
-  { to: "/logout", icon: "logout", label: "Logout" },
+  { to: "/", icon: "logout", label: "Logout" },
 ];
 
 export function getNavLinksForRole(role) {

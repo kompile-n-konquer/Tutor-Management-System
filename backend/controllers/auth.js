@@ -1,15 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
+const catchAsync = require('../utils/catchAsync');
+
 const prisma = new PrismaClient();
 
-// Catch all async errors. This removes the need for try-catch blocks
-const catchAsync = (req, res, next) => {};
-
-exports.getAllUsers = async (req, res, next) => {
-  try {
-    const users = await prisma.user.findMany();
-    res.json(users);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-};
+exports.getAllUsers = catchAsync(async (req, res, next) => {
+  const users = await prisma.user.findMany();
+  res.json(users);
+});

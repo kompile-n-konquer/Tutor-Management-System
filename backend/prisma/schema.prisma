@@ -7,8 +7,9 @@ datasource db {
 }
 model User {
   id             Int         @id @default(autoincrement())
-  studentNumber  String?     @unique
-  employeeNumber String?     @unique
+  firebaseUid    String      @unique
+  studentNumber  String?
+  employeeNumber String?
   firstName      String
   lastName       String
   email          String      @unique

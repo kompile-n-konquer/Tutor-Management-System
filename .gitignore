@@ -130,6 +130,10 @@ dist
 .vscode-test
 .vscode/
 
+# AI assistant / Qoder skill artifacts (per-developer, not shared)
+skills-lock.json
+**/skills-lock.json
+
 # yarn v2
 .yarn/cache
 .yarn/unplugged

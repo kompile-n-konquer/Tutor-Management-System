@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import useAsync from '../../../hooks/useAsync.js';
 
-import Input from '../../../components/Input/Input.jsx';
+import Input from "../../../components/input/Input.jsx";
 import isValidEmail from '../../../utils/validEmail.js';
 import ErrorMessage from '../../../components/error-message/ErrorMessage.jsx';
 import Button from '../../../components/button/Button.jsx';

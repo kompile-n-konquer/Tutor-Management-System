@@ -20,7 +20,7 @@ export default function Sidebar({ role = "tutor" }) {
         </div>
         <div>
           <h1 className="font-headline-lg text-headline-lg font-bold text-primary truncate leading-tight">
-            CSAM Portal
+            Tutor Flow
           </h1>
           <p className="font-label-caps text-label-caps text-on-surface-variant truncate">
             School of Computer Science

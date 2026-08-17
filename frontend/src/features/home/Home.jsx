@@ -6,7 +6,7 @@ export default function Landing() {
       <header className="w-full top-0 sticky bg-surface shadow-sm z-50">
         <div className="flex justify-between items-center w-full px-margin-page py-stack-md max-w-container-max mx-auto">
           <Link to="/" className="text-headline-md font-headline-lg font-bold text-primary hover:text-secondary transition-colors">
-            CSAM Portal
+            Tutor Flow
           </Link>
           <nav className="hidden md:flex gap-8">
             <a className="text-on-surface-variant font-body-md text-body-md hover:text-secondary transition-colors" href="#benefits">Benefits</a>
@@ -101,7 +101,7 @@ export default function Landing() {
       <footer className="w-full py-stack-lg bg-surface-container-highest border-t border-outline-variant mt-auto" id="contact">
         <div className="flex flex-col md:flex-row justify-between items-center w-full px-margin-page max-w-container-max mx-auto gap-6">
           <div className="flex flex-col items-center md:items-start gap-2">
-            <span className="font-headline-md text-headline-md font-bold text-on-surface">CSAM Portal</span>
+            <span className="font-headline-md text-headline-md font-bold text-on-surface">Tutor Flow</span>
             <span className="font-body-sm text-body-sm text-on-surface-variant">
               © 2024 School of Computer Science and Applied Mathematics. All rights reserved.
             </span>

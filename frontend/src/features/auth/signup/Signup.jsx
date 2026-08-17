@@ -23,12 +23,16 @@ const Signup = () => {
     setError('');
 
     const firebaseResponse = await execute(() => createUserWithEmailAndPassword(auth, data.email, data.password));
+    if (firebaseResponse && firebaseResponse.user) {
+      const extraData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        firebaseUid: firebaseResponse.user.uid,
+      };
+      const apiResponse = await execute(() => api.post('/users', extraData));
 
-    const extraData = { firstName: data.firstName, lastName: data.lastName, email: data.email };
-    const apiResponse = await execute(() => api.post('/users', extraData));
-
-    if (apiResponse.status === 201) {
-      navigate('/home');
+      if (apiResponse.status === 201) navigate('/home');
     }
   };
 

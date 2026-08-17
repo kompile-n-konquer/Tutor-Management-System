@@ -9,19 +9,15 @@ exports.getAllUsers = catchAsync(async (req, res, next) => {
 });
 
 exports.createUser = catchAsync(async (req, res, next) => {
-  if (!req.body || !req.body.firstName || !req.body.lastName || !req.body.email) {
+  const { firstName, lastName, email, firebaseUid } = req.body;
+
+  if (!firstName || !lastName || !email || !firebaseUid) {
     const error = new Error('All fields are required. Please provide all fields');
     error.statusCode = 400;
     return next(error);
   }
 
-  const userDetails = {
-    firstName: req.body.firstName,
-    lastName: req.body.lastName,
-    email: req.body.email,
-    role: 'STUDENT',
-  };
-
+  const userDetails = { firstName, lastName, email, firebaseUid, role: 'STUDENT' };
   const user = await prisma.user.create({ data: userDetails });
 
   res.status(201).json(user);

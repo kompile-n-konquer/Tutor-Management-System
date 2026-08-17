@@ -1,16 +1,15 @@
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "sqlserver"
   url      = env("DATABASE_URL")
 }
-
 model User {
   id             Int         @id @default(autoincrement())
-  studentNumber  String?     @unique
-  employeeNumber String?     @unique
+  firebaseUid    String      @unique
+  studentNumber  String?
+  employeeNumber String?
   firstName      String
   lastName       String
   email          String      @unique
@@ -23,7 +22,6 @@ model User {
   lecturer       Lecturer?
   tutor          Tutor?
 }
-
 model Tutor {
   id              Int               @id @default(autoincrement())
   userId          Int               @unique
@@ -39,7 +37,6 @@ model Tutor {
   user            User              @relation(fields: [userId], references: [id])
   assignments     TutorAssignment[]
 }
-
 model Lecturer {
   id             Int      @id @default(autoincrement())
   userId         Int      @unique
@@ -49,7 +46,6 @@ model Lecturer {
   courses        Course[]
   user           User     @relation(fields: [userId], references: [id])
 }
-
 model Applicant {
   id             Int       @id @default(autoincrement())
   userId         Int
@@ -63,7 +59,6 @@ model Applicant {
   course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   user           User      @relation(fields: [userId], references: [id])
 }
-
 model Course {
   id               Int               @id @default(autoincrement())
   courseCode       String            @unique
@@ -77,7 +72,6 @@ model Course {
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
 }
-
 model TutorAssignment {
   id             Int       @id @default(autoincrement())
   tutorId        Int
@@ -89,7 +83,6 @@ model TutorAssignment {
   course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   tutor          Tutor     @relation(fields: [tutorId], references: [id])
 }
-
 model Availability {
   id        Int      @id @default(autoincrement())
   tutorId   Int
@@ -98,7 +91,6 @@ model Availability {
   endTime   DateTime
   tutor     Tutor    @relation(fields: [tutorId], references: [id])
 }
-
 model Timesheet {
   id            Int              @id @default(autoincrement())
   tutorId       Int
@@ -111,7 +103,6 @@ model Timesheet {
   tutor         Tutor            @relation(fields: [tutorId], references: [id])
   entries       TimesheetEntry[]
 }
-
 model TimesheetEntry {
   id          Int       @id @default(autoincrement())
   timesheetId Int
@@ -127,7 +118,6 @@ model TimesheetEntry {
   course      Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
 }
-
 model Session {
   id           Int             @id @default(autoincrement())
   assignmentId Int
@@ -138,7 +128,6 @@ model Session {
   excuseReason String?
   assignment   TutorAssignment @relation(fields: [assignmentId], references: [id])
 }
-
 model CourseSlot {
   id          Int    @id @default(autoincrement())
   courseId    Int
@@ -146,10 +135,8 @@ model CourseSlot {
   startMinute Int
   endMinute   Int
   course      Course @relation(fields: [courseId], references: [id])
-
   @@index([courseId, dayOfWeek])
 }
-
 model OverflowWork {
   id          Int    @id @default(autoincrement())
   courseId    Int

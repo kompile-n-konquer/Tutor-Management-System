@@ -1,0 +1,85 @@
+# Deployment Documentation
+
+This document describes the Azure infrastructure backing the Tutor Management System, and how to redeploy manually if the CD pipeline breaks.
+
+## What Exists
+
+**Resource Group:** `TutorM_group` (Spain Central)
+
+| Resource | Type | Name |
+|---|---|---|
+| SQL Server | Azure SQL logical server | `komnkon` |
+| SQL Database | Azure SQL database | `Tutor_DB` |
+| App Service | Azure App Service | `TutorManagement` |
+
+**Server details:**
+- Server hostname: `komnkon.database.windows.net`
+- Database name: `Tutor_DB`
+- SQL admin login: `CloudSA67733bae`
+- Authentication: Mixed mode (both Microsoft Entra ID and SQL authentication are supported — "Support only Microsoft Entra authentication" was **disabled** to allow Prisma to connect via SQL login)
+- Entra admin: `2801257@students.wits.ac.za`
+- Public network access: **Enabled** (was previously set to Deny Public Network Access, which blocked all external connections including Prisma; this was changed to allow connections)
+
+## Credentials & Secrets
+
+The database connection string is stored as a **Gitea Actions secret** named `DATABASE_URL`. It is **not** committed to the repository.
+
+Connection string format used:
+```
+sqlserver://komnkon.database.windows.net:1433;database=Tutor_DB;user=CloudSA67733bae;password=<password>;encrypt=true;trustServerCertificate=false;connectionTimeout=30
+```
+
+> **Note:** As of this writing, `DATABASE_URL` was added as a **user-level** secret rather than a **repository-level** secret, because the person setting it up did not have Owner/Admin access to the repo. This needs to be corrected — an Owner/Admin (e.g. Mogomotsi) must add `DATABASE_URL` under:
+> `Repo → Settings → Actions → Secrets`
+> so it is available to CI/CD workflows for the whole team, not just one user's personal workflows.
+
+## Prisma Setup
+
+- Backend project: `backend/`
+- Prisma schema: `backend/prisma/schema.prisma`
+- Provider: `sqlserver`
+- To push schema changes to the database:
+  ```bash
+  cd backend
+  npx prisma db push
+  ```
+
+## Manual Redeploy Steps (if CD breaks)
+
+If the automated Gitea Actions CD pipeline fails, follow these steps to manually verify or redeploy:
+
+### 1. Verify the App Service is reachable
+- Azure Portal → `TutorM_group` → `TutorManagement` (App Service)
+- Check **Overview** for status (should be "Running")
+- Visit the app's default URL to confirm it's serving requests
+
+### 2. Verify database connectivity
+- Azure Portal → `komnkon` (SQL Server) → **Networking**
+- Confirm **Public network access** is enabled (not "Deny")
+- Confirm your IP (or the relevant CI runner IP range) is allowed under firewall rules
+
+### 3. Push schema manually
+```bash
+cd backend
+# Ensure .env has a valid DATABASE_URL (see Credentials & Secrets above)
+npx prisma db push
+```
+
+### 4. Redeploy the app manually
+- If deploying via Gitea Actions normally, check the failed workflow run under the repo's **Actions** tab for the specific error first
+- For a manual deploy fallback, use the Azure Portal's **Deployment Center** on the `TutorManagement` App Service, or deploy via `az webapp deploy` from the Azure CLI if configured locally
+
+### 5. Common issues & fixes
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `Login failed for user` | Wrong username/password, or Entra-only auth re-enabled | Confirm SQL auth is still enabled on server; reset password if needed |
+| `Deny Public Network Access` error | Public network access disabled on SQL server | Set to "Selected networks" or "Enabled from all networks" in server Networking settings |
+| Connection timeout | Firewall rule missing for your IP or CI runner IP | Add IP under SQL Server → Networking → Firewall rules |
+| Secret not found in workflow | `DATABASE_URL` added as user-level secret instead of repo-level | Repo Owner/Admin must add it under repo Settings → Actions → Secrets |
+
+## Open Items / Follow-ups
+
+- [ ] Move `DATABASE_URL` from user-level to repository-level Gitea secret
+- [ ] Confirm production DB schema push succeeds end-to-end via CD (not just manually)
+- [ ] Review whether "Deny Public Network Access" should be re-enabled with tighter "Selected networks" scoping for production security, now that dev/CD access has been confirmed to work

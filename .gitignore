@@ -134,6 +134,9 @@ dist
 skills-lock.json
 **/skills-lock.json
 
+# Qoder IDE workspace cache (auto-generated, per-developer)
+.qoder/
+
 # yarn v2
 .yarn/cache
 .yarn/unplugged

@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import useAsync from "../../../hooks/useAsync.js";
-import isValidEmail from "../../../utils/validEmail.js";
-import ErrorMessage from "../../../components/error-message/ErrorMessage.jsx";
-import Input from "../../../components/input/Input.jsx";
-import Button from "../../../components/button/Button.jsx";
+import useAsync from '../../../hooks/useAsync.js';
 
-import { sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "../../../firebase/firebase.js";
+import Input from "../../../components/input/Input.jsx";
+import isValidEmail from '../../../utils/validEmail.js';
+import ErrorMessage from '../../../components/error-message/ErrorMessage.jsx';
+import Button from '../../../components/button/Button.jsx';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../../firebase/firebase.js';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();

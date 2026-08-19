@@ -1,16 +1,17 @@
 import { useState } from "react";
 import {Link,  useNavigate } from "react-router-dom";
 
-import useAsync from "../../../hooks/useAsync.js";
-import isValidEmail from "../../../utils/validEmail.js";
-import ErrorMessage from "../../../components/error-message/ErrorMessage.jsx";
-import Input from "../../../components/input/Input.jsx";
-import Button from "../../../components/button/Button.jsx";
-import AuthLayout from "../../../components/auth-layout/AuthLayout.jsx";
+import useAsync from '../../../hooks/useAsync.js';
 
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { auth } from "../../../firebase/firebase.js";
-import provider from "../../../firebase/googleProvider.js";
+import Input from "../../../components/input/Input.jsx";
+import isValidEmail from '../../../utils/validEmail.js';
+import ErrorMessage from '../../../components/error-message/ErrorMessage.jsx';
+import Button from '../../../components/button/Button.jsx';
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth } from '../../../firebase/firebase.js';
+import provider from '../../../firebase/googleProvider.js';
+import AuthLayout from "../../../components/auth-layout/AuthLayout.jsx";
+import GoogleIcon from "../../../components/google-icon/GoogleIcon.jsx";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -87,7 +88,10 @@ export default function Login() {
                 </Button>
 
                 <Button type="button" onClick={handleGoogleLogin} disabled={isLoading}>
+                    <span className="flex items-center justify-center gap-2">
+                        <GoogleIcon />
                     Sign In with Google
+                    </span>
                 </Button>
             </div>
         </form>

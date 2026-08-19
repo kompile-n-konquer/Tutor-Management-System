@@ -2,44 +2,50 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import useAsync from "../../../hooks/useAsync.js";
+import Input from "../../../components/input/Input.jsx";
 import isValidEmail from "../../../utils/validEmail.js";
 import ErrorMessage from "../../../components/error-message/ErrorMessage.jsx";
-import Input from "../../../components/input/Input.jsx";
 import Button from "../../../components/button/Button.jsx";
 import AuthLayout from "../../../components/auth-layout/AuthLayout.jsx";
-
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../../firebase/firebase.js";
+import api from "../../../utils/axiosInstance.js";
 
-export default function Signup() {
+const Signup = () => {
   const navigate = useNavigate();
   const { setError, execute, isLoading, error } = useAsync();
+  const [data, setData] = useState({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "" });
 
-  const [firstName, setFirstName] = useState("");
-  const [surname, setSurname] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  async function handleSubmit(e) {
-    e.preventDefault();
+  const handleSignup = async (event) => {
+    event.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
+    const firebaseResponse = await execute(() => createUserWithEmailAndPassword(auth, data.email, data.password));
+    if (firebaseResponse && firebaseResponse.user) {
+      const extraData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        firebaseUid: firebaseResponse.user.uid,
+      };
+      const apiResponse = await execute(() => api.post("/users", extraData));
+
+      if (apiResponse.status === 201) navigate("/home");
     }
+  };
 
-    const response = await execute(() => createUserWithEmailAndPassword(auth, email, password));
-    if (response) navigate("/tutor-dashboard");
-  }
+  const handleChange = (event, name) => {
+    setError("");
+    setData((prevData) => ({ ...prevData, [name]: event.target.value }));
+  };
 
-  function handleChange(setter) {
-    return (e) => { setError(""); setter(e.target.value); };
-  }
-
-  const disableButton =
-    !firstName || !surname || !email || !password || !confirmPassword || !isValidEmail(email);
+  const disableBtn =
+    !data.firstName ||
+    !data.lastName ||
+    !data.password ||
+    !data.email ||
+    !data.confirmPassword ||
+    !isValidEmail(data.email);
 
   return (
     <AuthLayout
@@ -49,24 +55,59 @@ export default function Signup() {
       footerLinkText="Log In"
       footerLinkTo="/login"
     >
-        <form onSubmit={handleSubmit} className="space-y-stack-md mt-stack-lg">
-            <div className="grid grid-cols-2 gap-stack-md">
-                    <Input labelText="First Name" placeholder="Alan" value={firstName} onChange={handleChange(setFirstName)} />
-                    <Input labelText="Surname" placeholder="Turing" value={surname} onChange={handleChange(setSurname)} />
-            </div>
+      <form onSubmit={handleSignup} className="space-y-stack-md mt-stack-lg">
+        <div className="grid grid-cols-2 gap-stack-md">
+          <Input
+            labelText="First Name"
+            placeholder="Alan"
+            value={data.firstName}
+            onChange={(e) => handleChange(e, "firstName")}
+          />
+          <Input
+            labelText="Last Name"
+            placeholder="Turing"
+            value={data.lastName}
+            onChange={(e) => handleChange(e, "lastName")}
+          />
+        </div>
 
-            <Input labelText="Email Address" type="email" icon="mail" placeholder="alan.turing@university.edu" value={email} onChange={handleChange(setEmail)} />
-            <Input labelText="Password" icon="lock" isPassword placeholder="••••••••" value={password} onChange={handleChange(setPassword)} />
-            <Input labelText="Confirm Password" icon="lock_reset" isPassword placeholder="••••••••" value={confirmPassword} onChange={handleChange(setConfirmPassword)} />
+        <Input
+          labelText="Email Address"
+          type="email"
+          icon="mail"
+          placeholder="alan.turing@university.edu"
+          value={data.email}
+          onChange={(e) => handleChange(e, "email")}
+        />
 
-            {error && <ErrorMessage>{error}</ErrorMessage>}
+        <Input
+          labelText="Password"
+          icon="lock"
+          isPassword
+          placeholder="••••••••"
+          value={data.password}
+          onChange={(e) => handleChange(e, "password")}
+        />
 
-            <div className="pt-stack-sm">
-                <Button type="submit" disabled={disableButton} loading={isLoading}>
-                    Sign Up
-                </Button>
-            </div>
-        </form>
+        <Input
+          labelText="Confirm Password"
+          icon="lock_reset"
+          isPassword
+          placeholder="••••••••"
+          value={data.confirmPassword}
+          onChange={(e) => handleChange(e, "confirmPassword")}
+        />
+
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+
+        <div className="pt-stack-sm">
+          <Button type="submit" disabled={disableBtn} loading={isLoading}>
+            Create Account
+          </Button>
+        </div>
+      </form>
     </AuthLayout>
   );
-}
+};
+
+export default Signup;

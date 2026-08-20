@@ -20,7 +20,7 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError("");
 
-    const response = await execute(() => sendPasswordResetEmail(auth, email));
+    const response = await execute(() => sendPasswordResetEmail(auth, email.trim()));
 
     if (response) {
       navigate("/confirmation-message");

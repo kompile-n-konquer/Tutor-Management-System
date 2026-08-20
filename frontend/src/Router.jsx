@@ -2,7 +2,6 @@ import { createBrowserRouter } from "react-router-dom";
 
 import RootLayout from "./RootLayout.jsx";
 import ErrorPage from "./components/error-page/ErrorPage.jsx";
-import AppLayout from "./components/layout/AppLayout.jsx";
 
 import Home from "./features/home/Home.jsx";
 import Login from "./features/auth/login/Login.jsx";
@@ -15,7 +14,7 @@ import TutorDashboard from "./features/tutor-dashboard/TutorDashboard.jsx";
 import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
-import Placeholder from "./features/settings/Placeholder.jsx";
+import Settings from "./features/settings/Placeholder.jsx";
 
 const router = createBrowserRouter([
   {
@@ -28,55 +27,12 @@ const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "confirmation-message", element: <ConfirmationMessage /> },
-
-      {
-        path: "allocation-board",
-        element: (
-          <AppLayout role="tutor" title="Allocation Board" showSearch={true}>
-            <AllocationBoard />
-          </AppLayout>
-        ),
-      },
-      {
-        path: "tutor-dashboard",
-        element: (
-          <AppLayout role="tutor" title="Tutor Dashboard" showSearch={true}>
-            <TutorDashboard />
-          </AppLayout>
-        ),
-      },
-      {
-        path: "volunteer",
-        element: (
-          <AppLayout role="tutor" title="Volunteer View" showSearch={true}>
-            <VolunteerView />
-          </AppLayout>
-        ),
-      },
-      {
-        path: "profile",
-        element: (
-          <AppLayout role="tutor" title="Profile" showSearch={false}>
-            <Profile />
-          </AppLayout>
-        ),
-      },
-      {
-        path: "timesheets",
-        element: (
-          <AppLayout role="tutor" title="Timesheets" showSearch={true}>
-            <Timesheets />
-          </AppLayout>
-        ),
-      },
-      {
-        path: "settings",
-        element: (
-          <AppLayout role="tutor" title="Settings" showSearch={false}>
-            <Placeholder role="tutor" label="Settings" />
-          </AppLayout>
-        ),
-      },
+      { path: "allocation-board", element: <AllocationBoard /> },
+      { path: "tutor-dashboard", element: <TutorDashboard /> },
+      { path: "volunteer", element: <VolunteerView /> },
+      { path: "profile", element: <Profile /> },
+      { path: "timesheets", element: <Timesheets /> },
+      { path: "settings", element: <Settings /> },
     ],
   },
 ]);

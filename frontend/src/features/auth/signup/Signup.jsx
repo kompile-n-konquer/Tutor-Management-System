@@ -20,17 +20,17 @@ const Signup = () => {
     event.preventDefault();
     setError("");
 
-    const firebaseResponse = await execute(() => createUserWithEmailAndPassword(auth, data.email, data.password));
+    const firebaseResponse = await execute(() => createUserWithEmailAndPassword(auth, data.email.trim(), data.password));
     if (firebaseResponse && firebaseResponse.user) {
       const extraData = {
         firstName: data.firstName,
         lastName: data.lastName,
-        email: data.email,
+        email: data.email.trim(),
         firebaseUid: firebaseResponse.user.uid,
       };
       const apiResponse = await execute(() => api.post("/users", extraData));
 
-      if (apiResponse.status === 201) navigate("/home");
+      if (apiResponse.status === 201) navigate("/");
     }
   };
 

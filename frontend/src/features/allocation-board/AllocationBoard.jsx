@@ -111,7 +111,7 @@ export default function AllocationBoard() {
   const course = COURSES.find((c) => c.code === selectedCourse);
 
   return (
-    <AppLayout role="organiser" title="Tutor Management System">
+    <AppLayout role="tutor" title="Allocation Board" showSearch={true}>
       <div className="p-stack-md md:p-margin-page flex gap-gutter h-full">
         {/* Course list */}
         <div className="w-80 flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden shrink-0">

@@ -2,7 +2,6 @@ import { useState } from "react";
 import {Link,  useNavigate } from "react-router-dom";
 
 import useAsync from '../../../hooks/useAsync.js';
-
 import Input from "../../../components/input/Input.jsx";
 import isValidEmail from '../../../utils/validEmail.js';
 import ErrorMessage from '../../../components/error-message/ErrorMessage.jsx';
@@ -23,7 +22,7 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(email.trim())) {
       setError("Please enter a valid email address.");
       return;
     }
@@ -36,7 +35,7 @@ export default function Login() {
   async function handleGoogleLogin() {
     setError("");
     const response = await execute(() => signInWithPopup(auth, provider));
-    if (response) navigate("/home");
+    if (response) navigate("/");
   }
 
   return (

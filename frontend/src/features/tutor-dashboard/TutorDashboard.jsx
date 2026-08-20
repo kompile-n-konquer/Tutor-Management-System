@@ -1,7 +1,9 @@
 import React from 'react';
+import AppLayout from "../../components/layout/AppLayout.jsx";
 
 export default function TutorDashboard() {
   return (
+    <AppLayout role="tutor" title="Tutor Dashboard" showSearch={true}>
     <main className="flex-1 overflow-y-auto p-stack-md md:p-margin-page bg-background space-y-gutter">
       {/* Top Header Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
@@ -65,5 +67,6 @@ export default function TutorDashboard() {
         </div>
       </div>
     </main>
+    </AppLayout>
   );
 }

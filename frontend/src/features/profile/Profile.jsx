@@ -2,7 +2,7 @@ import AppLayout from "../../components/layout/AppLayout";
 
 export default function Profile() {
   return (
-    <AppLayout role="tutor" title="Tutor Management System">
+     <AppLayout role="tutor" title="Settings" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>

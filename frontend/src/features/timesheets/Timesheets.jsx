@@ -1,7 +1,9 @@
 import React from 'react';
+import AppLayout from '../../components/layout/AppLayout';
 
 export default function Timesheets() {
   return (
+    <AppLayout role="tutor" title="Tutor Management System">
     <main className="flex-1 overflow-y-auto p-stack-md md:p-margin-page bg-background space-y-gutter">
       <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-surface-variant shadow-sm">
         <div className="flex justify-between items-center mb-stack-md">
@@ -22,5 +24,6 @@ export default function Timesheets() {
         </div>
       </div>
     </main>
+  </AppLayout>
   );
 }

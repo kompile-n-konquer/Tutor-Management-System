@@ -35,7 +35,7 @@ export default function Login() {
   async function handleGoogleLogin() {
     setError("");
     const response = await execute(() => signInWithPopup(auth, provider));
-    if (response) navigate("/");
+    if (response) navigate("/tutor-dashboard");
   }
 
   return (

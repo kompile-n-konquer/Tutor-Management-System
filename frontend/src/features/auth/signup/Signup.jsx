@@ -30,7 +30,7 @@ const Signup = () => {
       };
       const apiResponse = await execute(() => api.post("/users", extraData));
 
-      if (apiResponse.status === 201) navigate("/");
+      if (apiResponse.status === 201) navigate("/tutor-dashboard");
     }
   };
 

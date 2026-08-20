@@ -33,10 +33,10 @@ describe('Input — shared form input used in auth flows', () => {
     expect(handleChange).toHaveBeenCalledTimes(1);
   });
 
-  test('sets htmlFor on label matching the lowercased labelText', () => {
+  it("sets htmlFor on label matching the hyphenated, lowercased labelText", () => {
     render(<Input labelText="First Name" type="text" />);
     const label = screen.getByText('First Name');
-    expect(label).toHaveAttribute('for', 'first name');
+    expect(label).toHaveAttribute('for', 'first-name');
   });
 
   test('renders label element even when labelText is not provided', () => {

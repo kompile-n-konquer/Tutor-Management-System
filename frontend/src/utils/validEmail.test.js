@@ -47,14 +47,12 @@ describe('isValidEmail — frontend email validation (used by Login, Signup, For
       expect(isValidEmail('user@wits.ac.za')).toBe(true);
     });
 
-    test('does NOT trim whitespace — frontend does not trim before validation', () => {
-      // Unlike the backend validator, the frontend regex does not trim.
-      // This means typing " user@test.com " in the input field will NOT validate
-      // until the user removes whitespace. This documents current behavior.
-      expect(isValidEmail(' user@wits.ac.za')).toBe(false);
-      expect(isValidEmail('user@wits.ac.za ')).toBe(false);
+    it("trims whitespace before validation", () => {
+      // Fixed: frontend now trims before validation, matching backend behavior.
+      // This means typing " user@test.com " in the input field WILL validate correctly.
+      expect(isValidEmail(' user@wits.ac.za')).toBe(true);
+      expect(isValidEmail('user@wits.ac.za ')).toBe(true);
     });
-
     test('handles Signup form: password field is irrelevant to email validation', () => {
       // Signup.jsx checks all fields independently; isValidEmail only checks the email field
       expect(isValidEmail('valid@email.com')).toBe(true);

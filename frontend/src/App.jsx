@@ -1,17 +1,133 @@
-import { useNavigate } from 'react-router-dom';
-import Button from './components/button/Button.jsx';
-import './App.css';
+import { Routes, Route } from "react-router-dom";
 
-// This component is used as a landing page
-const App = () => {
-    const navigate = useNavigate();
-    return (
-        <section>
-            <h1>Hello from TutorFlow!</h1>
-            <Button onClick={() => navigate('/login')}>Login</Button>
-            <Button onClick={() => navigate('/signup')}>Signup</Button>
-        </section>
-    );
-};
+import Landing from "./pages/Landing";
+import SignUp from "./pages/SignUp";
+import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ConfirmationMessage from "./pages/ConfirmationMessage";
 
-export default App;
+
+import AllocationBoard from "./pages/organiser/AllocationBoard";
+import TutorDashboard from "./pages/tutor/TutorDashboard";
+import VolunteerView from "./pages/student/VolunteerView";
+import Profile from "./pages/shared/Profile";
+
+import Placeholder from "./pages/Placeholder";
+
+import AppLayout from "./components/layout/AppLayout";
+
+export default function App() {
+  return (
+    <Routes>
+
+      {/* =========================
+          PUBLIC PAGES
+      ========================= */}
+
+      <Route path="/" element={<Landing />} />
+
+      <Route path="/signup" element={<SignUp />} />
+
+      <Route path="/login" element={<Login />} />
+
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+
+      <Route path="/confirmation-message" element={<ConfirmationMessage />} />
+
+
+      {/* =========================
+          TUTOR MANAGEMENT SYSTEM
+      ========================= */}
+
+      <Route
+        path="/allocation-board"
+        element={
+          <AppLayout
+            role="tutor"
+            title="Allocation Board"
+            showSearch={true}
+          >
+            <AllocationBoard />
+          </AppLayout>
+        }
+      />
+
+      <Route
+        path="/tutor-dashboard"
+        element={
+          <AppLayout
+            role="tutor"
+            title="Tutor Dashboard"
+            showSearch={true}
+          >
+            <TutorDashboard />
+          </AppLayout>
+        }
+      />
+
+      <Route
+        path="/volunteer"
+        element={
+          <AppLayout
+            role="tutor"
+            title="Volunteer View"
+            showSearch={true}
+          >
+            <VolunteerView />
+          </AppLayout>
+        }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <AppLayout
+            role="tutor"
+            title="Profile"
+            showSearch={false}
+          >
+            <Profile />
+          </AppLayout>
+        }
+      />
+
+
+      {/* =========================
+          OTHER PAGES
+      ========================= */}
+
+      <Route
+        path="/timesheets"
+        element={
+          <AppLayout
+            role="tutor"
+            title="Timesheets"
+            showSearch={true}
+          >
+            <Placeholder
+              role="tutor"
+              label="Timesheets"
+            />
+          </AppLayout>
+        }
+      />
+
+      <Route
+        path="/settings"
+        element={
+          <AppLayout
+            role="tutor"
+            title="Settings"
+            showSearch={false}
+          >
+            <Placeholder
+              role="tutor"
+              label="Settings"
+            />
+          </AppLayout>
+        }
+      />
+
+    </Routes>
+  );
+}

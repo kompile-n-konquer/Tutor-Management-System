@@ -1,90 +1,99 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
+import {Link,  useNavigate } from "react-router-dom";
 
 import useAsync from '../../../hooks/useAsync.js';
-
 import Input from "../../../components/input/Input.jsx";
 import isValidEmail from '../../../utils/validEmail.js';
 import ErrorMessage from '../../../components/error-message/ErrorMessage.jsx';
 import Button from '../../../components/button/Button.jsx';
-import AuthQuestion from '../auth-question/AuthQuestion.jsx';
-import AuthForm from '../auth-form/AuthForm.jsx';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth } from '../../../firebase/firebase.js';
 import provider from '../../../firebase/googleProvider.js';
+import AuthLayout from "../../../components/auth-layout/AuthLayout.jsx";
+import GoogleIcon from "../../../components/google-icon/GoogleIcon.jsx";
 
-const Login = () => {
-    const navigate = useNavigate();
-    const { setError, execute, isLoading, error } = useAsync();
-    const [data, setData] = useState({ email: '', password: '' });
+export default function Login() {
+  const navigate = useNavigate();
+  const { setError, execute, isLoading, error } = useAsync();
 
-    const handleLogin = async (event) => {
-        event.preventDefault();
-        setError('');
-        const response = await execute(() => signInWithEmailAndPassword(auth, data.email, data.password));
-        if (response) navigate('/home');
-    };
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-    const handleLoginWithGoogle = async (event) => {
-        event.preventDefault();
-        const response = await execute(() => signInWithPopup(auth, provider));
-        if (response) navigate('/home');
-    };
+  async function handleSubmit(e) {
+    e.preventDefault();
 
-    const handleChange = (event, name) => {
-        setError('');
-
-        setData((prevData) => {
-            const newData = { ...prevData };
-            newData[name] = event.target.value;
-            return newData;
-        });
-    };
-
-    let disableBtn = false; // Used to disable the submit button when one of the fields is empty
-    if (!data.password || !data.email || !isValidEmail(data.email)) {
-        disableBtn = true;
+    if (!isValidEmail(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
     }
 
-    const fields = [
-        {
-            id: 'email',
-            type: 'email',
-            value: data.email,
-            placeholder: 'example@testmaker.com',
-            labelText: 'Email',
-            onChange: (e) => handleChange(e, 'email'),
-        },
-        {
-            id: 'password',
-            type: 'password',
-            value: data.password,
-            placeholder: 'Enter your password',
-            labelText: 'Password',
-            onChange: (e) => handleChange(e, 'password'),
-        },
-    ];
+    setError("");
+    const response = await execute(() => signInWithEmailAndPassword(auth, email, password));
+    if (response) navigate("/tutor-dashboard");
+  }
 
-    const description = 'Please fill in your details below to access your account';
+  async function handleGoogleLogin() {
+    setError("");
+    const response = await execute(() => signInWithPopup(auth, provider));
+    if (response) navigate("/tutor-dashboard");
+  }
 
-    return (
-        <>
-            <AuthForm heading="Welcome Back" description={description}>
-                {fields.map((field) => (
-                    <Input key={field.id} {...field} />
-                ))}
-                {error && <ErrorMessage>{error}</ErrorMessage>}
-                <Button disabled={disableBtn} loading={isLoading} onClick={(e) => handleLogin(e)}>
-                    Login
+  return (
+    <AuthLayout
+      heading="Welcome Back"
+      description="Sign in to manage your scheduling, track academic progress, and connect with the computer science faculty network."
+      footerPrompt="Don't have an account? "
+      footerLinkText="Sign Up"
+      footerLinkTo="/signup"
+    >
+        <form onSubmit={handleSubmit} className="space-y-stack-md mt-stack-lg">
+            <Input
+                labelText="Email Address"
+                type="email"
+                icon="mail"
+                placeholder="alan.turing@university.edu"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            />
+
+            <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                    <label className="font-label-caps text-label-caps text-on-surface-variant block">
+                        Password
+                    </label>
+
+                    <Link
+                        to="/forgot-password"
+                        className="font-body-sm text-body-sm text-primary hover:text-primary-container transition-colors font-semibold"
+                    >
+                        Forgot Password?
+                    </Link>
+                </div>
+
+                <Input
+                    icon="lock"
+                    isPassword
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                />
+            </div>
+
+            {error && <ErrorMessage>{error}</ErrorMessage>}
+
+            <div className="pt-stack-sm space-y-stack-sm">
+                <Button type="submit" loading={isLoading}>
+                    Log In
                 </Button>
-            </AuthForm>
-            <a onClick={() => navigate('/forgot-password')}>Forgot Password</a>
-            <AuthQuestion onClick={() => navigate('/signup')} linkText="Signup">
-                Don't have an account?
-            </AuthQuestion>
-            <Button onClick={handleLoginWithGoogle}>Login with google</Button>
-        </>
-    );
-};
 
-export default Login;
+                <Button type="button" onClick={handleGoogleLogin} disabled={isLoading}>
+                    <span className="flex items-center justify-center gap-2">
+                        <GoogleIcon />
+                    Sign In with Google
+                    </span>
+                </Button>
+            </div>
+        </form>
+    </AuthLayout>
+  );
+}

@@ -57,24 +57,20 @@ describe('Button — shared UI component used in auth flows', () => {
     const handleClick = vi.fn();
     render(
       <Button onClick={handleClick} loading>
-        Submit
+        Click Me
       </Button>,
     );
 
-    // Button is not explicitly disabled during loading, but shows "Loading..." text
+    // Fixed: Button now sets disabled={disabled || loading}, so the native
+    // disabled attribute blocks clicks during loading, preventing duplicate submissions.
     fireEvent.click(screen.getByRole('button'));
-    // The click fires — this documents current behavior.
-    // If the app should prevent clicks during loading, the Button component
-    // should also set disabled={loading}. This is a finding for the dev team.
-    expect(handleClick).toHaveBeenCalled();
+    expect(handleClick).not.toHaveBeenCalled();
   });
 
-  test('does not pass through extra HTML attributes (component does not spread rest props)', () => {
-    // The Button component destructures only { onClick, disabled, loading, children }.
-    // Extra props like type="submit" are silently dropped.
-    // This documents current behavior — if form submission needs type="submit",
-    // the Button component should be updated to spread ...rest onto the <button>.
+  test('passes through extra HTML attributes via rest props spreading', () => {
+    // Fixed: Button now spreads ...rest onto the <button>, so type="submit"
+    // (and other passed attributes) correctly reach the DOM element.
     const { container } = render(<Button type="submit">Submit</Button>);
-    expect(container.querySelector('button')).not.toHaveAttribute('type', 'submit');
+    expect(container.querySelector('button')).toHaveAttribute('type', 'submit');
   });
 });

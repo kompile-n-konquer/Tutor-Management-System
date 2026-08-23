@@ -26,10 +26,11 @@ exports.createUser = catchAsync(async (req, res, next) => {
 
 exports.deleteUser = catchAsync(async (req, res, next) => {
   const firebaseUid = req.user.user_id;
+  console.log(firebaseUid);
 
   const user = await prisma.user.findUnique({ where: { firebaseUid } });
   if (!user) {
-    const error = new Error('User not found. Please check the user exists');
+    const error = new Error('User not found. Please check if the user exists');
     error.statusCode = 404;
     return next(error);
   }

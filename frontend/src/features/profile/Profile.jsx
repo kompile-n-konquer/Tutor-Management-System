@@ -1,7 +1,29 @@
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
+import { auth } from '../../firebase/firebase';
+import useAsync from '../../hooks/useAsync';
+import api from '../../utils/axiosInstance';
+import { useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
 
 export default function Profile() {
+  const navigate = useNavigate();
+  const { execute, isLoading } = useAsync();
+
+  const handleDeleteAccount = async () => {
+    if (auth.currentUser) {
+      const token = await auth.currentUser.getIdToken();
+
+      const headers = { Authorization: `Bearer ${token}` };
+      const response = await execute(() => api.delete('/users', { headers }));
+
+      if (response.status === 204) {
+        await signOut(auth);
+        navigate('/');
+      }
+    }
+  };
+
   return (
     <AppLayout role="tutor" title="Settings" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
@@ -93,7 +115,9 @@ export default function Profile() {
             </div>
 
             <div>
-              <Button>Delete Account</Button>
+              <Button onClick={handleDeleteAccount} loading={isLoading}>
+                Delete Account
+              </Button>
             </div>
           </div>
 

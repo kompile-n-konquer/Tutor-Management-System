@@ -1,9 +1,13 @@
+import { useNavigate } from 'react-router-dom';
+
 /**
  * TopNavBar
  * `title` lets each page override the page-title text on the left (e.g. "TMS" on
  * small screens) while keeping the search box / icons / avatar consistent everywhere.
  */
-export default function TopNavBar({ title = "Tutor Management System", showSearch = true, avatarUrl }) {
+export default function TopNavBar({ title = 'Tutor Management System', showSearch = true, avatarUrl }) {
+  const navigate = useNavigate();
+
   return (
     <header className="flex justify-between items-center h-16 px-gutter sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm">
       <div className="flex items-center gap-stack-md">
@@ -36,7 +40,10 @@ export default function TopNavBar({ title = "Tutor Management System", showSearc
           {avatarUrl ? (
             <img alt="User avatar" className="w-full h-full object-cover" src={avatarUrl} />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-on-surface-variant">
+            <div
+              className="w-full h-full flex items-center justify-center text-on-surface-variant"
+              onClick={() => navigate('/profile')}
+            >
               <span className="material-symbols-outlined text-[18px]">person</span>
             </div>
           )}

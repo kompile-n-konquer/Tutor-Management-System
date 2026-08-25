@@ -15,6 +15,13 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: npm ci
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Push Prisma schema to database
+        working-directory: backend
+        run: npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -29,6 +36,18 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Set Azure App Service settings
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az webapp config appsettings set \
+              --name TutorManagement \
+              --resource-group TutorM_group \
+              --settings DATABASE_URL="${{ secrets.DATABASE_URL }}"
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:

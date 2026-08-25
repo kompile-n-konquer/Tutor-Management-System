@@ -22,16 +22,36 @@ This document describes the Azure infrastructure backing the Tutor Management Sy
 
 ## Credentials & Secrets
 
-The database connection string is stored as a **Gitea Actions secret** named `DATABASE_URL`. It is **not** committed to the repository.
+The following secrets must be configured as **repository-level** Gitea Actions secrets under `Repo → Settings → Actions → Secrets`:
 
-Connection string format used:
+| Secret | Purpose | How to obtain |
+|---|---|---|
+| `DATABASE_URL` | Prisma connection string to Azure SQL | See format below. |
+| `AZURE_WEBAPP_PUBLISH_PROFILE` | Publish-profile deployment to `TutorManagement` | Azure Portal → App Service → **Get publish profile** |
+| `AZURE_CREDENTIALS` | Service principal JSON for `azure/login` and `azure/CLI` | Run the `az ad sp create-for-rbac` command below. |
+
+### `DATABASE_URL` format
 ```
 sqlserver://komnkon.database.windows.net:1433;database=Tutor_DB;user=CloudSA67733bae;password=<password>;encrypt=true;trustServerCertificate=false;connectionTimeout=30
 ```
 
-> **Note:** As of this writing, `DATABASE_URL` was added as a **user-level** secret rather than a **repository-level** secret, because the person setting it up did not have Owner/Admin access to the repo. This needs to be corrected — an Owner/Admin (e.g. Mogomotsi) must add `DATABASE_URL` under:
-> `Repo → Settings → Actions → Secrets`
-> so it is available to CI/CD workflows for the whole team, not just one user's personal workflows.
+> **Note:** `DATABASE_URL` must be a **repository-level** secret, not a user-level secret, so the CD workflow can access it.
+
+### Creating `AZURE_CREDENTIALS`
+
+The workflow uses the Azure CLI to set App Service configuration (e.g. `DATABASE_URL`), which requires a service principal login. Create it once with:
+
+```bash
+az ad sp create-for-rbac \
+  --name "TutorManagementDeploy" \
+  --role contributor \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/TutorM_group \
+  --sdk-auth
+```
+
+Paste the resulting JSON output into a Gitea secret named `AZURE_CREDENTIALS`.
+
+If you do not have permission to create a service principal, you can skip the `Set Azure App Service settings` step and manually add `DATABASE_URL` in the Azure Portal under **App Service → Configuration → Application settings** before running the workflow.
 
 ## Prisma Setup
 
@@ -80,6 +100,7 @@ npx prisma db push
 
 ## Open Items / Follow-ups
 
-- [ ] Move `DATABASE_URL` from user-level to repository-level Gitea secret
+- [x] Move `DATABASE_URL` from user-level to repository-level Gitea secret
 - [ ] Confirm production DB schema push succeeds end-to-end via CD (not just manually)
 - [ ] Review whether "Deny Public Network Access" should be re-enabled with tighter "Selected networks" scoping for production security, now that dev/CD access has been confirmed to work
+- [ ] Verify `AZURE_CREDENTIALS` service principal secret is added to Gitea and has Contributor access to `TutorM_group`

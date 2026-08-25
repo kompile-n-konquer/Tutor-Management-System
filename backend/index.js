@@ -16,7 +16,8 @@ app.use('/api/users', usersRouter);
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware
 
-const PORT = process.env.SERVER_PORT;
+// Azure App Service sets PORT; SERVER_PORT is kept for backward compatibility / local dev.
+const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on PORT ${PORT}`);
 });

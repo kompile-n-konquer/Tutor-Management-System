@@ -1,0 +1,263 @@
+---
+sidebar_position: 7
+title: Functional Requirements
+description: Implemented functional requirements for the TutorFlow Tutor Management System
+---
+
+# Functional Requirements
+
+This page documents the functional requirements that have been implemented in the TutorFlow
+Tutor Management System. Each requirement is mapped to the feature area and describes the
+current implementation status.
+
+---
+
+## FR-1: Authentication & Account Management
+
+### FR-1.1 — Email & Password Login
+
+- The system shall allow users to log in using an email address and password.
+- The system shall validate the email format before submission.
+- The system shall display user-friendly error messages for invalid credentials or
+  Firebase authentication failures.
+- **Status:** Implemented — `Login.jsx` uses Firebase `signInWithEmailAndPassword` with
+  email validation and a centralized error message hook.
+
+### FR-1.2 — Google OAuth Sign-In
+
+- The system shall allow users to authenticate using their Google account via OAuth.
+- The system shall redirect the user to the dashboard upon successful Google sign-in.
+- **Status:** Implemented — `Login.jsx` integrates Firebase `signInWithPopup` with the
+  Google provider (`googleProvider.js`).
+
+### FR-1.3 — User Registration (Sign Up)
+
+- The system shall allow new users to create an account with first name, last name, email,
+  and password.
+- The system shall require password confirmation before account creation.
+- The system shall disable the submit button until all required fields are valid.
+- Upon successful Firebase account creation, the system shall send user details to the
+  backend API to persist the user record in the database.
+- **Status:** Implemented — `Signup.jsx` calls Firebase `createUserWithEmailAndPassword`
+  followed by a POST to `/api/users`.
+
+### FR-1.4 — Password Reset
+
+- The system shall allow users to request a password reset link via email.
+- The system shall validate the email format before sending the reset link.
+- The system shall display a confirmation message after the reset email is sent.
+- **Status:** Implemented — `ForgotPassword.jsx` uses Firebase `sendPasswordResetEmail`
+  and navigates to a `ConfirmationMessage` page on success.
+
+### FR-1.5 — Firebase Authentication Integration
+
+- The system shall use Firebase Authentication as the identity provider for all
+  authentication flows.
+- Firebase configuration shall be sourced from environment variables.
+- **Status:** Implemented — `firebase.js` initializes Firebase using `VITE_FIREBASE_*`
+  environment variables and exports the `auth` instance.
+
+---
+
+## FR-2: Landing Page
+
+### FR-2.1 — Public Landing Page
+
+- The system shall display a public-facing landing page describing the platform's purpose
+  and features.
+- The landing page shall include sections for Benefits, Features, and Contact information.
+- The landing page shall provide navigation to Sign Up and Log In.
+- **Status:** Implemented — `Home.jsx` renders a full landing page with hero section,
+  feature cards (for Organisers, Tutors, Students), and footer.
+
+---
+
+## FR-3: Tutor Dashboard
+
+### FR-3.1 — Dashboard Metrics
+
+- The system shall display key metrics for the logged-in tutor, including allocated hours,
+  active courses, and timesheet status.
+- **Status:** Implemented — `TutorDashboard.jsx` renders metric cards for allocated hours,
+  active course count, and timesheet approval status.
+
+### FR-3.2 — Assigned Sessions View
+
+- The system shall display a table of the tutor's assigned tutoring sessions showing
+  course, day/time, location, and session status.
+- **Status:** Implemented — `TutorDashboard.jsx` includes a sessions table with status badges.
+
+---
+
+## FR-4: Allocation Board
+
+### FR-4.1 — Course List with Allocation Progress
+
+- The system shall display a list of courses with the number of required and allocated
+  tutors, shown as a progress bar.
+- Courses requiring urgent attention shall be visually highlighted.
+- **Status:** Implemented — `AllocationBoard.jsx` renders a course sidebar with progress
+  indicators and urgency badges.
+
+### FR-4.2 — Drag-and-Drop Tutor Allocation
+
+- The system shall allow organisers to drag tutors between an "Available" pool and an
+  "Allocated" pool for each course.
+- The system shall visually highlight the drop target during drag operations.
+- **Status:** Implemented — `AllocationBoard.jsx` implements HTML5 drag-and-drop between
+  two pool columns.
+
+### FR-4.3 — Tutor Cards with Metadata
+
+- Each tutor card shall display the tutor's name, rating, remaining available hours,
+  verification status, and any schedule clashes.
+- Schedule clashes shall be visually flagged with a warning indicator.
+- **Status:** Implemented — `TutorCard` component renders rating, hours left, verified/clash
+  badges, and clash warning icons.
+
+### FR-4.4 — Auto-Assign
+
+- The system shall provide an "Auto-Assign" button for automated tutor allocation.
+- **Status:** UI present — button rendered in `AllocationBoard.jsx`; backend logic pending.
+
+---
+
+## FR-5: Volunteer View
+
+### FR-5.1 — Browse Volunteer Opportunities
+
+- The system shall display available volunteer opportunities with descriptions and
+  estimated hours.
+- **Status:** Implemented — `VolunteerView.jsx` renders volunteer opportunity cards.
+
+### FR-5.2 — Apply to Volunteer
+
+- The system shall allow tutors and students to apply for volunteer opportunities.
+- **Status:** UI present — "Apply to Volunteer" button rendered; backend integration pending.
+
+---
+
+## FR-6: Profile Management
+
+### FR-6.1 — Personal Information Display
+
+- The system shall display the user's personal information including email, phone number,
+  department, and spoken languages.
+- **Status:** Implemented — `Profile.jsx` renders personal info cards.
+
+### FR-6.2 — Academic History
+
+- The system shall display the user's academic history with course codes, terms, grades,
+  and eligibility status.
+- **Status:** Implemented — `Profile.jsx` renders an academic history list with grade badges.
+
+### FR-6.3 — Availability & Schedule Calendar
+
+- The system shall display a weekly calendar grid showing the user's available time slots,
+  scheduled sessions, and any scheduling conflicts.
+- Scheduling conflicts shall be visually highlighted with a hover tooltip explaining the clash.
+- **Status:** Implemented — `Profile.jsx` renders a weekly availability grid with available
+  slots, lab sessions, and clash warnings.
+
+### FR-6.4 — Notification Preferences
+
+- The system shall allow users to toggle notification preferences for allocation requests,
+  schedule changes, and timesheet reminders.
+- **Status:** Implemented — `Profile.jsx` includes toggle switches for notification categories.
+
+### FR-6.5 — Security Settings
+
+- The system shall display the user's security status including two-factor authentication
+  and connected device management.
+- **Status:** UI present — security section rendered in `Profile.jsx`; backend integration pending.
+
+---
+
+## FR-7: Timesheets
+
+### FR-7.1 — View Weekly Timesheets
+
+- The system shall display weekly timesheet entries with total logged hours and approval status.
+- **Status:** Implemented — `Timesheets.jsx` renders weekly timesheet cards with status badges.
+
+### FR-7.2 — Submit New Time Logs
+
+- The system shall allow tutors to submit new timesheet entries.
+- **Status:** UI present — "Submit New Log" button rendered; form and backend integration pending.
+
+---
+
+## FR-8: Role-Based Navigation
+
+### FR-8.1 — Role-Filtered Sidebar
+
+- The system shall display navigation links filtered by the logged-in user's role
+  (organiser, tutor, student, lecturer).
+- **Status:** Implemented — `navConfig.js` defines role-based navigation and
+  `getNavLinksForRole()` filters links accordingly.
+
+### FR-8.2 — Application Layout
+
+- The system shall provide a consistent application layout with a sidebar, top navigation
+  bar, and content area across all authenticated pages.
+- **Status:** Implemented — `AppLayout.jsx`, `Sidebar.jsx`, and `TopNavBar.jsx` provide
+  the shared layout shell.
+
+---
+
+## FR-9: Backend API
+
+### FR-9.1 — User Endpoints
+
+- The system shall expose REST endpoints to retrieve all users (`GET /api/users`) and
+  create a new user (`POST /api/users`).
+- User creation shall require `firstName`, `lastName`, `email`, and `firebaseUid`.
+- New users shall be assigned the `STUDENT` role by default.
+- **Status:** Implemented — `routes/auth.js` and `controllers/auth.js`.
+
+### FR-9.2 — Global Error Handling
+
+- The system shall handle errors globally with a centralized error middleware.
+- The system shall return a 404 response for undefined routes.
+- **Status:** Implemented — `controllers/error.js` provides `globalErrorHandler` and
+  `notFoundErrorHandler` middleware.
+
+### FR-9.3 — Async Error Catching
+
+- The system shall wrap async route handlers to catch and forward errors to the Express
+  error pipeline.
+- **Status:** Implemented — `utils/catchAsync.js`.
+
+---
+
+## FR-10: Database Schema
+
+### FR-10.1 — Core Data Models
+
+- The system shall define data models for Users, Tutors, Lecturers, Applicants, Courses,
+  Tutor Assignments, Availability, Timesheets, Timesheet Entries, Sessions, Course Slots,
+  and Overflow Work.
+- **Status:** Implemented — `schema.prisma` defines all models with relations.
+
+### FR-10.2 — Role Enumerations
+
+- The system shall support user roles: STUDENT, TUTOR, LECTURER, TA, and ADMIN.
+- **Status:** Implemented — `UserRole` enum in `schema.prisma`.
+
+### FR-10.3 — Status Workflows
+
+- The system shall define status enumerations for applications (PENDING, APPROVED, REJECTED),
+  tutor status (AVAILABLE, ASSIGNED, INACTIVE), assignments (PENDING, ACTIVE, COMPLETED),
+  timesheets (DRAFT, SUBMITTED, APPROVED, REJECTED), overflow work (OPEN, CLAIMED, CLOSED),
+  and sessions (SCHEDULED, COMPLETED, CANCELLED, EXCUSED).
+- **Status:** Implemented — all status enums defined in `schema.prisma`.
+
+---
+
+## Implementation Status Legend
+
+| Status | Meaning |
+|---|---|
+| **Implemented** | Fully functional with frontend and/or backend integration |
+| **UI present** | Frontend component rendered; backend integration pending |
+| **Pending** | Planned but not yet started |

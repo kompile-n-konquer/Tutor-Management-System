@@ -1,0 +1,123 @@
+---
+sidebar_position: 2
+title: Project Methodology
+---
+
+# Project Methodology — Tutor Management System
+
+## Development Methodology
+
+This project follows **Scrum**, an Agile framework built around fixed-length
+iterations ("sprints") that each produce a working increment of the software.
+
+Why Scrum
+
+The course imposes fixed milestone deadlines (Sprint 1, 2, 3, Submission), which map
+ naturally onto sprint boundaries — each milestone functions as a sprint with its own
+  goal and scope. With a small team, Scrum's lightweight structure (a defined sprint goal,
+   a tracked backlog, and iterative delivery) gives us enough process to stay coordinated
+    without the overhead of a heavier framework.
+
+- **Team size:** 6
+
+- **Sprint length:** Variable, driven by the course's fixed milestone
+  calendar rather than a uniform cadence:
+  | Sprint | Start | End | Length |
+  |---|---|---|---|
+  | Sprint 1 | 2026-08-02 | 2026-08-25 | 23 days (~3.3 weeks) |
+  | Sprint 2 | 2026-08-25 | 2026-09-15 | 21 days (3 weeks) |
+  | Sprint 3 | 2026-09-15 | 2026-09-29 | 14 days (2 weeks) |
+  | Wrap-up / stabilization | 2026-09-29 | 2026-10-11 | 12 days (~1.7 weeks) — final hardening and bug-fixing before submission, not a full sprint |
+
+
+
+### Roles
+
+- **Product Owner:** Ndumiso Skhosana — owns the backlog and prioritizes features.
+- **Scrum Master:**  Mogomotsi Motoma — facilitates ceremonies and removes blockers.
+- **Development Team:** Remaining members, responsible for implementation.
+
+---
+
+
+## Scrum Ceremonies
+
+| Ceremony | Frequency | Purpose |
+| --- | --- | --- |
+| Sprint Planning | Start of each sprint | Select and estimate backlog items for the sprint |
+| Daily Standup | Daily | Quick sync — what was done, what's next, and any blockers |
+| Sprint Review | End of each sprint | Demonstrate completed work to stakeholders |
+| Sprint Retrospective | End of each sprint | Reflect on the process — what worked and what can be improved |
+
+---
+
+## Sprint Logs
+ 
+Each sprint has its own page documenting that sprint's goal, scope,
+ceremonies held, and evidence. Pages are added as each sprint concludes.
+ 
+- [Sprint 1](./sprint-logs/sprint-1.mdx) — 2026-08-02 → 2026-08-25
+- Sprint 2 — 2026-08-25 → 2026-09-15 *(added at end of Sprint 2)*
+- Sprint 3 — 2026-09-15 → 2026-09-29 *(added at end of Sprint 3)*
+- Wrap-up — 2026-09-29 → 2026-10-11 *(added before submission)*
+
+## Backlog & Task Tracking
+
+- **Tool used:** Gitea Issues and Gitea Project
+- User stories are broken down into smaller tasks and tracked through the following workflow:
+
+```text
+Backlog → To Do → In Progress → Done
+```
+
+## Version Control & Branching
+ 
+- Repository hosted on a self-hosted **Gitea** instance.
+- Feature work happens on descriptively-named branches following a
+  `<type>/<short-description>` convention (e.g. `feat/backend-routes-connectivity`,
+  `chore/setup-webpages-frontend`).
+- Changes are merged via **Pull Requests**, reviewed by at least one other
+  team member before merging into `main`.
+- Commit messages describe the change and, where relevant, the branch/feature
+  they belong to.
+
+## Continuous Integration / Continuous Deployment (CI/CD)
+ 
+Automated via **Gitea Actions**, triggered on every push to `main`:
+ 
+- **Backend:** installed, tested, and deployed to **Azure App Service**.
+- **Frontend:** built and deployed to **Vercel**.
+- Both jobs run independently, so a failure in one does not block the other.
+
+## Scrum Ceremonies
+ 
+- **Sprint Planning:** done - captured as the Gitea Milestone goal/scope
+  above, with issues created and assigned against it.
+- **Daily Standups:** While daily standups are not currently conducted
+ as a formal, documented ceremony, the team holds daily check-ins and
+  discussions through WhatsApp to communicate progress, upcoming tasks, and any blockers.
+- **Sprint Review:** not yet formally documented. 
+- **Sprint Retrospective:** not yet formally run for Sprint 1. Planned to
+  be introduced from Sprint 2 onward.
+These ceremonies are being formalized going into Sprint 2, where the
+"Actively following methodology" criterion carries the same 10% weight and
+explicitly expects ongoing evidence.
+
+## Definition of Done
+ 
+A task/user story is considered **Done** when it:
+- [ ] Meets the acceptance criteria defined during sprint planning
+- [ ] Has been code-reviewed and merged via Pull Request
+- [ ] Passes CI checks (build, lint, tests where applicable)
+- [ ] Has been manually verified against the live/staging environment
+- [ ] Does not introduce regressions to existing functionality
+## Communication
+ 
+- Tool used for team communication - WhatsApp, Gmail Spaces
+- Standups: format - text updates, live call
+
+## Evidence
+ 
+Evidence that this methodology is used (not just declared) is captured
+per-sprint on each [sprint's page](#sprint-logs), since the rubric expects
+this to be shown as ongoing, not a one-time snapshot.

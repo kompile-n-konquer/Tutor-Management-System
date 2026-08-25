@@ -1,0 +1,18 @@
+<svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="1200" height="800" fill="#ffffff" stroke="#555555" stroke-width="2"/>
+<text x="600.0" y="60" font-family='Helvetica, Arial, sans-serif' font-size="24" font-weight="bold" text-anchor="middle" fill="#222">Tutor Flow</text>
+<rect x="380.0" y="110" width="440" height="480" fill="#f7f7f7" stroke="#555555" rx="6"/>
+<text x="410.0" y="150" font-family='Helvetica, Arial, sans-serif' font-size="18" font-weight="bold" fill="#222">Log In</text>
+<text x="410.0" y="184" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#555">Email</text>
+<rect x="410.0" y="190" width="380" height="34" fill="#ffffff" stroke="#555555" rx="3"/>
+<text x="410.0" y="254" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#555">Password</text>
+<rect x="410.0" y="260" width="380" height="34" fill="#ffffff" stroke="#555555" rx="3"/>
+<rect x="410.0" y="320" width="380" height="40" fill="#cfcfcf" stroke="#555555" rx="4"/>
+<text x="600.0" y="345.0" font-family='Helvetica, Arial, sans-serif' font-size="13" text-anchor="middle" fill="#222">Log In</text>
+<text x="410.0" y="385" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#3355aa">Forgot password?</text>
+<line x1="410.0" y1="410" x2="790.0" y2="410" stroke="#555555" stroke-dasharray="2,2"/>
+<text x="410.0" y="440" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#555">Don't have an account?</text>
+<rect x="410.0" y="455" width="380" height="40" fill="#ffffff" stroke="#555555" rx="4"/>
+<text x="600.0" y="480.0" font-family='Helvetica, Arial, sans-serif' font-size="13" text-anchor="middle" fill="#222">Sign Up</text>
+<text x="600.0" y="540" font-family='Helvetica, Arial, sans-serif' font-size="10" fill="#999" text-anchor="middle">AuthLayout shared shell: Login / Signup / Forgot Password swap this card only</text>
+</svg>

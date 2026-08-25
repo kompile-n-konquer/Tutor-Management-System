@@ -1,0 +1,71 @@
+<svg viewBox="0 0 1100 700" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="1100" height="700" fill="#0d1117"/>
+<text x="550.0" y="36" font-family='Helvetica, Arial, sans-serif' font-size="20" font-weight="bold" text-anchor="middle" fill="#e6edf3">Tutor Flow — System Architecture Overview</text>
+<circle cx="90" cy="130" r="26" fill="#4A5CC9"/>
+<text x="90" y="136" font-family='Helvetica, Arial, sans-serif' font-size="23" text-anchor="middle" fill="#ffffff" font-weight="bold">U</text>
+<text x="90" y="178" font-family='Helvetica, Arial, sans-serif' font-size="14" font-weight="bold" text-anchor="middle" fill="#e6edf3">Students /</text>
+<text x="90" y="196" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">Tutors / Lecturers</text>
+<rect x="200" y="80" width="220" height="140" rx="10" fill="#161b22" stroke="#2D8CFF" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="216" y="106" font-family='Helvetica, Arial, sans-serif' font-size="13" font-weight="bold" fill="#2D8CFF">Client (Browser)</text>
+<circle cx="310" cy="155" r="30" fill="#2D8CFF"/>
+<text x="310" y="161" font-family='Helvetica, Arial, sans-serif' font-size="27" text-anchor="middle" fill="#ffffff" font-weight="bold">▢</text>
+<text x="310" y="207" font-family='Helvetica, Arial, sans-serif' font-size="14" font-weight="bold" text-anchor="middle" fill="#e6edf3">React App</text>
+<text x="310" y="225" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">hosted on Vercel</text>
+<rect x="480" y="80" width="260" height="140" rx="10" fill="#161b22" stroke="#2E9E5B" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="496" y="106" font-family='Helvetica, Arial, sans-serif' font-size="13" font-weight="bold" fill="#2E9E5B">Application Server</text>
+<circle cx="610" cy="155" r="30" fill="#2E9E5B"/>
+<text x="610" y="161" font-family='Helvetica, Arial, sans-serif' font-size="27" text-anchor="middle" fill="#ffffff" font-weight="bold">⚙</text>
+<text x="610" y="207" font-family='Helvetica, Arial, sans-serif' font-size="14" font-weight="bold" text-anchor="middle" fill="#e6edf3">Node.js API</text>
+<text x="610" y="225" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">Azure App Service</text>
+<circle cx="900" cy="155" r="28" fill="#F2994A"/>
+<text x="900" y="161" font-family='Helvetica, Arial, sans-serif' font-size="25" text-anchor="middle" fill="#ffffff" font-weight="bold">K</text>
+<text x="900" y="205" font-family='Helvetica, Arial, sans-serif' font-size="14" font-weight="bold" text-anchor="middle" fill="#e6edf3">Firebase Auth</text>
+<text x="900" y="223" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">sign up / sign in</text>
+<rect x="430" y="330" width="260" height="150" rx="10" fill="#161b22" stroke="#B8860B" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="446" y="356" font-family='Helvetica, Arial, sans-serif' font-size="13" font-weight="bold" fill="#B8860B">Data Layer</text>
+<circle cx="560" cy="410" r="30" fill="#B8860B"/>
+<text x="560" y="416" font-family='Helvetica, Arial, sans-serif' font-size="27" text-anchor="middle" fill="#ffffff" font-weight="bold">≡</text>
+<text x="560" y="462" font-family='Helvetica, Arial, sans-serif' font-size="14" font-weight="bold" text-anchor="middle" fill="#e6edf3">SQL Server DB</text>
+<text x="560" y="480" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">via Prisma ORM</text>
+<rect x="750" y="330" width="260" height="150" rx="10" fill="#161b22" stroke="#8A8F98" stroke-width="2" stroke-dasharray="6,4"/>
+<text x="766" y="356" font-family='Helvetica, Arial, sans-serif' font-size="13" font-weight="bold" fill="#8A8F98">Planned Integrations</text>
+<circle cx="880" cy="410" r="28" fill="#8A8F98"/>
+<text x="880" y="416" font-family='Helvetica, Arial, sans-serif' font-size="25" text-anchor="middle" fill="#ffffff" font-weight="bold">?</text>
+<text x="880" y="460" font-family='Helvetica, Arial, sans-serif' font-size="14" font-weight="bold" text-anchor="middle" fill="#e6edf3">External API</text>
+<text x="880" y="478" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">TBD</text>
+<defs><marker id="arrow-116-130-200-150" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4A5CC9"/></marker></defs>
+<line x1="116" y1="130" x2="200" y2="150" stroke="#4A5CC9" stroke-width="2" marker-end="url(#arrow-116-130-200-150)"/>
+<rect x="144.8" y="119.0" width="26.4" height="18" fill="#0d1117"/>
+<text x="158.0" y="132.0" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#4A5CC9">uses</text>
+<defs><marker id="arrow-340-155-480-155" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2E9E5B"/></marker></defs>
+<line x1="340" y1="155" x2="480" y2="155" stroke="#2E9E5B" stroke-width="2" marker-end="url(#arrow-340-155-480-155)"/>
+<rect x="370.4" y="134.0" width="79.19999999999999" height="18" fill="#0d1117"/>
+<text x="410.0" y="147.0" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#2E9E5B">REST / HTTPS</text>
+<defs><marker id="arrow-310-185-880-175" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#F2994A"/></marker></defs>
+<line x1="310" y1="185" x2="880" y2="175" stroke="#F2994A" stroke-width="2" marker-end="url(#arrow-310-185-880-175)"/>
+<rect x="512.5" y="127.0" width="165.0" height="18" fill="#0d1117"/>
+<text x="595.0" y="140.0" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#F2994A">sign up / sign in / token</text>
+<defs><marker id="arrow-640-185-890-180" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#F2994A"/></marker></defs>
+<line x1="640" y1="185" x2="890" y2="180" stroke="#F2994A" stroke-width="2" marker-end="url(#arrow-640-185-890-180)"/>
+<rect x="708.9" y="187.5" width="112.19999999999999" height="18" fill="#0d1117"/>
+<text x="765.0" y="200.5" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#F2994A">verifies ID token</text>
+<defs><marker id="arrow-610-185-560-330" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#B8860B"/></marker></defs>
+<line x1="610" y1="185" x2="560" y2="330" stroke="#B8860B" stroke-width="2" marker-end="url(#arrow-610-185-560-330)"/>
+<rect x="538.8" y="236.5" width="92.39999999999999" height="18" fill="#0d1117"/>
+<text x="585.0" y="249.5" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#B8860B">Prisma queries</text>
+<defs><marker id="arrow-700-155-750-380" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#8A8F98"/></marker></defs>
+<line x1="700" y1="155" x2="750" y2="380" stroke="#8A8F98" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-700-155-750-380)"/>
+<rect x="701.9" y="224.5" width="46.199999999999996" height="18" fill="#0d1117"/>
+<text x="725.0" y="237.5" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#8A8F98">planned</text>
+<circle cx="60" cy="590" r="7" fill="#2D8CFF"/>
+<text x="76" y="594" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#e6edf3">Client / Frontend</text>
+<circle cx="229" cy="590" r="7" fill="#2E9E5B"/>
+<text x="245" y="594" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#e6edf3">Backend / API</text>
+<circle cx="370" cy="590" r="7" fill="#F2994A"/>
+<text x="386" y="594" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#e6edf3">Auth</text>
+<circle cx="448" cy="590" r="7" fill="#B8860B"/>
+<text x="464" y="594" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#e6edf3">Database</text>
+<circle cx="554" cy="590" r="7" fill="#8A8F98"/>
+<text x="570" y="594" font-family='Helvetica, Arial, sans-serif' font-size="12" fill="#e6edf3">Planned / External</text>
+<text x="550.0" y="660" font-family='Helvetica, Arial, sans-serif' font-size="11" text-anchor="middle" fill="#9da7b3">Synthesized from: Component Diagram, ER Diagram (Data Layer), and Sequence Diagram (Assigning a Tutor)</text>
+</svg>

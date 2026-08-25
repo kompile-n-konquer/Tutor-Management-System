@@ -42,7 +42,7 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
 
   // This approach of awaiting one promise after the other leaves the data with inconsistant when the firebase operation fails
   const { getAuth } = getFirebaseAdmin(); // If this fails the db call will not happen
-  await prisma.user.update({ where: { firebaseUid }, data: { isActive: true } });
+  await prisma.user.update({ where: { firebaseUid }, data: { isActive: false } });
   await getAuth().updateUser(firebaseUid, { disabled: true });
 
   res.status(204).end();

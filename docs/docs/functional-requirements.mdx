@@ -78,14 +78,15 @@ current implementation status.
 
 - The system shall display key metrics for the logged-in tutor, including allocated hours,
   active courses, and timesheet status.
-- **Status:** Implemented — `TutorDashboard.jsx` renders metric cards for allocated hours,
-  active course count, and timesheet approval status.
+- **Status:** Pending — page exists in `TutorDashboard.jsx` but data is currently mocked and
+  the feature is not yet fully functional.
 
 ### FR-3.2 — Assigned Sessions View
 
 - The system shall display a table of the tutor's assigned tutoring sessions showing
   course, day/time, location, and session status.
-- **Status:** Implemented — `TutorDashboard.jsx` includes a sessions table with status badges.
+- **Status:** Pending — sessions table is rendered with static data; backend integration is
+  not yet complete.
 
 ---
 
@@ -96,29 +97,30 @@ current implementation status.
 - The system shall display a list of courses with the number of required and allocated
   tutors, shown as a progress bar.
 - Courses requiring urgent attention shall be visually highlighted.
-- **Status:** Implemented — `AllocationBoard.jsx` renders a course sidebar with progress
-  indicators and urgency badges.
+- **Status:** Pending — course sidebar and progress UI exist in `AllocationBoard.jsx` but are
+  populated with static data; allocation logic is not yet functional.
 
 ### FR-4.2 — Drag-and-Drop Tutor Allocation
 
 - The system shall allow organisers to drag tutors between an "Available" pool and an
   "Allocated" pool for each course.
 - The system shall visually highlight the drop target during drag operations.
-- **Status:** Implemented — `AllocationBoard.jsx` implements HTML5 drag-and-drop between
-  two pool columns.
+- **Status:** Pending — drag-and-drop UI is present in `AllocationBoard.jsx` but state is local
+  and not persisted; backend integration is not yet complete.
 
 ### FR-4.3 — Tutor Cards with Metadata
 
 - Each tutor card shall display the tutor's name, rating, remaining available hours,
   verification status, and any schedule clashes.
 - Schedule clashes shall be visually flagged with a warning indicator.
-- **Status:** Implemented — `TutorCard` component renders rating, hours left, verified/clash
-  badges, and clash warning icons.
+- **Status:** Pending — tutor cards render in `AllocationBoard.jsx` but use static sample data;
+  dynamic data is not yet wired up.
 
 ### FR-4.4 — Auto-Assign
 
 - The system shall provide an "Auto-Assign" button for automated tutor allocation.
-- **Status:** UI present — button rendered in `AllocationBoard.jsx`; backend logic pending.
+- **Status:** Pending — auto-assign button is rendered but the underlying allocation logic is
+  not implemented.
 
 ---
 
@@ -128,12 +130,14 @@ current implementation status.
 
 - The system shall display available volunteer opportunities with descriptions and
   estimated hours.
-- **Status:** Implemented — `VolunteerView.jsx` renders volunteer opportunity cards.
+- **Status:** Pending — volunteer opportunity cards exist in `VolunteerView.jsx` but use static
+  data; backend integration is not yet complete.
 
 ### FR-5.2 — Apply to Volunteer
 
 - The system shall allow tutors and students to apply for volunteer opportunities.
-- **Status:** UI present — "Apply to Volunteer" button rendered; backend integration pending.
+- **Status:** Pending — "Apply to Volunteer" button is rendered but the application flow is not
+  implemented.
 
 ---
 
@@ -143,33 +147,37 @@ current implementation status.
 
 - The system shall display the user's personal information including email, phone number,
   department, and spoken languages.
-- **Status:** Implemented — `Profile.jsx` renders personal info cards.
+- **Status:** Pending — personal info cards exist in `Profile.jsx` but display static data; editing
+  and persistence are not yet implemented.
 
 ### FR-6.2 — Academic History
 
 - The system shall display the user's academic history with course codes, terms, grades,
   and eligibility status.
-- **Status:** Implemented — `Profile.jsx` renders an academic history list with grade badges.
+- **Status:** Pending — academic history list exists in `Profile.jsx` but is populated with static
+  sample data.
 
 ### FR-6.3 — Availability & Schedule Calendar
 
 - The system shall display a weekly calendar grid showing the user's available time slots,
   scheduled sessions, and any scheduling conflicts.
 - Scheduling conflicts shall be visually highlighted with a hover tooltip explaining the clash.
-- **Status:** Implemented — `Profile.jsx` renders a weekly availability grid with available
-  slots, lab sessions, and clash warnings.
+- **Status:** Pending — availability grid is rendered in `Profile.jsx` but uses static data and
+  does not yet save changes.
 
 ### FR-6.4 — Notification Preferences
 
 - The system shall allow users to toggle notification preferences for allocation requests,
   schedule changes, and timesheet reminders.
-- **Status:** Implemented — `Profile.jsx` includes toggle switches for notification categories.
+- **Status:** Pending — notification toggles are present in `Profile.jsx` but preferences are not
+  persisted.
 
 ### FR-6.5 — Security Settings
 
 - The system shall display the user's security status including two-factor authentication
   and connected device management.
-- **Status:** UI present — security section rendered in `Profile.jsx`; backend integration pending.
+- **Status:** Pending — security section is rendered in `Profile.jsx` but 2FA and device management
+  are not yet integrated.
 
 ---
 
@@ -178,12 +186,14 @@ current implementation status.
 ### FR-7.1 — View Weekly Timesheets
 
 - The system shall display weekly timesheet entries with total logged hours and approval status.
-- **Status:** Implemented — `Timesheets.jsx` renders weekly timesheet cards with status badges.
+- **Status:** Pending — timesheet cards exist in `Timesheets.jsx` but use static data; backend
+  integration is not yet complete.
 
 ### FR-7.2 — Submit New Time Logs
 
 - The system shall allow tutors to submit new timesheet entries.
-- **Status:** UI present — "Submit New Log" button rendered; form and backend integration pending.
+- **Status:** Pending — "Submit New Log" button is rendered but the submission form and backend
+  integration are not implemented.
 
 ---
 
@@ -193,15 +203,15 @@ current implementation status.
 
 - The system shall display navigation links filtered by the logged-in user's role
   (organiser, tutor, student, lecturer).
-- **Status:** Implemented — `navConfig.js` defines role-based navigation and
-  `getNavLinksForRole()` filters links accordingly.
+- **Status:** Pending — role-based navigation is defined in `navConfig.js` but active role
+  resolution from authentication state is not yet wired up.
 
 ### FR-8.2 — Application Layout
 
 - The system shall provide a consistent application layout with a sidebar, top navigation
   bar, and content area across all authenticated pages.
-- **Status:** Implemented — `AppLayout.jsx`, `Sidebar.jsx`, and `TopNavBar.jsx` provide
-  the shared layout shell.
+- **Status:** Pending — application layout components (`AppLayout.jsx`, `Sidebar.jsx`, `TopNavBar.jsx`)
+  exist but are not yet driven by live authentication/role data.
 
 ---
 

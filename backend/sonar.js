@@ -3,7 +3,7 @@ const { scan } = require('@sonar/scan');
 const runScan = async () => {
   try {
     await scan({
-      serverUrl: 'http://localhost:9000',
+      serverUrl: process.env.SONAR_HOST_URL,
       token: process.env.SONAR_TOKEN,
 
       options: {

@@ -1,0 +1,31 @@
+---
+id: wireframes
+title: Initial Wireframes
+sidebar_label: Wireframes
+---
+
+## Auth (Login / Signup / Forgot Password)
+
+![Auth wireframe](/img/wireframes/auth.svg)
+
+Shared `AuthLayout` shell — one card that swaps between Login, Signup, and Forgot Password. Used by all roles (student, tutor, lecturer) to sign in.
+
+## Student — Apply to Become a Tutor
+
+![Student apply-to-tutor wireframe](/img/wireframes/student-apply-tutor.svg)
+
+The student picks a course they've already completed and submits a tutor application. Their mark for that course is pulled in automatically (read-only, dashed border) rather than self-reported, since eligibility depends on it. Availability and a short motivation field round out the application. The right-hand panel tracks the status (pending/accepted/rejected) of every application the student has submitted, so they don't need to ask a lecturer directly.
+
+## Tutor — Working Hours & Calendar
+
+![Tutor hours and calendar wireframe](/img/wireframes/tutor-hours-calendar.svg)
+
+Top cards summarise hours worked this week against the max allowed, and how many courses the tutor is assigned to — this is where a "hours exceeded" warning would surface. Below that, a weekly calendar grid shows assigned tutoring sessions alongside the tutor's own availability, so clashes are visible at a glance. The timesheet table at the bottom is where the tutor logs hours per date/course/activity before submitting — kept as draft rows until submission, matching the "visible before it's saved" validation requirement from your notes.
+
+## Lecturer — Course Tutors, Timesheet Review & Course Registration
+
+![Lecturer courses wireframe](/img/wireframes/lecturer-courses.svg)
+
+Three stacked sections on one page rather than separate tabs, since a lecturer's daily loop is: check who's tutoring their course → review submitted hours → occasionally register a new course. The tutors table shows each tutor's course mark (the same value validated during application) alongside assigned hours and status. The timesheets table is where approve/reject actions happen. The course registration form at the bottom is deliberately minimal (code + name) — you can extend it once you know what else `Course` needs at creation time.
+
+---

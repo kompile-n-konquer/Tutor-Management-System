@@ -4,21 +4,21 @@
 // There are various equivalent ways to declare your Docusaurus config.
 // See: https://docusaurus.io/docs/api/docusaurus-config
 
-import {themes as prismThemes} from 'prism-react-renderer';
+import { themes as prismThemes } from 'prism-react-renderer';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Tutor Management System',
-tagline: 'Allocating tutors to courses for Wits CS & Applied Maths',
+  tagline: 'Allocating tutors to courses for Wits CS & Applied Maths',
   favicon: 'img/favicon.ico',
 
   future: {
     v4: true,
   },
 
-  url: 'https://your-custom-docs-url.com', 
+  url: 'https://your-custom-docs-url.com',
   baseUrl: '/',
 
   onBrokenLinks: 'throw',
@@ -30,6 +30,14 @@ tagline: 'Allocating tutors to courses for Wits CS & Applied Maths',
     defaultLocale: 'en',
     locales: ['en'],
   },
+
+  // Enables ```mermaid code fences to render as diagrams.
+  // Must be a top-level config key, NOT inside themeConfig.
+  markdown: {
+    mermaid: true,
+  },
+  // Must also be a top-level config key, NOT inside themeConfig.
+  themes: ['@docusaurus/theme-mermaid'],
 
   presets: [
     [

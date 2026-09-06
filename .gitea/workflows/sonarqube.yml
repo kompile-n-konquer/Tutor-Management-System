@@ -32,4 +32,5 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_NAME: ${{ secrets.SONAR_PROJECT_NAME }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: node sonar.js

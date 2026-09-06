@@ -7,6 +7,7 @@ const runScan = async () => {
       token: process.env.SONAR_TOKEN,
 
       options: {
+        'sonar.host.url': process.env.SONAR_HOST_URL,
         'sonar.projectKey': process.env.SONAR_PROJECT_NAME,
         'sonar.sources': '../frontend,.',
         'sonar.exclusions': '**/node_modules/**',

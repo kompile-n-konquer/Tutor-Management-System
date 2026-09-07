@@ -156,14 +156,14 @@ model TimesheetEntry {
 }
 
 model Session {
-  id           Int             @id @default(autoincrement())
-  assignmentId Int
-  date         DateTime
-  startTime    DateTime
-  endTime      DateTime
-  status       String          @default("SCHEDULED")
-  excuseReason String?
-  assignment   TutorAssignment @relation(fields: [assignmentId], references: [id])
+  id            Int             @id @default(autoincrement())
+  assignmentId  Int
+  date          DateTime
+  courseSlotId  Int
+  status        String          @default("SCHEDULED")
+  excuseReason  String?
+  assignment    TutorAssignment @relation(fields: [assignmentId], references: [id])
+  courseSlot    CourseSlot      @relation(fields: [courseSlotId], references: [id])
 }
 
 model CourseSlot {

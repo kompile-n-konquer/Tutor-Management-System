@@ -15,7 +15,7 @@ model User {
   lastName       String
   email          String      @unique
   phoneNumber    String?
-  role           String      @default("STUDENT") // TODO: still open — 5 roles now (student, tutor, lecturer, organiser, admin); SQL Server doesn't support Prisma enums, so this stays a validated String unless you decide otherwise
+  role           String      @default("STUDENT") // intentionally String: SQL Server doesn't support Prisma enums; one of STUDENT/TUTOR/LECTURER/ORGANISER/ADMIN, validated in application code
   isActive       Boolean     @default(true)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -71,7 +71,7 @@ model Course {
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
-  // budget field — still open (needed for Issue 11's spend-vs-budget report, not yet added)
+  budget           Float? // course tutoring budget, used by the spend-vs-budget report (Issue 11)
   lecturerId       Int
   applications     Applicant[]
   lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])
@@ -88,7 +88,7 @@ model CourseTutorMark {
   courseId Int
   mark     Float
   tutor    Tutor  @relation(fields: [tutorId], references: [id])
-  course   Course @relation(fields: [courseId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
 
   @@unique([tutorId, courseId])
 }
@@ -163,7 +163,7 @@ model Session {
   status        String          @default("SCHEDULED")
   excuseReason  String?
   assignment    TutorAssignment @relation(fields: [assignmentId], references: [id])
-  courseSlot    CourseSlot      @relation(fields: [courseSlotId], references: [id])
+  courseSlot    CourseSlot      @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
 }
 
 model CourseSlot {
@@ -175,6 +175,7 @@ model CourseSlot {
   sessionType String?
   course      Course   @relation(fields: [courseId], references: [id])
   timeSlot    TimeSlot @relation(fields: [timeSlotId], references: [id])
+  sessions    Session[]
 
   @@index([courseId, dayOfWeek])
 }

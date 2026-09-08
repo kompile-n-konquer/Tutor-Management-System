@@ -22,16 +22,19 @@ This document describes the Azure infrastructure backing the Tutor Management Sy
 
 ## Credentials & Secrets
 
-The database connection string is stored as a **Gitea Actions secret** named `DATABASE_URL`. It is **not** committed to the repository.
+The following secrets must be configured as **repository-level** Gitea Actions secrets under `Repo → Settings → Actions → Secrets`:
 
-Connection string format used:
+| Secret | Purpose | How to obtain |
+|---|---|---|
+| `DATABASE_URL` | Prisma connection string to Azure SQL | See format below. |
+| `AZURE_WEBAPP_PUBLISH_PROFILE` | Publish-profile deployment to `TutorManagement` | Azure Portal → App Service → **Get publish profile** |
+
+### `DATABASE_URL` format
 ```
 sqlserver://komnkon.database.windows.net:1433;database=Tutor_DB;user=CloudSA67733bae;password=<password>;encrypt=true;trustServerCertificate=false;connectionTimeout=30
 ```
 
-> **Note:** As of this writing, `DATABASE_URL` was added as a **user-level** secret rather than a **repository-level** secret, because the person setting it up did not have Owner/Admin access to the repo. This needs to be corrected — an Owner/Admin (e.g. Mogomotsi) must add `DATABASE_URL` under:
-> `Repo → Settings → Actions → Secrets`
-> so it is available to CI/CD workflows for the whole team, not just one user's personal workflows.
+> **Note:** `DATABASE_URL` must be a **repository-level** secret, not a user-level secret, so the CD workflow can push the Prisma schema. The same value must also be set as an App Service setting in the Azure Portal under **TutorManagement → Configuration → Application settings** so the running app can connect to the database.
 
 ## Prisma Setup
 
@@ -80,6 +83,6 @@ npx prisma db push
 
 ## Open Items / Follow-ups
 
-- [ ] Move `DATABASE_URL` from user-level to repository-level Gitea secret
+- [x] Move `DATABASE_URL` from user-level to repository-level Gitea secret
 - [ ] Confirm production DB schema push succeeds end-to-end via CD (not just manually)
 - [ ] Review whether "Deny Public Network Access" should be re-enabled with tighter "Selected networks" scoping for production security, now that dev/CD access has been confirmed to work

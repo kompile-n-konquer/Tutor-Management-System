@@ -201,3 +201,19 @@ The extensive official documentation and a large developer ecosystem makes it ea
 
 Firebase provides authentication tokens that can be verified by backend services, allowing the backend to establish the identity of the
 authenticated user. This means we can retain our existing backend architecture while delegating authentication to Firebase
+
+## Overview
+
+A simplified, high-level view of how Tutor Flow's pieces connect — synthesized from the [Component Diagram](./component-diagram), the [Data Model (ER Diagram)](./er-diagram), and the [Sequence Diagram: Assigning a Tutor to a Course](./sequence-diagram). This page is meant as the "start here" overview before diving into the more detailed diagrams.
+
+![Tutor Flow architecture overview](pathname:///img/diagrams/architecture-overview.svg)
+
+### How it fits together
+
+- **Client (Browser)** — the React frontend, hosted on Vercel. This is what students, tutors, and lecturers interact with directly.
+- **Application Server** — the Node.js backend API, hosted on Azure App Service. Talks to the frontend over a hand-written REST/HTTPS API, and is where the combined validation endpoint (`POST /assignments/validate`) from the tutor-assignment sequence diagram lives.
+- **Firebase Auth** — handles sign up, sign in, and token issuance for the client. The backend verifies the Firebase ID token on incoming requests rather than managing sessions itself.
+- **Data Layer** — a SQL Server database accessed through Prisma ORM. This is where all the entities from the ER diagram (`USER`, `TUTOR`, `APPLICANT`, `TUTOR_ASSIGNMENT`, `TIMESHEET`, etc.) live.
+- **Planned Integrations** — an external API slot reserved for future integration; not yet built, shown dashed/grey to flag it as TBD rather than current architecture.
+
+This diagram intentionally leaves out AWS-style infra detail (load balancers, CDNs, auto-scaling groups) since Tutor Flow currently runs on managed platforms (Vercel, Azure App Service) rather than raw AWS infrastructure — those concerns are handled by the platform, not something the team configures directly.

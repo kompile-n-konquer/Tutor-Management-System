@@ -29,12 +29,11 @@ model Tutor {
   id               Int               @id @default(autoincrement())
   userId           Int               @unique
   hourlyRate       Float?
-  maxHoursPerWeek  Int
-  availableHours   Int
-  currentHours     Int               @default(0) // stored, kept in sync by assign/excuse logic — see note below
+  maxHoursPerWeek  Int // weekly hour cap; hours remaining is derived as cap - sum of assigned session durations for the week (Issue 32)
   status           String
   approvedAt       DateTime?
   availability     Availability[]
+  busyBlocks       BusyBlock[]
   overflowClaims   OverflowWork[]
   timesheets       Timesheet[]
   user             User              @relation(fields: [userId], references: [id])
@@ -124,6 +123,19 @@ model Availability {
   timeSlot   TimeSlot @relation(fields: [timeSlotId], references: [id])
 
   @@unique([tutorId, dayOfWeek, timeSlotId])
+}
+
+// Per-tutor busy time ranges (Issue 32). Free-form minute-of-day values rather than a
+// TimeSlot FK so tutors can block arbitrary unavailable ranges; a tutor may have many blocks.
+model BusyBlock {
+  id          Int   @id @default(autoincrement())
+  tutorId     Int
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+  tutor       Tutor @relation(fields: [tutorId], references: [id])
+
+  @@unique([tutorId, dayOfWeek, startMinute, endMinute])
 }
 
 model Timesheet {

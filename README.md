@@ -135,7 +135,8 @@ We are using Prisma ORM with a relational database. To run the backend locally, 
 
 # SonarQube Setup & Scan Guide
 
-This guide walks you through setting up SonarQube from scratch, running a scan on this project, and viewing the results — including after opening a pull request.
+This guide walks you through setting up SonarQube from scratch. Please wait for the scanner workflow
+to finish running before checking the results after opening a pull request
 
 1. **Prerequisites**
    Make sure you have the following installed before starting:

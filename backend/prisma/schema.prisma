@@ -139,16 +139,17 @@ model BusyBlock {
 }
 
 model Timesheet {
-  id            Int              @id @default(autoincrement())
-  tutorId       Int
-  payrollNumber String?
-  totalHours    Float
-  totalAmount   Float?
-  status        String           @default("DRAFT")
-  submittedAt   DateTime?
-  approvedAt    DateTime?
-  tutor         Tutor            @relation(fields: [tutorId], references: [id])
-  entries       TimesheetEntry[]
+  id              Int              @id @default(autoincrement())
+  tutorId         Int
+  payrollNumber   String?
+  totalHours      Float
+  totalAmount     Float?
+  status          String           @default("DRAFT") // DRAFT -> SUBMITTED -> APPROVED | REJECTED (workflow states per docs/docs/diagrams/er-diagram.md)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectionReason String? // set when a lecturer rejects a submitted timesheet; included in the rejection notification email
+  tutor           Tutor            @relation(fields: [tutorId], references: [id])
+  entries         TimesheetEntry[]
 }
 
 model TimesheetEntry {
@@ -202,4 +203,30 @@ model OverflowWork {
   status      String
   tutor       Tutor? @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course      Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+}
+
+// Audit log of email notification dispatch attempts (sent via Resend).
+// dedupeKey uniquely identifies one notification event, e.g.
+//   "ASSIGNMENT_ADDED:TutorAssignment:12"
+//   "TIMESHEET_STUCK_REMINDER:Timesheet:7:2026-W37" (at most one reminder per ISO week per timesheet)
+// A SENT row for a key blocks re-sending that event; FAILED rows do not block, so a failed
+// attempt can be retried later without producing a duplicate successful notification.
+// The affected entity is referenced by entityType/entityId (plain columns, no FK) on purpose:
+// the log is an audit snapshot that must survive entity deletion (e.g. removed assignments)
+// and this avoids introducing new SQL Server cascade-path constraints.
+model EmailLog {
+  id              Int       @id @default(autoincrement())
+  eventType       String // ASSIGNMENT_ADDED | ASSIGNMENT_REMOVED | TIMESHEET_APPROVED | TIMESHEET_REJECTED | TIMESHEET_STUCK_REMINDER
+  entityType      String // Prisma model name of the affected entity, e.g. TutorAssignment / Timesheet
+  entityId        Int
+  dedupeKey       String
+  recipientEmail  String
+  recipientUserId Int? // User.id of the recipient when known
+  status          String    @default("PENDING") // PENDING while in flight, then SENT or FAILED
+  subject         String?
+  attemptedAt     DateTime  @default(now())
+  sentAt          DateTime?
+  errorMessage    String? // failure details when status = FAILED
+
+  @@index([dedupeKey, status])
 }

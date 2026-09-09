@@ -10,7 +10,7 @@ title: Project Methodology
 This project follows **Scrum**, an Agile framework built around fixed-length
 iterations ("sprints") that each produce a working increment of the software.
 
-Why Scrum
+### Why Scrum
 
 The course imposes fixed milestone deadlines (Sprint 1, 2, 3, Submission), which map
  naturally onto sprint boundaries — each milestone functions as a sprint with its own
@@ -22,19 +22,19 @@ The course imposes fixed milestone deadlines (Sprint 1, 2, 3, Submission), which
 
 - **Sprint length:** Variable, driven by the course's fixed milestone
   calendar rather than a uniform cadence:
-  | Sprint | Start | End | Length |
-  |---|---|---|---|
-  | Sprint 1 | 2026-08-02 | 2026-08-25 | 23 days (~3.3 weeks) |
-  | Sprint 2 | 2026-08-25 | 2026-09-15 | 21 days (3 weeks) |
-  | Sprint 3 | 2026-09-15 | 2026-09-29 | 14 days (2 weeks) |
-  | Wrap-up / stabilization | 2026-09-29 | 2026-10-11 | 12 days (~1.7 weeks) — final hardening and bug-fixing before submission, not a full sprint |
+| Sprint | Start | End | Length |
+|---|---|---|---|
+| Sprint 1 | 2026-08-02 | 2026-08-25 | 23 days (~3.3 weeks) |
+| Sprint 2 | 2026-08-25 | 2026-09-15 | 21 days (3 weeks) |
+| Sprint 3 | 2026-09-15 | 2026-09-29 | 14 days (2 weeks) |
+| Wrap-up / stabilization | 2026-09-29 | 2026-10-11 | 12 days (~1.7 weeks) — final hardening and bug-fixing before submission, not a full sprint |
 
 
 
 ### Roles
 
 - **Product Owner:** Ndumiso Skhosana — owns the backlog and prioritizes features.
-- **Scrum Master:**  Mogomotsi Motoma — facilitates ceremonies and removes blockers.
+- **Scrum Master:** Mogomotsi Motoma — facilitates ceremonies and removes blockers.
 - **Development Team:** Remaining members, responsible for implementation.
 
 ---
@@ -89,7 +89,7 @@ Automated via **Gitea Actions**, triggered on every push to `main`:
 - **Frontend:** built and deployed to **Vercel**.
 - Both jobs run independently, so a failure in one does not block the other.
 
-## Scrum Ceremonies
+## Ceremony Adoption Status
  
 - **Sprint Planning:** done - captured as the Gitea Milestone goal/scope
   above, with issues created and assigned against it.
@@ -111,6 +111,7 @@ A task/user story is considered **Done** when it:
 - [ ] Passes CI checks (build, lint, tests where applicable)
 - [ ] Has been manually verified against the live/staging environment
 - [ ] Does not introduce regressions to existing functionality
+
 ## Communication
  
 - Tool used for team communication - WhatsApp, Gmail Spaces

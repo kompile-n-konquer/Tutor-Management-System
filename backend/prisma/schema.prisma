@@ -55,9 +55,10 @@ model Applicant {
   availability   String?
   status         String    @default("PENDING")
   appliedAt      DateTime  @default(now())
-  reviewedAt     DateTime?
-  course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  user           User      @relation(fields: [userId], references: [id])
+  reviewedAt      DateTime?        
+  course           Course           @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  user             User             @relation(fields: [userId], references: [id])
+  tutorAssignment  TutorAssignment?
 }
 model Course {
   id               Int               @id @default(autoincrement())
@@ -73,15 +74,17 @@ model Course {
   assignments      TutorAssignment[]
 }
 model TutorAssignment {
-  id             Int       @id @default(autoincrement())
-  tutorId        Int
+  id             Int        @id @default(autoincrement())
+  tutorId        Int?
   courseId       Int
+  applicantId    Int?       @unique
   allocatedHours Int
   semester       String
   status         String
   sessions       Session[]
-  course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  tutor          Tutor     @relation(fields: [tutorId], references: [id])
+  course         Course     @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  tutor          Tutor?     @relation(fields: [tutorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  applicant      Applicant? @relation(fields: [applicantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 model Availability {
   id        Int      @id @default(autoincrement())

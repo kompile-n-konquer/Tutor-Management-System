@@ -1,0 +1,39 @@
+---
+sidebar_position: 3
+title: Email Notifications
+description: Documentation for the Resend email notification service
+---
+
+# Email Notification Service
+
+This document provides a comprehensive overview of the email notification service implemented in the Tutor Management System, which uses **Resend** as the email provider.
+
+## What is Resend?
+
+Resend is an email API for developers. It enables applications to send transactional emails easily and reliably. Built with a focus on modern development, it provides a straightforward SDK and works well with React components to generate email templates.
+
+## Why Resend Was Chosen
+
+1. **Developer Experience**: Resend offers a clean, modern API with excellent documentation and easy-to-use SDKs.
+2. **React Email Integration**: It seamlessly integrates with React Email, allowing us to build email templates using React components instead of dealing directly with complex HTML tables and inline CSS.
+3. **Deliverability**: Resend is built for modern transactional emails, ensuring high deliverability rates and reducing the chances of emails ending up in spam folders.
+4. **Testing and Tooling**: The platform offers excellent tooling for testing emails in development and previewing them before sending.
+5. **Generous Free Tier**: It provides a sufficient number of free emails per month to cover development, testing, and early production usage without immediate costs.
+
+## Implementation Details
+
+In the Tutor Management System, Resend is used to trigger transactional emails across various workflows:
+
+- **Account Management**: Welcome emails and password reset links.
+- **Application Status**: Notifying students about the outcome of their tutoring applications (accepted, rejected, waitlisted).
+- **Timesheet Updates**: Informing tutors when their submitted timesheets are approved or queried by organizers.
+- **Session Notifications**: Alerts regarding assigned sessions, excuse requests, and cover assignments.
+
+### Security and Configuration
+
+- **API Keys**: Resend requires an API key, which is stored securely in environment variables (`RESEND_API_KEY`).
+- **Sender Identity**: Emails are sent from a verified domain configured within the Resend dashboard to ensure authenticity and maintain deliverability.
+
+## Conclusion
+
+By using Resend, the Tutor Management System can reliably and efficiently deliver critical updates to tutors, students, and organizers, enhancing the overall user experience and ensuring timely communication.

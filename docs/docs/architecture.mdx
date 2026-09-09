@@ -153,6 +153,7 @@ development rather than deployment management.
 | ORM               | Prisma          | Interacting with the database         |
 | Backend Hosting   | Azure           | Deploying and hosting the backend     |
 | Frontend Hosting  | Vercel          | Deploying and hosting the frontend    |
+| Notifications     | Resend          | Sending email notifications           |
 
 ## Authentication
 
@@ -201,3 +202,9 @@ The extensive official documentation and a large developer ecosystem makes it ea
 
 Firebase provides authentication tokens that can be verified by backend services, allowing the backend to establish the identity of the
 authenticated user. This means we can retain our existing backend architecture while delegating authentication to Firebase
+
+## Email Notifications
+
+The application uses Resend as the email notification service to keep users informed about important events, such as application status updates, timesheet approvals, and meeting invitations.
+
+For more detailed information, please refer to the dedicated [Email Notification Service](./email-notifications) documentation page.

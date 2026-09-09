@@ -9,7 +9,8 @@ import Signup from "./features/auth/signup/Signup.jsx";
 import ForgotPassword from "./features/auth/forgot-password/ForgotPassword.jsx";
 import ConfirmationMessage from "./features/auth/confirmation-message/ConfirmationMessage.jsx";
 
-import AllocationBoard from "./features/allocation-board/AllocationBoard.jsx";
+import Organiser from "./features/organiser/Organiser.jsx";
+import OrganiserAnalytics from "./features/organiser/OrganiserAnalytics.jsx";
 import TutorDashboard from "./features/tutor-dashboard/TutorDashboard.jsx";
 import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
@@ -27,7 +28,8 @@ const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "confirmation-message", element: <ConfirmationMessage /> },
-      { path: "allocation-board", element: <AllocationBoard /> },
+      { path: "organiser", element: <Organiser /> },
+      { path: "organiser-analytics", element: <OrganiserAnalytics /> },
       { path: "tutor-dashboard", element: <TutorDashboard /> },
       { path: "volunteer", element: <VolunteerView /> },
       { path: "profile", element: <Profile /> },

@@ -3,11 +3,11 @@ import TopNavBar from "./TopNavBar";
 
 /**
  * AppLayout
- * Every authenticated page (Allocation Board, Tutor Dashboard, Volunteer View, Profile...)
+ * Every authenticated page (Organiser Board, Tutor Dashboard, Volunteer View, Profile...)
  * renders <AppLayout role="..."> around its own content instead of re-declaring the
  * sidebar/header markup itself.
  */
-export default function AppLayout({ role, title, showSearch, avatarUrl, children }) {
+export default function AppLayout({ role, title, showSearch = true, avatarUrl, children }) {
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen flex">
       <Sidebar role={role} />

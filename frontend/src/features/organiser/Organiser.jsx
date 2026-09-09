@@ -1,28 +1,24 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
+import { COURSES, TUTORS as INITIAL_TUTORS } from "../../data/mockData";
 
-const COURSES = [
-  { code: "CS101", name: "Intro to Programming", req: 5, allocated: 3, urgency: "trust" },
-  { code: "MATH202", name: "Discrete Mathematics", req: 2, allocated: 0, urgency: "none" },
-  { code: "CS305", name: "Database Systems", req: 4, allocated: 1, urgency: "urgent" },
-];
-
-const INITIAL_AVAILABLE = [
-  { id: "t1", name: "Alex Mercer", rating: 4.8, hoursLeft: 15, verified: true, clash: false },
-  { id: "t2", name: "Sarah Jenkins", rating: 4.5, hoursLeft: 2, verified: true, clash: false },
-];
-
-const INITIAL_ALLOCATED = [{ id: "t3", name: "David Kim", rating: 4.9, hoursLeft: 8, verified: true, clash: true }];
-
-function TutorCard({ tutor, onDragStart }) {
+function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart }) {
   const clashClasses = tutor.clash
     ? "bg-clash-bg/10 border-2 border-clash-bg"
     : "bg-surface-container-lowest border border-surface-variant";
   return (
     <div
+      ref={cardRef}
+      tabIndex={isFocused ? 0 : -1}
+      role="button"
+      aria-label={`${tutor.name}. Press Enter to move between pools.`}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
       draggable
-      onDragStart={(e) => onDragStart(e, tutor.id)}
-      className={`${clashClasses} p-stack-sm rounded cursor-grab hover:shadow-sm transition-shadow flex items-start gap-stack-sm relative group`}
+      onDragStart={onDragStart}
+      className={`${clashClasses} p-stack-sm rounded cursor-grab hover:shadow-sm transition-shadow flex items-start gap-stack-sm relative group outline-none ${
+        isFocused ? "ring-2 ring-primary ring-offset-1" : ""
+      }`}
     >
       {tutor.clash && (
         <div className="absolute -top-2 -right-2 bg-clash-bg text-white rounded-full p-1 shadow-sm">
@@ -56,7 +52,7 @@ function TutorCard({ tutor, onDragStart }) {
   );
 }
 
-function Pool({ id, label, count, tutors, onDragStart, onDragOver, onDrop, highlighted }) {
+function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCardFocus, onDragStart, onDragOver, onDrop, highlighted }) {
   return (
     <div className="w-1/2 flex flex-col bg-surface-container-low rounded-lg border border-outline-variant/50">
       <div className="p-stack-sm border-b border-outline-variant/50 flex justify-between items-center">
@@ -68,50 +64,125 @@ function Pool({ id, label, count, tutors, onDragStart, onDragOver, onDrop, highl
         onDrop={(e) => onDrop(e, id)}
         className={`flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm ${highlighted === id ? "drag-over rounded" : ""}`}
       >
-        {tutors.map((t) => (
-          <TutorCard key={t.id} tutor={t} onDragStart={onDragStart} />
+        {tutors.length === 0 && (
+          <p className="text-center font-body-sm text-on-surface-variant py-stack-lg">No tutors here yet.</p>
+        )}
+        {tutors.map((t, index) => (
+          <TutorCard
+            key={t.id}
+            tutor={t}
+            cardRef={(node) => {
+              cardRefs.current[`${id}-${index}`] = node;
+            }}
+            isFocused={focus.pool === id && focus.index === index}
+            onKeyDown={(e) => onCardKeyDown(e, id, index)}
+            onFocus={() => onCardFocus(id, index)}
+            onDragStart={(e) => onDragStart(e, t.id)}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-export default function AllocationBoard() {
+export default function Organiser() {
   const [selectedCourse, setSelectedCourse] = useState(COURSES[0].code);
-  const [available, setAvailable] = useState(INITIAL_AVAILABLE);
-  const [allocated, setAllocated] = useState(INITIAL_ALLOCATED);
+  const [tutors, setTutors] = useState(INITIAL_TUTORS);
   const [dragOverPool, setDragOverPool] = useState(null);
+  const [focus, setFocus] = useState({ pool: "available", index: 0 });
+  const cardRefs = useRef({});
 
-  function handleDragStart(e, tutorId) {
-    e.dataTransfer.setData("text/plain", tutorId);
+  const course = COURSES.find((c) => c.code === selectedCourse);
+  const available = tutors.filter((t) => t.courseCode === null);
+  const allocated = tutors.filter((t) => t.courseCode === selectedCourse);
+  const pools = { available, allocated };
+
+  // Switching courses changes what "allocated" means, so reset focus to somewhere valid
+  useEffect(() => {
+    setFocus({ pool: "available", index: 0 });
+  }, [selectedCourse]);
+
+  // Keep the roving-tabindex target in bounds whenever a pool's length changes
+  // (e.g. after an assignment shrinks the "available" list)
+  useEffect(() => {
+    const list = pools[focus.pool];
+    if (focus.index > list.length - 1) {
+      setFocus((f) => ({ ...f, index: Math.max(list.length - 1, 0) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [available.length, allocated.length]);
+
+  // Move actual DOM focus to match `focus` state after every render
+  useEffect(() => {
+    const key = `${focus.pool}-${focus.index}`;
+    cardRefs.current[key]?.focus();
+  }, [focus, available.length, allocated.length]);
+
+  function moveTutor(tutorId, fromPool) {
+    setTutors((prev) =>
+      prev.map((t) =>
+        t.id === tutorId ? { ...t, courseCode: fromPool === "available" ? selectedCourse : null } : t
+      )
+    );
   }
 
+  function handleCardKeyDown(e, pool, index) {
+    const list = pools[pool];
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setFocus({ pool, index: Math.min(index + 1, list.length - 1) });
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setFocus({ pool, index: Math.max(index - 1, 0) });
+        break;
+      case "ArrowRight":
+      case "ArrowLeft": {
+        e.preventDefault();
+        const otherPool = pool === "available" ? "allocated" : "available";
+        const otherList = pools[otherPool];
+        setFocus({ pool: otherPool, index: Math.min(index, Math.max(otherList.length - 1, 0)) });
+        break;
+      }
+      case "Enter":
+      case " ": {
+        e.preventDefault();
+        const tutor = list[index];
+        if (tutor) moveTutor(tutor.id, pool);
+        break;
+      }
+      case "Escape":
+        e.currentTarget.blur();
+        break;
+      default:
+        break;
+    }
+  }
+
+  function handleCardFocus(pool, index) {
+    setFocus({ pool, index });
+  }
+
+  function handleDragStartMouse(e, tutorId) {
+    e.dataTransfer.setData("text/plain", tutorId);
+  }
   function handleDragOver(e, poolId) {
     e.preventDefault();
     setDragOverPool(poolId);
   }
-
   function handleDrop(e, poolId) {
     e.preventDefault();
     setDragOverPool(null);
     const tutorId = e.dataTransfer.getData("text/plain");
-
-    const fromAvailable = available.find((t) => t.id === tutorId);
-    const fromAllocated = allocated.find((t) => t.id === tutorId);
-
-    if (poolId === "allocated" && fromAvailable) {
-      setAvailable((prev) => prev.filter((t) => t.id !== tutorId));
-      setAllocated((prev) => [...prev, fromAvailable]);
-    } else if (poolId === "available" && fromAllocated) {
-      setAllocated((prev) => prev.filter((t) => t.id !== tutorId));
-      setAvailable((prev) => [...prev, fromAllocated]);
-    }
+    const draggedTutor = tutors.find((t) => t.id === tutorId);
+    if (!draggedTutor) return;
+    const fromPool = draggedTutor.courseCode === null ? "available" : "allocated";
+    if (fromPool !== poolId) moveTutor(tutorId, fromPool);
   }
 
-  const course = COURSES.find((c) => c.code === selectedCourse);
-
   return (
-    <AppLayout role="tutor" title="Allocation Board" showSearch={true}>
+    <AppLayout role="tutor" title="Tutor Management System">
       <div className="p-stack-md md:p-margin-page flex gap-gutter h-full">
         {/* Course list */}
         <div className="w-80 flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden shrink-0">
@@ -127,10 +198,12 @@ export default function AllocationBoard() {
           <div className="flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm">
             {COURSES.map((c) => {
               const isActive = c.code === selectedCourse;
-              const pct = c.req ? Math.round((c.allocated / c.req) * 100) : 0;
+              const allocatedCount = tutors.filter((t) => t.courseCode === c.code).length;
+              const pct = c.req ? Math.round((allocatedCount / c.req) * 100) : 0;
+              const isLow = pct < 50;
               const border = isActive
                 ? "border-primary bg-primary-fixed"
-                : c.urgency === "urgent"
+                : isLow
                 ? "border-urgent-orange/50 bg-secondary-fixed/20 hover:border-urgent-orange"
                 : "border-surface-variant bg-surface-container-lowest hover:border-outline";
               return (
@@ -143,7 +216,7 @@ export default function AllocationBoard() {
                     <h3 className={`font-body-lg text-body-lg font-bold ${isActive ? "text-primary" : "text-on-surface"}`}>{c.code}</h3>
                     <span
                       className={`px-2 py-1 rounded font-data-mono text-data-mono text-xs text-white ${
-                        c.urgency === "urgent" ? "bg-urgent-orange" : isActive ? "bg-trust-blue" : "bg-surface-variant text-on-surface-variant"
+                        isLow ? "bg-urgent-orange" : isActive ? "bg-trust-blue" : "bg-surface-variant text-on-surface-variant"
                       }`}
                     >
                       Req: {c.req}
@@ -151,11 +224,11 @@ export default function AllocationBoard() {
                   </div>
                   <p className="font-body-sm text-body-sm text-on-surface-variant mb-stack-sm">{c.name}</p>
                   <div className="flex justify-between items-center">
-                    <span className={`font-label-caps text-label-caps ${c.urgency === "urgent" ? "text-urgent-orange" : "text-on-surface-variant"}`}>
-                      Allocated: {c.allocated}
+                    <span className={`font-label-caps text-label-caps ${isLow ? "text-urgent-orange" : "text-on-surface-variant"}`}>
+                      Allocated: {allocatedCount}
                     </span>
                     <div className="w-full bg-surface-variant rounded-full h-1.5 ml-2">
-                      <div className={`h-1.5 rounded-full ${c.urgency === "urgent" ? "bg-urgent-orange" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+                      <div className={`h-1.5 rounded-full ${isLow ? "bg-urgent-orange" : "bg-primary"}`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 </button>
@@ -166,10 +239,12 @@ export default function AllocationBoard() {
 
         {/* Board */}
         <div className="flex-1 flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden">
-          <div className="p-stack-md border-b border-surface-variant bg-surface flex justify-between items-center">
+          <div className="p-stack-md border-b border-surface-variant bg-surface flex justify-between items-center flex-wrap gap-2">
             <div>
               <h2 className="font-headline-md text-headline-md text-on-surface">{course.code} Allocation</h2>
-              <p className="font-label-caps text-label-caps text-on-surface-variant mt-unit">Drag tutors to assign</p>
+              <p className="font-label-caps text-label-caps text-on-surface-variant mt-unit">
+                Drag tutors, or use ↑↓ to move, ←→ to switch pools, Enter to assign, Esc to clear focus
+              </p>
             </div>
             <div className="flex gap-stack-sm">
               <button className="bg-surface-container-high text-on-surface px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:bg-surface-variant transition-colors">
@@ -186,7 +261,11 @@ export default function AllocationBoard() {
               label="Available Tutors"
               count={available.length}
               tutors={available}
-              onDragStart={handleDragStart}
+              cardRefs={cardRefs}
+              focus={focus}
+              onCardKeyDown={handleCardKeyDown}
+              onCardFocus={handleCardFocus}
+              onDragStart={handleDragStartMouse}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               highlighted={dragOverPool}
@@ -196,7 +275,11 @@ export default function AllocationBoard() {
               label={`Assigned to ${course.code}`}
               count={`${allocated.length}/${course.req}`}
               tutors={allocated}
-              onDragStart={handleDragStart}
+              cardRefs={cardRefs}
+              focus={focus}
+              onCardKeyDown={handleCardKeyDown}
+              onCardFocus={handleCardFocus}
+              onDragStart={handleDragStartMouse}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               highlighted={dragOverPool}

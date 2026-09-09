@@ -7,7 +7,8 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
@@ -16,12 +17,14 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "firebase-admin": "^14.3.0",
     "morgan": "^1.11.0",
     "prisma": "^6.19.3"
   },
   "devDependencies": {
+    "@sonar/scan": "^5.0.0",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
     "nodemon": "^3.1.14"

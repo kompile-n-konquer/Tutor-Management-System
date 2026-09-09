@@ -158,20 +158,28 @@ needed.
 
 ### Making a change
 
-1. **Preview locally before pushing:**
+1. **Install dependencies (first time only):**
+```bash
+   cd docs
+   npm install
+```
+   This installs all the packages Docusaurus needs. You only need to run this once, or again if
+   `package.json` has changed since your last install.
+
+2. **Preview locally before pushing:**
 ```bash
    cd docs
    npm run start
 ```
    This opens the site at `http://localhost:3000` with hot reload, so you can see edits as you make them.
 
-2. **Edit the relevant file:**
+3. **Edit the relevant file:**
    * Docs content pages → `docs/docs/*.md` or `*.mdx`
    * Sidebar order/structure → `docs/sidebars.js`
    * Site config (title, navbar, links) → `docs/docusaurus.config.js`
    * Homepage → `docs/src/pages/index.js`
 
-3. **Follow the standard branch workflow** (see Git Workflow above — do not push directly to `main`):
+4. **Follow the standard branch workflow** (see Git Workflow above — do not push directly to `main`):
 ```bash
    git checkout -b feat/docs-<short-description>
    git add .
@@ -179,7 +187,7 @@ needed.
    git push -u origin feat/docs-<short-description>
 ```
 
-4. **Open a PR, get it reviewed and merged.** Once merged into `main`, the docs deploy workflow picks it
+5. **Open a PR, get it reviewed and merged.** Once merged into `main`, the docs deploy workflow picks it
    up automatically and the live site updates within a couple of minutes.
 
 ### Adding a new page

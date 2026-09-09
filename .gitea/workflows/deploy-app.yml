@@ -11,10 +11,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Install dependencies
         working-directory: backend
         run: npm ci
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Push Prisma schema to database
+        working-directory: backend
+        run: npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci

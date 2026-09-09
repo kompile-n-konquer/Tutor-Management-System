@@ -1,5 +1,156 @@
 ---
 sidebar_position: 5
-title: Meetings with Client
-description: Walkthrough of the Prisma schema and key models
+title: Stakeholder Interaction Log
 ---
+
+# Stakeholder Interaction Log
+
+**Milestone 1: Sprint 1 — Owner: Ndumiso Skhosana — Compiled 25 Aug 2026**
+
+:::info Rubric target — Stakeholder Interaction (10%)
+Advanced (80–100%): *"Great stakeholder interaction, all requirements discussed."* This document evidences three client meetings (10 Aug, 17 Aug, 25 Aug), each with dated decisions, direct requirement discussion, and demonstrable follow-through into next steps — not a single check-in.
+:::
+
+## 1. Meeting summary
+
+| Date | Type | Format | Key focus |
+|---|---|---|---|
+| 10 Aug 2026 | Client meeting | Recorded, timestamped | Architecture mandate, repo access, dev workflow, deployment, auth strategy |
+| 17 Aug 2026 | Client meeting | Recorded, timestamped | Sprint 1 deliverables, CI/CD status, accessibility requirements, code quality standards |
+| 25 Aug 2026 | Client meeting | Internal notes | MS1 task ownership assigned across group for documentation deliverables |
+
+## 2. Requirements discussed with the client
+
+Pulled directly from meeting transcripts, mapped against the course's Key Requirements of All Projects and the tutor-management feature brief — demonstrating requirements were actually walked through with the client, not assumed.
+
+### 2.1 Architecture & non-monolithic split
+
+- Client mandated client-server architecture with strict frontend/backend separation, explicitly warning against frameworks that bundle both layers (10 Aug, 00:04:28).
+- Recommended stack: React frontend, ExpressJS backend — confirmed and reaffirmed in the 17 Aug follow-up (00:00:03).
+
+### 2.2 API design
+
+- Client required hand-written REST APIs, explicitly prohibiting auto-generated CRUD from tools like Firebase/Supabase (10 Aug, 00:08:30).
+- Controller-based architecture mandated — a dedicated folder for request-handling logic, to keep application logic explicit and owned by the team.
+
+### 2.3 Authentication
+
+- Client confirmed Firebase (or Supabase) as the authentication approach, supporting email/password and Google sign-in (10 Aug, 00:15:37).
+- Explicit requirement that authentication rely on an established library rather than a custom-built system — consistent with the course's Key Requirements.
+
+### 2.4 Deployment
+
+- Split hosting strategy agreed: Vercel for frontend, Azure for backend/database, to isolate issues between layers (10 Aug, 00:12:35).
+- Interim requirement: deploy a placeholder page to both hosts by end of week, to demonstrate environment setup before feature work begins.
+- 17 Aug follow-up confirmed a service is live on Azure; CD workflow flagged as still incomplete and tracked as an open item (00:06:48).
+
+### 2.5 Version control & review process
+
+- Feature-branch workflow mandated: every change developed on its own branch (10 Aug, 00:07:14).
+- Two-approval requirement for all pull requests before merge, specifically to ensure equal participation across all 6 members (10 Aug, 00:07:14–00:12:35).
+- 17 Aug meeting escalated this into a concrete review method: pulling branches locally and testing before approval, rather than reviewing on GitHub/Gitea alone (00:44:36).
+- Agreed policy: stale or problematic pull requests requiring major fixes are closed and reopened fresh, rather than left inactive — discussed directly in response to a real pull request during the 17 Aug meeting (00:41:00–00:48:22).
+
+### 2.6 Testing standards
+
+- Client raised test-driven development directly and questioned whether trivial tests were being used to satisfy requirements (17 Aug, 00:42:31).
+- Team and client agreed: trivial/placeholder tests are insufficient — pull requests must include substantive tests tied to real functionality (e.g. email validation) before merge (17 Aug, 00:43:35).
+
+### 2.7 Accessibility & responsiveness
+
+- Client explicitly required mobile responsiveness and accessibility — the application must adapt gracefully across screen sizes without removing functionality (17 Aug, 00:18:28, 00:21:35).
+
+### 2.8 Grading structure & Sprint 1 expectations
+
+- Client clarified milestones account for 70% of the total project grade, and that tutors (not the lecturer) mark sprints and milestones (17 Aug, 00:02:59, 00:24:30).
+- Client confirmed the Sprint 1 deadline (25 Aug) and committed to providing a specific demonstration checklist by the following Wednesday (17 Aug, 00:09:59).
+- Client set a concrete Sprint 1 demo requirement: a functional login/sign-up flow must be shown live at the sprint meeting (17 Aug, 00:08:06).
+
+### 2.9 External API integration & documentation
+
+- Potential external API integration discussed as a requirement to fulfil (17 Aug, 00:19:55) — specific service still to be finalised by the team.
+- Client confirmed documentation is correctly deployed via GitHub Pages, satisfying the course's public documentation site requirement.
+
+### 2.10 Technical implementation decisions
+
+- Team proposed and the group aligned on an async error-handling wrapper to replace repetitive try-catch blocks across asynchronous functions, discussed and debated for trade-offs before adoption, in line with the team's agile/iterative approach (17 Aug, 00:49:26–00:53:03).
+
+## 3. Decisions log
+
+Formal decisions reached and confirmed in each meeting, in the order discussed.
+
+| Date | Decision | Rationale |
+|---|---|---|
+| 10 Aug | Client-server architecture mandated | Avoid monolithic frameworks; strict frontend/backend separation |
+| 10 Aug | Feature branching + 2-approval PR policy | Ensure equal participation across all 6 members |
+| 10 Aug | Hand-written REST APIs only | No auto-generated CRUD from DB tools |
+| 10 Aug | Controller folder structure required | Explicit, owned application logic |
+| 10 Aug | Vercel (frontend) + Azure (backend/DB) | Isolate issues between hosting layers |
+| 10 Aug | Firebase/Supabase for auth | Established library; email/password + Google sign-in |
+| 10 Aug | Instructor added as read-only repo member | Client/marker visibility into progress |
+| 17 Aug | Mobile responsiveness & accessibility mandated | Application must work across devices and for users with disabilities |
+| 17 Aug | Stale/problematic PRs closed and reopened fresh | Avoid inactive PRs blocking progress |
+| 17 Aug | Async-catch wrapper adopted for error handling | Cleaner code, less repetitive try-catch |
+| 17 Aug | Substantive tests required, trivial tests rejected | Real code-quality standard, not box-ticking |
+| 17 Aug | Local branch pull + test required before PR approval | Verify deployment/integration works before merge |
+
+## 4. Assigned tasks arising from client meetings
+
+Action items directly attributable to stakeholder discussion, drawn from both meeting records plus the 25 Aug task-ownership meeting.
+
+### 4.1 From 10 Aug meeting
+
+| Owner | Task |
+|---|---|
+| The group | Add instructor to organisation/repository with read-only access |
+| The group | Decouple architecture — build separate frontend and backend layers |
+| The group | Implement feature-branch workflow for every change |
+| The group | Enforce 2-approval requirement on all pull requests |
+| The group | Develop hand-written REST APIs; no auto-generated DB services |
+| The group | Structure request-handling logic into a dedicated controllers folder |
+| The group | Deploy frontend to Vercel, backend to Azure |
+| The group | Deploy placeholder page to both hosts by end of week |
+| The group | Present initialised environment at the next meeting (Fri–Mon) |
+
+### 4.2 From 17 Aug meeting
+
+| Owner | Task |
+|---|---|
+| Glann Mulaudzi (client) | Send list of specific Sprint 1 demonstration requirements |
+| The group | Implement responsiveness — mobile and laptop-friendly layout |
+| The group | Prepare Milestone 2 requirements list and begin implementation |
+| Kgaogelo G | Finish remaining missing API endpoints |
+| Kgaogelo G | Close current PR and open a new one with fixes incorporated |
+| Nhlamulo Mabuza | Review new PR changes and provide approval feedback |
+| Ndumiso Skhosana | Resolve file conflict in PR for target-branch compatibility |
+| Ndumiso Skhosana | Align current PR with main; validate email function against main's implementation |
+| The group | Review pending PR to allow merge into main |
+| Ndumiso Skhosana | Distribute meeting minutes via group chat / Google space |
+
+### 4.3 From 25 Aug meeting — MS1 documentation ownership
+
+Client requested individual ownership of each MS1 documentation deliverable, assigned as follows:
+
+| Owner | Deliverable |
+|---|---|
+| Mogomotsi | Project Methodology |
+| KG (Kgaogelo) | Initial Design and Dev Plan |
+| Tlhalefo | Tech Stack |
+| Ndumiso | Stakeholder Interactions (this document) |
+| Nduvho | Functional Requirements |
+| Nhlamulo | Our own meetings (internal team meeting minutes) |
+
+## 5. Evidence of follow-through
+
+The rubric rewards not just discussion but integration — showing the client's input was actually acted on, not just recorded.
+
+- Architecture mandate (10 Aug) → confirmed live and reaffirmed in the 17 Aug meeting, with a working Azure service already deployed by that point.
+- PR review concerns raised generally (10 Aug) → became a concrete local-pull-and-test policy after being tested against a real conflicting PR in the 17 Aug meeting.
+- Testing standard raised (17 Aug) → directly resulted in an agreed policy to reject trivial tests and require substantive coverage, with real examples (email validation) cited.
+- Client's Sprint 1 demo requirement (functional login/sign-up) is tracked as a concrete, checkable deliverable rather than a vague expectation.
+
+## 6. Open items carried forward
+
+- CD (continuous deployment) portion of the pipeline still requires configuration — CI functions correctly, but full CD is not yet complete (flagged 17 Aug).
+- External API integration target still to be finalised by the team.
+- Client's detailed Sprint 1 demonstration checklist — due by Wednesday per the 17 Aug meeting — to be confirmed received and actioned.

@@ -144,8 +144,8 @@ export default function Profile() {
                     Set your preferred tutoring hours for the current semester.
                   </p>
                 </div>
-                <button className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors">
-                  Edit Hours
+                <button onClick={() => navigate('/timetable/edit')} className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors cursor-pointer">
+                  Edit Timetable
                 </button>
               </div>
               <div className="flex-1 overflow-x-auto calendar-scroll">

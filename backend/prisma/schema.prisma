@@ -21,6 +21,7 @@ model User {
   applications   Applicant[]
   lecturer       Lecturer?
   tutor          Tutor?
+  volunteerRequests SessionVolunteer[]
 }
 model Tutor {
   id              Int               @id @default(autoincrement())
@@ -119,14 +120,24 @@ model TimesheetEntry {
   timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
 }
 model Session {
-  id           Int             @id @default(autoincrement())
-  assignmentId Int
-  date         DateTime
-  startTime    DateTime
-  endTime      DateTime
-  status       String          @default("SCHEDULED")
-  excuseReason String?
-  assignment   TutorAssignment @relation(fields: [assignmentId], references: [id])
+  id               Int              @id @default(autoincrement())
+  assignmentId     Int
+  date             DateTime
+  startTime        DateTime
+  endTime          DateTime
+  status           String           @default("SCHEDULED") // SCHEDULED | UNASSIGNED | PENDING
+  excuseReason     String?
+  assignment       TutorAssignment  @relation(fields: [assignmentId], references: [id])
+  volunteerRequest SessionVolunteer?
+}
+model SessionVolunteer {
+  id        Int      @id @default(autoincrement())
+  sessionId Int      @unique
+  userId    Int
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 model CourseSlot {
   id          Int    @id @default(autoincrement())

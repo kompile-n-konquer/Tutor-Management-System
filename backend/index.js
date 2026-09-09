@@ -5,6 +5,7 @@ const cors = require('cors');
 const prisma = require('./prisma/client');
 const { globalErrorHandler, notFoundErrorHandler } = require('./controllers/error');
 const usersRouter = require('./routes/auth');
+const sessionsRouter = require('./routes/sessions');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.use('/api/users', usersRouter);
+app.use('/api/sessions', sessionsRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

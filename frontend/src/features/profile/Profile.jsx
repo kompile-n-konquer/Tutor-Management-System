@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
 import { auth } from '../../firebase/firebase';
@@ -5,10 +6,21 @@ import useAsync from '../../hooks/useAsync';
 import api from '../../utils/axiosInstance';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
+import { useAuth } from '../context/AuthContext';
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { currentUser, loading } = useAuth();
   const { execute, isLoading } = useAsync();
+
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      navigate('/login');
+    }
+  }, [currentUser, loading, navigate]);
+
+  if (loading) return null; // TODO: Create a professional loading state 
+  if (!currentUser) return null;
 
   const handleDeleteAccount = async () => {
     if (auth.currentUser) {

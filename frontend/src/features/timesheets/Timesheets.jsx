@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
 import { TIMESHEETS as INITIAL_TIMESHEETS } from "../../data/mockData";
 
-export default function Timesheets({ role = "tutor" }) {
+export default function Timesheets() {
   const [timesheets, setTimesheets] = useState(INITIAL_TIMESHEETS);
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -23,7 +23,7 @@ export default function Timesheets({ role = "tutor" }) {
   }
 
   return (
-    <AppLayout role={role} title="Tutor Management System">
+    <AppLayout title="Tutor Management System">
       <div className="p-margin-page max-w-container-max mx-auto w-full">
         <div className="flex justify-between items-end mb-stack-lg flex-wrap gap-4">
           <div>

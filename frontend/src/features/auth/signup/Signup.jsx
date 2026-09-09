@@ -10,6 +10,7 @@ import AuthLayout from "../../../components/auth-layout/AuthLayout.jsx";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../../firebase/firebase.js";
 import api from "../../../utils/axiosInstance.js";
+import { ROLE_HOME_ROUTE } from "../../../constants/roles.js";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -30,9 +31,19 @@ const Signup = () => {
       };
       const apiResponse = await execute(() => api.post("/users", extraData));
 
-      if (apiResponse.status === 201) navigate("/tutor-dashboard");
+      if (apiResponse.status === 201) {
+        await redirectToRoleHome();
+      }
     }
   };
+
+  async function redirectToRoleHome() {
+    const meResponse = await execute(() => api.get('/users/me'));
+    if (meResponse?.status === 200 && meResponse.data.role) {
+      const role = meResponse.data.role.toLowerCase();
+      navigate(ROLE_HOME_ROUTE[role] || '/tutor-dashboard');
+    }
+  }
 
   const handleChange = (event, name) => {
     setError("");

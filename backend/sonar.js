@@ -1,0 +1,21 @@
+const { scan } = require('@sonar/scan');
+
+const runScan = async () => {
+  try {
+    await scan({
+      serverUrl: process.env.SONAR_HOST_URL,
+      token: process.env.SONAR_TOKEN,
+
+      options: {
+        'sonar.host.url': process.env.SONAR_HOST_URL,
+        'sonar.projectKey': process.env.SONAR_PROJECT_NAME,
+        'sonar.sources': '../frontend,.',
+        'sonar.exclusions': '**/node_modules/**',
+      },
+    });
+  } catch (error) {
+    console.log(error.message);
+  }
+};
+
+runScan();

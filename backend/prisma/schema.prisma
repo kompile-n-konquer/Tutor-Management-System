@@ -1,42 +1,46 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "sqlserver"
   url      = env("DATABASE_URL")
 }
+
 model User {
   id             Int         @id @default(autoincrement())
-  firebaseUid    String      @unique
   studentNumber  String?
   employeeNumber String?
   firstName      String
   lastName       String
   email          String      @unique
   phoneNumber    String?
-  role           String
+  role           String      @default("STUDENT") // intentionally String: SQL Server doesn't support Prisma enums; one of STUDENT/TUTOR/LECTURER/ORGANISER/ADMIN, validated in application code
   isActive       Boolean     @default(true)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+  firebaseUid    String      @unique
   applications   Applicant[]
   lecturer       Lecturer?
   tutor          Tutor?
 }
+
 model Tutor {
-  id              Int               @id @default(autoincrement())
-  userId          Int               @unique
-  hourlyRate      Float?
-  maxHoursPerWeek Int
-  availableHours  Int
-  currentHours    Int               @default(0)
-  status          String
-  approvedAt      DateTime?
-  availability    Availability[]
-  overflowClaims  OverflowWork[]
-  timesheets      Timesheet[]
-  user            User              @relation(fields: [userId], references: [id])
-  assignments     TutorAssignment[]
+  id               Int               @id @default(autoincrement())
+  userId           Int               @unique
+  hourlyRate       Float?
+  maxHoursPerWeek  Int // weekly hour cap; hours remaining is derived as cap - sum of assigned session durations for the week (Issue 32)
+  status           String
+  approvedAt       DateTime?
+  availability     Availability[]
+  busyBlocks       BusyBlock[]
+  overflowClaims   OverflowWork[]
+  timesheets       Timesheet[]
+  user             User              @relation(fields: [userId], references: [id])
+  assignments      TutorAssignment[]
+  courseTutorMarks CourseTutorMark[]
 }
+
 model Lecturer {
   id             Int      @id @default(autoincrement())
   userId         Int      @unique
@@ -46,6 +50,7 @@ model Lecturer {
   courses        Course[]
   user           User     @relation(fields: [userId], references: [id])
 }
+
 model Applicant {
   id             Int       @id @default(autoincrement())
   userId         Int
@@ -59,11 +64,13 @@ model Applicant {
   course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   user           User      @relation(fields: [userId], references: [id])
 }
+
 model Course {
   id               Int               @id @default(autoincrement())
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
+  budget           Float? // course tutoring budget, used by the spend-vs-budget report (Issue 11)
   lecturerId       Int
   applications     Applicant[]
   lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])
@@ -71,7 +78,20 @@ model Course {
   overflowWork     OverflowWork[]
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
+  courseTutorMarks CourseTutorMark[]
 }
+
+model CourseTutorMark {
+  id       Int    @id @default(autoincrement())
+  tutorId  Int
+  courseId Int
+  mark     Float
+  tutor    Tutor  @relation(fields: [tutorId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+
+  @@unique([tutorId, courseId])
+}
+
 model TutorAssignment {
   id             Int       @id @default(autoincrement())
   tutorId        Int
@@ -83,14 +103,41 @@ model TutorAssignment {
   course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   tutor          Tutor     @relation(fields: [tutorId], references: [id])
 }
-model Availability {
-  id        Int      @id @default(autoincrement())
-  tutorId   Int
-  dayOfWeek String
-  startTime DateTime
-  endTime   DateTime
-  tutor     Tutor    @relation(fields: [tutorId], references: [id])
+
+model TimeSlot {
+  id           Int            @id @default(autoincrement())
+  startMinute  Int
+  endMinute    Int
+  availability Availability[]
+  courseSlots  CourseSlot[]
+
+  @@unique([startMinute, endMinute])
 }
+
+model Availability {
+  id         Int      @id @default(autoincrement())
+  tutorId    Int
+  dayOfWeek  Int
+  timeSlotId Int
+  tutor      Tutor    @relation(fields: [tutorId], references: [id])
+  timeSlot   TimeSlot @relation(fields: [timeSlotId], references: [id])
+
+  @@unique([tutorId, dayOfWeek, timeSlotId])
+}
+
+// Per-tutor busy time ranges (Issue 32). Free-form minute-of-day values rather than a
+// TimeSlot FK so tutors can block arbitrary unavailable ranges; a tutor may have many blocks.
+model BusyBlock {
+  id          Int   @id @default(autoincrement())
+  tutorId     Int
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+  tutor       Tutor @relation(fields: [tutorId], references: [id])
+
+  @@unique([tutorId, dayOfWeek, startMinute, endMinute])
+}
+
 model Timesheet {
   id            Int              @id @default(autoincrement())
   tutorId       Int
@@ -103,6 +150,7 @@ model Timesheet {
   tutor         Tutor            @relation(fields: [tutorId], references: [id])
   entries       TimesheetEntry[]
 }
+
 model TimesheetEntry {
   id          Int       @id @default(autoincrement())
   timesheetId Int
@@ -118,25 +166,32 @@ model TimesheetEntry {
   course      Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
 }
+
 model Session {
-  id           Int             @id @default(autoincrement())
-  assignmentId Int
-  date         DateTime
-  startTime    DateTime
-  endTime      DateTime
-  status       String          @default("SCHEDULED")
-  excuseReason String?
-  assignment   TutorAssignment @relation(fields: [assignmentId], references: [id])
+  id            Int             @id @default(autoincrement())
+  assignmentId  Int
+  date          DateTime
+  courseSlotId  Int
+  status        String          @default("SCHEDULED")
+  excuseReason  String?
+  assignment    TutorAssignment @relation(fields: [assignmentId], references: [id])
+  courseSlot    CourseSlot      @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
 }
+
 model CourseSlot {
-  id          Int    @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   courseId    Int
   dayOfWeek   Int
-  startMinute Int
-  endMinute   Int
-  course      Course @relation(fields: [courseId], references: [id])
+  timeSlotId  Int
+  venue       String?
+  sessionType String?
+  course      Course   @relation(fields: [courseId], references: [id])
+  timeSlot    TimeSlot @relation(fields: [timeSlotId], references: [id])
+  sessions    Session[]
+
   @@index([courseId, dayOfWeek])
 }
+
 model OverflowWork {
   id          Int    @id @default(autoincrement())
   courseId    Int

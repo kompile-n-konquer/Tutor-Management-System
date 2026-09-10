@@ -65,6 +65,9 @@ model Course {
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
+  requiredTutors   Int               @default(1)
+  budgetHours      Float             @default(0)
+  hourlyRate       Float             @default(0)
   lecturerId       Int
   applications     Applicant[]
   lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])

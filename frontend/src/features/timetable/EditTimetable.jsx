@@ -1,62 +1,107 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
+import api from '../../utils/axiosInstance';
+import useAsync from '../../hooks/useAsync';
+import { useAuth } from '../context/AuthContext';
+import ErrorMessage from '../../components/error-message/ErrorMessage';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const TIME_SLOTS = [
-  '08:00-08:45',
-  '09:00-09:45',
-  '10:15-11:00',
-  '11:15-12:00',
-  '12:30-13:15',
-  '14:15-15:00',
-  '15:15-16:00',
-  '16:15-17:00',
-];
 
-const buildInitialGrid = () => {
-  const grid = {};
-  TIME_SLOTS.forEach((time) => {
-    grid[time] = {};
-    DAYS.forEach((day) => {
-      grid[time][day] = 'empty';
-    });
-  });
-
-  // Dummy availability data
-  grid['08:00-08:45'] = { Mon: 'available', Tue: 'empty', Wed: 'available', Thu: 'empty', Fri: 'available' };
-  grid['09:00-09:45'] = { Mon: 'available', Tue: 'available', Wed: 'empty', Thu: 'available', Fri: 'empty' };
-  grid['10:15-11:00'] = { Mon: 'empty', Tue: 'available', Wed: 'available', Thu: 'empty', Fri: 'available' };
-  grid['11:15-12:00'] = { Mon: 'available', Tue: 'empty', Wed: 'available', Thu: 'available', Fri: 'empty' };
-  grid['12:30-13:15'] = { Mon: 'empty', Tue: 'empty', Wed: 'empty', Thu: 'empty', Fri: 'empty' };
-  grid['14:15-15:00'] = { Mon: 'available', Tue: 'available', Wed: 'empty', Thu: 'available', Fri: 'available' };
-  grid['15:15-16:00'] = { Mon: 'empty', Tue: 'available', Wed: 'available', Thu: 'empty', Fri: 'available' };
-  grid['16:15-17:00'] = { Mon: 'available', Tue: 'empty', Wed: 'empty', Thu: 'available', Fri: 'empty' };
-
-  return grid;
+// Converts 480 -> "08:00"
+const minutesToLabel = (minutes) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
 const EditTimetable = () => {
   const navigate = useNavigate();
-  const [grid, setGrid] = useState(buildInitialGrid);
+  const { currentUser, loading } = useAuth();
+  const { execute, isLoading } = useAsync();
 
-  const toggleSlot = (time, day) => {
+  const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
+  const [grid, setGrid] = useState({}); // { [slotId]: { [dayIndex]: 'available' | 'empty' } }
+  const [savedGrid, setSavedGrid] = useState({});
+  const [loadError, setLoadError] = useState('');
+  const [saveError, setSaveError] = useState('');
+
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      navigate('/login');
+    }
+  }, [currentUser, loading, navigate]);
+
+  useEffect(() => {
+    if (loading || !currentUser) return;
+
+    const loadAvailability = async () => {
+      const response = await execute(() => api.get('/availability'));
+      if (!response || response.status !== 200) {
+        setLoadError('Could not load your availability. Please try again.');
+        return;
+      }
+
+      const slots = response.data.timeSlots;
+      const entries = response.data.availability;
+
+      const newGrid = {};
+      slots.forEach((slot) => {
+        newGrid[slot.id] = { 0: 'empty', 1: 'empty', 2: 'empty', 3: 'empty', 4: 'empty' };
+      });
+      entries.forEach((entry) => {
+        if (newGrid[entry.timeSlotId]) {
+          newGrid[entry.timeSlotId][entry.dayOfWeek] = 'available';
+        }
+      });
+
+      setTimeSlots(slots);
+      setGrid(newGrid);
+      setSavedGrid(JSON.parse(JSON.stringify(newGrid)));
+    };
+
+    loadAvailability();
+  }, [currentUser, loading, execute]);
+
+  if (loading) return null;
+  if (!currentUser) return null;
+
+  const hasChanges = JSON.stringify(grid) !== JSON.stringify(savedGrid);
+
+  const toggleSlot = (slotId, dayIndex) => {
+    setSaveError('');
     setGrid((prev) => {
-      const current = prev[time][day];
+      const current = prev[slotId][dayIndex];
       const next = current === 'available' ? 'empty' : 'available';
       return {
         ...prev,
-        [time]: {
-          ...prev[time],
-          [day]: next,
+        [slotId]: {
+          ...prev[slotId],
+          [dayIndex]: next,
         },
       };
     });
   };
 
-  const handleSave = () => {
-    navigate('/profile');
+  const handleSave = async () => {
+    const availability = [];
+    timeSlots.forEach((slot) => {
+      Object.entries(grid[slot.id]).forEach(([dayIndex, status]) => {
+        if (status === 'available') {
+          availability.push({ dayOfWeek: Number(dayIndex), timeSlotId: slot.id });
+        }
+      });
+    });
+
+    const response = await execute(() => api.put('/availability', { availability }));
+    if (response && response.status === 200) {
+      setSavedGrid(JSON.parse(JSON.stringify(grid)));
+      setSaveError('');
+      navigate('/profile');
+    } else {
+      setSaveError(response?.data?.message || 'Could not save your availability. Please try again.');
+    }
   };
 
   const handleCancel = () => {
@@ -86,9 +131,14 @@ const EditTimetable = () => {
           </div>
           <div className="flex gap-2">
             <Button onClick={handleCancel}>Cancel</Button>
-            <Button onClick={handleSave} className="min-w-40">Save Changes</Button>
+            <Button onClick={handleSave} disabled={!hasChanges} loading={isLoading} className="min-w-40">
+              Save Changes
+            </Button>
           </div>
         </div>
+
+        {loadError && <ErrorMessage>{loadError}</ErrorMessage>}
+        {saveError && <ErrorMessage>{saveError}</ErrorMessage>}
 
         <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
           <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
@@ -124,17 +174,17 @@ const EditTimetable = () => {
                 </div>
               ))}
 
-              {TIME_SLOTS.map((time) => (
-                <div key={time} className="contents">
+              {timeSlots.map((slot) => (
+                <div key={slot.id} className="contents">
                   <div className="bg-surface-container-lowest p-2 text-right font-data-mono text-body-sm text-outline border-b border-outline-variant/20">
-                    {time}
+                    {minutesToLabel(slot.startMinute)}-{minutesToLabel(slot.endMinute)}
                   </div>
-                  {DAYS.map((day) => {
-                    const status = grid[time][day];
+                  {DAYS.map((day, dayIndex) => {
+                    const status = grid[slot.id]?.[dayIndex] || 'empty';
                     return (
                       <div
-                        key={`${time}-${day}`}
-                        onClick={() => toggleSlot(time, day)}
+                        key={`${slot.id}-${day}`}
+                        onClick={() => toggleSlot(slot.id, dayIndex)}
                         className={`p-2 border-b border-outline-variant/20 relative cursor-pointer transition-colors ${
                           status === 'available' ? 'bg-primary/5 hover:bg-primary/10' : 'bg-surface-container-lowest hover:bg-surface-container-low'
                         }`}

@@ -1,8 +1,8 @@
 // Mock the Prisma client before requiring the controller
 jest.mock('../prisma/client', () => {
   const mockTx = {
-    tutor: { create: jest.fn() },
-    tutorAssignment: { create: jest.fn() },
+    tutor: { create: jest.fn(), findUnique: jest.fn() },
+    tutorAssignment: { create: jest.fn(), delete: jest.fn() },
     applicant: { update: jest.fn() },
   };
 
@@ -22,6 +22,14 @@ const {
   getAssignedTutors,
   unassignTutor,
 } = require('../controllers/allocation');
+
+// catchAsync does not `return` the inner promise, so the wrapped handler
+// resolves to `undefined` immediately while the inner async work keeps
+// running on the microtask queue.  flushMicrotasks waits for all
+// pending microtasks to settle before assertions run.
+function flushMicrotasks() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 function mockReq(overrides = {}) {
@@ -180,6 +188,7 @@ describe('assignTutor', () => {
       courseMark: 85,
       user: { firstName: 'Alice', lastName: 'Smith' },
     });
+    prisma.tutor.findUnique.mockResolvedValue({ id: 5, userId: 10 });
     prisma.tutorAssignment.findUnique.mockResolvedValue({ id: 50 }); // existing assignment
 
     const req = mockReq({ body: { applicantId: 1 } });
@@ -187,6 +196,7 @@ describe('assignTutor', () => {
     const next = jest.fn();
 
     await assignTutor(req, res, next);
+    await flushMicrotasks();
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: 400, message: expect.stringContaining('already assigned') }),
@@ -203,6 +213,7 @@ describe('assignTutor', () => {
     });
     prisma.tutorAssignment.findUnique.mockResolvedValue(null);
     prisma.tutor.findUnique.mockResolvedValue({ id: 5, userId: 10 });
+    prisma.__tx.tutor.findUnique.mockResolvedValue({ id: 5, userId: 10 });
 
     const createdAssignment = {
       id: 1,
@@ -224,6 +235,7 @@ describe('assignTutor', () => {
     const next = jest.fn();
 
     await assignTutor(req, res, next);
+    await flushMicrotasks();
 
     // Tutor should NOT be re-created since one already exists
     expect(prisma.__tx.tutor.create).not.toHaveBeenCalled();
@@ -264,6 +276,7 @@ describe('assignTutor', () => {
     });
     prisma.tutorAssignment.findUnique.mockResolvedValue(null);
     prisma.tutor.findUnique.mockResolvedValue(null); // no Tutor yet
+    prisma.__tx.tutor.findUnique.mockResolvedValue(null); // none inside tx either
 
     const newTutor = { id: 99, userId: 20 };
     prisma.__tx.tutor.create.mockResolvedValue(newTutor);
@@ -287,6 +300,7 @@ describe('assignTutor', () => {
     const next = jest.fn();
 
     await assignTutor(req, res, next);
+    await flushMicrotasks();
 
     // Tutor should be created inside the transaction
     expect(prisma.__tx.tutor.create).toHaveBeenCalledWith(
@@ -394,30 +408,25 @@ describe('unassignTutor', () => {
 
   test('deletes assignment and resets applicant status to PENDING', async () => {
     prisma.tutorAssignment.findUnique.mockResolvedValue({ id: 10, applicantId: 7 });
-    prisma.tutorAssignment.delete = jest.fn().mockResolvedValue({});
+    prisma.__tx.tutorAssignment.delete.mockResolvedValue({});
     prisma.__tx.applicant.update.mockResolvedValue({});
-
-    // Override $transaction to also call delete on the tx proxy
-    const originalTx = prisma.$transaction;
-    prisma.$transaction.mockImplementation(async (fn) => {
-      const tx = {
-        ...prisma.__tx,
-        tutorAssignment: { delete: jest.fn().mockResolvedValue({}) },
-      };
-      return fn(tx);
-    });
 
     const req = mockReq({ params: { applicantId: '7' } });
     const res = mockRes();
     const next = jest.fn();
 
     await unassignTutor(req, res, next);
+    await flushMicrotasks();
 
+    expect(prisma.__tx.tutorAssignment.delete).toHaveBeenCalledWith({ where: { id: 10 } });
+    expect(prisma.__tx.applicant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({ status: 'PENDING' }),
+      }),
+    );
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.end).toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
-
-    // Restore original mock
-    prisma.$transaction = originalTx;
   });
 });

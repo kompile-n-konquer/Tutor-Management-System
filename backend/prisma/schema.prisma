@@ -59,10 +59,10 @@ model Applicant {
   transcriptPath String?
   availability   String?
   status         String    @default("PENDING")
-  appliedAt      DateTime  @default(now())
-  reviewedAt      DateTime?        
-  course           Course           @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  user             User             @relation(fields: [userId], references: [id])
+  appliedAt        DateTime  @default(now())
+  reviewedAt       DateTime?
+  course           Course             @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  user             User               @relation(fields: [userId], references: [id])
   tutorAssignment  TutorAssignment?
 }
 

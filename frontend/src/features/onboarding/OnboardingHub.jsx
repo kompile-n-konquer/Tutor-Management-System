@@ -80,8 +80,15 @@ export default function OnboardingHub() {
                 <div className="bg-secondary-fixed/30 border border-secondary/20 rounded-lg p-stack-sm mb-stack-md">
                   <p className="font-body-sm text-on-surface-variant flex items-center gap-unit">
                     <span className="material-symbols-outlined text-secondary text-[18px]">info</span>
-                    You must set your availability in your Profile before applying.
+                    You must set your availability before applying.
                   </p>
+                  <button
+                    onClick={() => navigate("/timetable/edit")}
+                    className="mt-unit text-primary font-label-caps text-label-caps hover:underline inline-flex items-center gap-unit"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">edit_calendar</span>
+                    Set Availability Now
+                  </button>
                 </div>
               )}
             </div>

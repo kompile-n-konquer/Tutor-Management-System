@@ -67,10 +67,16 @@ async function cleanup() {
   const seedUids = SYNTHETIC_USERS.map((u) => u.firebaseUid);
 
   // Delete in reverse-dependency order
+  await prisma.roleApplication.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
   await prisma.tutorAssignment.deleteMany({
     where: { applicant: { user: { email: { in: testEmails } } } },
   });
   await prisma.applicant.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
+  await prisma.availability.deleteMany({
     where: { user: { email: { in: testEmails } } },
   });
   await prisma.tutor.deleteMany({
@@ -82,6 +88,7 @@ async function cleanup() {
   await prisma.course.deleteMany({
     where: { courseCode: { in: COURSES.map((c) => c.courseCode) } },
   });
+  await prisma.timeSlot.deleteMany();
   await prisma.lecturer.deleteMany({
     where: { user: { email: { in: testEmails } } },
   });
@@ -175,31 +182,56 @@ async function main() {
     console.log(`  ✓ ${c.courseCode} – ${c.courseName}`);
   }
 
-  // ── 5. Create CourseSlots (timetable) ───────────────────────────────
-  console.log("\n📅 Creating CourseSlots...\n");
+  // ── 5. Create TimeSlots (availability grid) ───────────────────────
+  console.log("\n\u23f0 Creating TimeSlots...\n");
 
-  const slots = [
-    { code: "COMS1015", day: 1, start: 8 * 60,       end: 9 * 60 + 30  }, // Mon 08:00–09:30
-    { code: "COMS1015", day: 3, start: 10 * 60,      end: 11 * 60 + 30 }, // Wed 10:00–11:30
-    { code: "MATH2002", day: 2, start: 11 * 60,      end: 12 * 60 + 30 }, // Tue 11:00–12:30
-    { code: "MATH2002", day: 4, start: 14 * 60,      end: 15 * 60 + 30 }, // Thu 14:00–15:30
-    { code: "COMS3055", day: 1, start: 13 * 60,      end: 14 * 60 + 30 }, // Mon 13:00–14:30
-    { code: "COMS3055", day: 5, start: 9 * 60,       end: 10 * 60 + 30 }, // Fri 09:00–10:30
+  const timeSlotDefs = [
+    { start: 8 * 60,  end: 9 * 60  },
+    { start: 9 * 60,  end: 10 * 60 },
+    { start: 10 * 60, end: 11 * 60 },
+    { start: 11 * 60, end: 12 * 60 },
+    { start: 12 * 60, end: 13 * 60 },
+    { start: 13 * 60, end: 14 * 60 },
+    { start: 14 * 60, end: 15 * 60 },
+    { start: 15 * 60, end: 16 * 60 },
+    { start: 16 * 60, end: 17 * 60 },
   ];
 
-  for (const s of slots) {
+  const timeSlots = {};
+  for (const ts of timeSlotDefs) {
+    const created = await prisma.timeSlot.upsert({
+      where: { startMinute_endMinute: { startMinute: ts.start, endMinute: ts.end } },
+      update: {},
+      create: { startMinute: ts.start, endMinute: ts.end },
+    });
+    timeSlots[`${ts.start}`] = created;
+  }
+  console.log(`  \u2713 ${timeSlotDefs.length} time slots created`);
+
+  // ── 6. Create CourseSlots (timetable) ───────────────────────────────
+  console.log("\n📅 Creating CourseSlots...\n");
+
+  const courseSlotDefs = [
+    { code: "COMS1015", day: 1, start: 8 * 60  }, // Mon 08:00
+    { code: "COMS1015", day: 3, start: 10 * 60 }, // Wed 10:00
+    { code: "MATH2002", day: 2, start: 11 * 60 }, // Tue 11:00
+    { code: "MATH2002", day: 4, start: 14 * 60 }, // Thu 14:00
+    { code: "COMS3055", day: 1, start: 13 * 60 }, // Mon 13:00
+    { code: "COMS3055", day: 5, start: 9 * 60  }, // Fri 09:00
+  ];
+
+  for (const s of courseSlotDefs) {
     await prisma.courseSlot.create({
       data: {
         courseId: courses[s.code].id,
         dayOfWeek: s.day,
-        startMinute: s.start,
-        endMinute: s.end,
+        timeSlotId: timeSlots[`${s.start}`].id,
       },
     });
   }
-  console.log(`  ✓ ${slots.length} course slots created`);
+  console.log(`  ✓ ${courseSlotDefs.length} course slots created`);
 
-  // ── 6. Create Applicants (Available Tutors pool) ────────────────────
+  // ── 7. Create Applicants (Available Tutors pool) ────────────────────
   console.log("\n📋 Creating Applicants (available tutors)...\n");
 
   const applicantData = [
@@ -233,7 +265,7 @@ async function main() {
     console.log(`  ✓ ${a.email.padEnd(28)} → ${a.code}  (mark: ${a.mark}%)`);
   }
 
-  // ── 7. Pre-assign 2 tutors (Assigned Tutors pool) ───────────────────
+  // ── 8. Pre-assign 2 tutors (Assigned Tutors pool) ───────────────────
   console.log("\n📌 Pre-assigning tutors (TutorAssignments)...\n");
 
   // Create Tutor rows for the pre-assigned students first
@@ -298,9 +330,9 @@ async function main() {
   });
   console.log("  ✓ Priya Nair  → COMS3055 (assigned, no Tutor row yet)");
 
-  // ── 8. Mark Alex as ACCEPTED for COMS1015 ───────────────────────────
+  // ── 9. Mark Alex as ACCEPTED for COMS1015 ───────────────────────────
   // Already done above via the applicant update
-  console.log("  ✓ Alex's application status set to ASSIGNED (verified badge)");
+  console.log("  \u2713 Alex's application status set to ASSIGNED (verified badge)");
 
   // ── Done! ───────────────────────────────────────────────────────────
   console.log("\n" + "═".repeat(60));

@@ -60,10 +60,11 @@ model Applicant {
   transcriptPath String?
   availability   String?
   status         String    @default("PENDING")
-  appliedAt      DateTime  @default(now())
-  reviewedAt     DateTime?
-  course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  user           User      @relation(fields: [userId], references: [id])
+  appliedAt        DateTime  @default(now())
+  reviewedAt       DateTime?
+  course           Course             @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  user             User               @relation(fields: [userId], references: [id])
+  tutorAssignment  TutorAssignment?
 }
 
 model Course {
@@ -71,7 +72,9 @@ model Course {
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
-  budget           Float? // course tutoring budget, used by the spend-vs-budget report (Issue 11)
+  requiredTutors   Int               @default(1)
+  budgetHours      Float             @default(0)
+  hourlyRate       Float             @default(0)
   lecturerId       Int
   applications     Applicant[]
   lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])
@@ -94,15 +97,17 @@ model CourseTutorMark {
 }
 
 model TutorAssignment {
-  id             Int       @id @default(autoincrement())
-  tutorId        Int
+  id             Int        @id @default(autoincrement())
+  tutorId        Int?
   courseId       Int
+  applicantId    Int?       @unique
   allocatedHours Int
   semester       String
   status         String
   sessions       Session[]
-  course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  tutor          Tutor     @relation(fields: [tutorId], references: [id])
+  course         Course     @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  tutor          Tutor?     @relation(fields: [tutorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  applicant      Applicant? @relation(fields: [applicantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model TimeSlot {

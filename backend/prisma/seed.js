@@ -1,44 +1,66 @@
 require("dotenv/config");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const getFirebaseAdmin = require("../firebase/admin");
 
-// Firebase Admin SDK — used to create real login accounts for seeded users.
-// Falls back to fake UIDs if the SDK is not configured.
-let getFirebaseAdmin = null;
-try {
-  getFirebaseAdmin = require("../firebase/admin");
-} catch {
-  // Admin SDK not available — seed will use placeholder UIDs.
-}
+// ────────────────────────────────────────────────────────────────────────
+// Test accounts that get real Firebase credentials (loggable in the app)
+// ────────────────────────────────────────────────────────────────────────
+const PASSWORD = "Test@1234";
 
-const TEST_PASSWORD = "Test1234!";
+const ACCOUNTS = [
+  { email: "organiser@tutorflow.test", first: "Kgaogelo", last: "Molefe",  role: "ORGANISER", empNo: "ORG-001" },
+  { email: "lecturer@tutorflow.test",  first: "Sarah",    last: "Van Wyk", role: "LECTURER",  empNo: "EMP-L001" },
+  { email: "alex@tutorflow.test",      first: "Alex",     last: "Mercer",  role: "STUDENT",   stuNo: "STU-001" },
+  // Excuse / volunteer feature accounts (issue #37):
+  //   tutor.demo   → signs in, sees the Tutor Dashboard, can excuse a session
+  //   student.demo → signs in, sees the Volunteer View, can apply to volunteer
+  //   nduvo.demo   → pre-loads a PENDING volunteer request (conflict path)
+  { email: "tutor.demo@wits.ac.za",   first: "Thabo",  last: "Demotutor",    role: "TUTOR",   stuNo: "1234567" },
+  { email: "student.demo@wits.ac.za", first: "Lerato", last: "Demostudent",  role: "STUDENT", stuNo: "7654321" },
+  { email: "nduvo.demo@wits.ac.za",   first: "Nduvho", last: "Demovolunteer", role: "STUDENT", stuNo: "9876543" },
+];
 
-// Creates a Firebase Auth user (or retrieves the existing one) and returns the real UID.
-// This lets you log in with the seeded email + TEST_PASSWORD.
-async function ensureFirebaseUser(email, firstName, lastName) {
-  if (!getFirebaseAdmin) {
-    console.warn(`  ⚠  Firebase Admin SDK not configured — using placeholder UID for ${email}`);
-    return `seed-${email.split("@")[0]}-uid`;
-  }
+// ────────────────────────────────────────────────────────────────────────
+// Non-loginable users (fake UIDs) — just need DB rows for applicants/tutors
+// ────────────────────────────────────────────────────────────────────────
+const SYNTHETIC_USERS = [
+  { firebaseUid: "seed-sarah-j",   email: "sarah.j@wits.ac.za",      first: "Sarah",   last: "Jenkins", role: "STUDENT", stuNo: "STU-002" },
+  { firebaseUid: "seed-david-k",   email: "david.k@wits.ac.za",      first: "David",   last: "Kim",     role: "STUDENT", stuNo: "STU-003" },
+  { firebaseUid: "seed-priya-n",   email: "priya.n@wits.ac.za",      first: "Priya",   last: "Nair",    role: "STUDENT", stuNo: "STU-004" },
+  { firebaseUid: "seed-marcus-w",  email: "marcus.w@wits.ac.za",     first: "Marcus", last: "Webb",    role: "STUDENT", stuNo: "STU-005" },
+  { firebaseUid: "seed-thabo-m",   email: "thabo.m@wits.ac.za",      first: "Thabo",   last: "Mokoena", role: "STUDENT", stuNo: "STU-006" },
+  { firebaseUid: "seed-lerato-k",  email: "lerato.k@wits.ac.za",     first: "Lerato",  last: "Khumalo", role: "STUDENT", stuNo: "STU-007" },
+];
 
-  const { getAuth } = getFirebaseAdmin();
-  const auth = getAuth();
+// ────────────────────────────────────────────────────────────────────────
+// Course definitions
+// ────────────────────────────────────────────────────────────────────────
+const COURSES = [
+  { courseCode: "COMS1015", courseName: "Introduction to Programming",  minimumMark: 65, requiredTutors: 5, budgetHours: 40, hourlyRate: 150 },
+  { courseCode: "MATH2002", courseName: "Discrete Mathematics",         minimumMark: 60, requiredTutors: 3, budgetHours: 25, hourlyRate: 160 },
+  { courseCode: "COMS3055", courseName: "Database Systems",             minimumMark: 65, requiredTutors: 4, budgetHours: 35, hourlyRate: 155 },
+];
 
+// The tutor whose sessions exercise the excuse flow (issue #37).
+const FEATURE_TUTOR_EMAIL = "tutor.demo@wits.ac.za";
+
+// ────────────────────────────────────────────────────────────────────────
+// Helper — create or fetch a Firebase user
+// ────────────────────────────────────────────────────────────────────────
+async function ensureFirebaseUser(auth, email, displayName) {
   try {
     const existing = await auth.getUserByEmail(email);
-    // Update password so it always matches TEST_PASSWORD (in case it was changed).
-    await auth.updateUser(existing.uid, { password: TEST_PASSWORD });
+    await auth.updateUser(existing.uid, { password: PASSWORD });
+    console.log(`  ✓ Firebase user exists: ${email}`);
     return existing.uid;
-  } catch (error) {
-    if (error.code === "auth/user-not-found") {
-      const created = await auth.createUser({
-        email,
-        password: TEST_PASSWORD,
-        displayName: `${firstName} ${lastName}`,
-      });
+  } catch (err) {
+    if (err.code === "auth/user-not-found") {
+      const created = await auth.createUser({ email, password: PASSWORD, displayName });
+      console.log(`  + Firebase user created: ${email}`);
       return created.uid;
     }
-    throw error;
+    throw err;
   }
 }
 
@@ -51,258 +73,422 @@ const nextWeekdayAt = (weekday, hour, minute) => {
   return date;
 };
 
-async function main() {
-  // ── Lecturer ────────────────────────────────────────────────────────
-  const lecturerUid = await ensureFirebaseUser("kg.newuser@wits.ac.za", "Kgaogelo", "Testuser");
-  const lecturerUser = await prisma.user.upsert({
-    where: { email: "kg.newuser@wits.ac.za" },
-    update: { firebaseUid: lecturerUid },
-    create: {
-      firstName: "Kgaogelo",
-      lastName: "Testuser",
-      email: "kg.newuser@wits.ac.za",
-      firebaseUid: lecturerUid,
-      role: "LECTURER",
-      employeeNumber: "KG-EMP003",
-      studentNumber: "N/A-KG003",
-    },
-  });
+// ────────────────────────────────────────────────────────────────────────
+// Time slots (minutes since midnight)
+// ────────────────────────────────────────────────────────────────────────
+// Availability timetable slots — the grid used by Profile / Edit Timetable.
+const AVAILABILITY_TIME_SLOTS = [
+  { startMinute: 480,  endMinute: 525  }, // 08:00-08:45
+  { startMinute: 540,  endMinute: 585  }, // 09:00-09:45
+  { startMinute: 615,  endMinute: 660  }, // 10:15-11:00
+  { startMinute: 675,  endMinute: 720  }, // 11:15-12:00
+  { startMinute: 750,  endMinute: 795  }, // 12:30-13:15
+  { startMinute: 855,  endMinute: 900  }, // 14:15-15:00
+  { startMinute: 915,  endMinute: 960  }, // 15:15-16:00
+  { startMinute: 975,  endMinute: 1020 }, // 16:15-17:00
+];
 
-  const lecturer = await prisma.lecturer.upsert({
-    where: { userId: lecturerUser.id },
-    update: {},
-    create: { userId: lecturerUser.id, department: "Computer Science" },
-  });
+// Course-timing slots — the ranges the course slots below are taught in.
+// (CourseSlot references a TimeSlot via timeSlotId, so these must exist first.)
+const COURSE_TIME_SLOTS = [
+  { startMinute: 480, endMinute: 570 }, // 08:00-09:30
+  { startMinute: 540, endMinute: 630 }, // 09:00-10:30
+  { startMinute: 600, endMinute: 690 }, // 10:00-11:30
+  { startMinute: 660, endMinute: 750 }, // 11:00-12:30
+  { startMinute: 780, endMinute: 870 }, // 13:00-14:30
+  { startMinute: 840, endMinute: 930 }, // 14:00-15:30
+];
 
-  // ── Tutor ───────────────────────────────────────────────────────────
-  const tutorUid = await ensureFirebaseUser("tutor.demo@wits.ac.za", "Thabo", "Demotutor");
-  const tutorUser = await prisma.user.upsert({
-    where: { email: "tutor.demo@wits.ac.za" },
-    update: { firebaseUid: tutorUid },
-    create: {
-      firstName: "Thabo",
-      lastName: "Demotutor",
-      email: "tutor.demo@wits.ac.za",
-      firebaseUid: tutorUid,
-      role: "TUTOR",
-      studentNumber: "1234567",
-    },
-  });
+// ────────────────────────────────────────────────────────────────────────
+// Course slot definitions (course + weekday + the time range above)
+// ────────────────────────────────────────────────────────────────────────
+const COURSE_SLOT_DEFS = [
+  { code: "COMS1015", day: 1, start: 8 * 60,      end: 9 * 60 + 30  }, // Mon 08:00–09:30
+  { code: "COMS1015", day: 3, start: 10 * 60,     end: 11 * 60 + 30 }, // Wed 10:00–11:30
+  { code: "MATH2002", day: 2, start: 11 * 60,     end: 12 * 60 + 30 }, // Tue 11:00–12:30
+  { code: "MATH2002", day: 4, start: 14 * 60,     end: 15 * 60 + 30 }, // Thu 14:00–15:30
+  { code: "COMS3055", day: 1, start: 13 * 60,     end: 14 * 60 + 30 }, // Mon 13:00–14:30
+  { code: "COMS3055", day: 5, start: 9 * 60,      end: 10 * 60 + 30 }, // Fri 09:00–10:30
+];
 
-  const tutor = await prisma.tutor.upsert({
-    where: { userId: tutorUser.id },
-    update: {},
-    create: { userId: tutorUser.id, maxHoursPerWeek: 20, status: "APPROVED" },
-  });
+// ────────────────────────────────────────────────────────────────────────
+// Clean up previous seed runs (safe — only removes seed-generated data)
+// ────────────────────────────────────────────────────────────────────────
+async function cleanup() {
+  console.log("\n🧹 Cleaning up previous seed data...\n");
 
-  // ── Students ────────────────────────────────────────────────────────
-  const studentUid = await ensureFirebaseUser("student.demo@wits.ac.za", "Lerato", "Demostudent");
-  const studentUser = await prisma.user.upsert({
-    where: { email: "student.demo@wits.ac.za" },
-    update: { firebaseUid: studentUid },
-    create: {
-      firstName: "Lerato",
-      lastName: "Demostudent",
-      email: "student.demo@wits.ac.za",
-      firebaseUid: studentUid,
-      role: "STUDENT",
-      studentNumber: "7654321",
-    },
-  });
-
-  // A second student who already volunteered — tests the "another student
-  // has already volunteered" error path.
-  const busyUid = await ensureFirebaseUser("nduvo.demo@wits.ac.za", "Nduvho", "Demovolunteer");
-  const busyStudent = await prisma.user.upsert({
-    where: { email: "nduvo.demo@wits.ac.za" },
-    update: { firebaseUid: busyUid },
-    create: {
-      firstName: "Nduvho",
-      lastName: "Demovolunteer",
-      email: "nduvo.demo@wits.ac.za",
-      firebaseUid: busyUid,
-      role: "STUDENT",
-      studentNumber: "9876543",
-    },
-  });
-
-  // ── Courses ─────────────────────────────────────────────────────────
-  const cs101 = await prisma.course.upsert({
-    where: { courseCode: "CS101" },
-    update: {},
-    create: { courseCode: "CS101", courseName: "Intro Programming", minimumMark: 70, lecturerId: lecturer.id },
-  });
-
-  const cs305 = await prisma.course.upsert({
-    where: { courseCode: "CS305" },
-    update: {},
-    create: { courseCode: "CS305", courseName: "Database Systems", minimumMark: 70, lecturerId: lecturer.id },
-  });
-
-  // ── Tutor Assignments ──────────────────────────────────────────────
-  let cs101Assignment = await prisma.tutorAssignment.findFirst({
-    where: { tutorId: tutor.id, courseId: cs101.id, semester: "2026-S2" },
-  });
-  if (!cs101Assignment) {
-    cs101Assignment = await prisma.tutorAssignment.create({
-      data: { tutorId: tutor.id, courseId: cs101.id, allocatedHours: 6, semester: "2026-S2", status: "ACTIVE" },
-    });
-  }
-
-  let cs305Assignment = await prisma.tutorAssignment.findFirst({
-    where: { tutorId: tutor.id, courseId: cs305.id, semester: "2026-S2" },
-  });
-  if (!cs305Assignment) {
-    cs305Assignment = await prisma.tutorAssignment.create({
-      data: { tutorId: tutor.id, courseId: cs305.id, allocatedHours: 4, semester: "2026-S2", status: "ACTIVE" },
-    });
-  }
-
-  // ── Time Slots (minutes since midnight) ────────────────────────────
-  // Availability timetable slots (from main — used by the profile timetable).
-  const timetableSlots = [
-    { startMinute: 480, endMinute: 525 },  // 08:00-08:45
-    { startMinute: 540, endMinute: 585 },  // 09:00-09:45
-    { startMinute: 615, endMinute: 660 },  // 10:15-11:00
-    { startMinute: 675, endMinute: 720 },  // 11:15-12:00
-    { startMinute: 750, endMinute: 795 },  // 12:30-13:15
-    { startMinute: 855, endMinute: 900 },  // 14:15-15:00
-    { startMinute: 915, endMinute: 960 },  // 15:15-16:00
-    { startMinute: 975, endMinute: 1020 }, // 16:15-17:00
+  const testEmails = [
+    ...ACCOUNTS.map((a) => a.email),
+    ...SYNTHETIC_USERS.map((u) => u.email),
   ];
+  const seedUids = SYNTHETIC_USERS.map((u) => u.firebaseUid);
+  const tutorEmails = [FEATURE_TUTOR_EMAIL];
 
-  for (const slot of timetableSlots) {
-    await prisma.timeSlot.upsert({
+  // Delete in reverse-dependency order.
+  // Volunteers and sessions first — they reference assignments and course slots.
+  await prisma.sessionVolunteer.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
+  await prisma.session.deleteMany({
+    where: {
+      assignment: {
+        OR: [
+          { tutor: { user: { email: { in: tutorEmails } } } },
+          { applicant: { user: { email: { in: testEmails } } } },
+        ],
+      },
+    },
+  });
+  await prisma.tutorAssignment.deleteMany({
+    where: {
+      OR: [
+        { applicant: { user: { email: { in: testEmails } } } },
+        { tutor: { user: { email: { in: tutorEmails } } } },
+      ],
+    },
+  });
+  await prisma.applicant.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
+  await prisma.tutor.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
+  await prisma.courseSlot.deleteMany({
+    where: { course: { courseCode: { in: COURSES.map((c) => c.courseCode) } } },
+  });
+  await prisma.course.deleteMany({
+    where: { courseCode: { in: COURSES.map((c) => c.courseCode) } },
+  });
+  await prisma.lecturer.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
+  await prisma.availability.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
+  await prisma.user.deleteMany({
+    where: { OR: [{ email: { in: testEmails } }, { firebaseUid: { in: seedUids } }] },
+  });
+
+  console.log("  Cleanup complete.\n");
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Main seed
+// ────────────────────────────────────────────────────────────────────────
+async function main() {
+  const { getAuth } = getFirebaseAdmin();
+  const auth = getAuth();
+
+  await cleanup();
+
+  // ── 1. Create loggable Firebase accounts ────────────────────────────
+  console.log("👤 Creating Firebase accounts...\n");
+
+  const firebaseUids = {};
+  for (const acct of ACCOUNTS) {
+    firebaseUids[acct.email] = await ensureFirebaseUser(
+      auth,
+      acct.email,
+      `${acct.first} ${acct.last}`
+    );
+  }
+
+  // ── 2. Create all User rows ─────────────────────────────────────────
+  console.log("👤 Creating User records...\n");
+
+  const users = {};
+
+  // Loggable accounts
+  for (const acct of ACCOUNTS) {
+    users[acct.email] = await prisma.user.create({
+      data: {
+        firebaseUid: firebaseUids[acct.email],
+        firstName: acct.first,
+        lastName: acct.last,
+        email: acct.email,
+        role: acct.role,
+        employeeNumber: acct.empNo ?? null,
+        studentNumber: acct.stuNo ?? null,
+      },
+    });
+  }
+
+  // Synthetic (non-loginable) users
+  for (const u of SYNTHETIC_USERS) {
+    users[u.email] = await prisma.user.create({
+      data: {
+        firebaseUid: u.firebaseUid,
+        firstName: u.first,
+        lastName: u.last,
+        email: u.email,
+        role: u.role,
+        studentNumber: u.stuNo ?? null,
+      },
+    });
+  }
+
+  // ── 3. Create the Lecturer profile ──────────────────────────────────
+  console.log("🎓 Creating Lecturer profile...\n");
+
+  const lecturer = await prisma.lecturer.create({
+    data: {
+      userId: users["lecturer@tutorflow.test"].id,
+      department: "Computer Science and Applied Mathematics",
+      officeLocation: "Maths Building, Room 204",
+      officeHours: "Mon/Wed 14:00–16:00",
+    },
+  });
+
+  console.log(`  ✓ Lecturer "${lecturer.id}" linked to user ${users["lecturer@tutorflow.test"].id}`);
+
+  // ── 4. Create Courses ───────────────────────────────────────────────
+  console.log("\n📚 Creating Courses...\n");
+
+  const courses = {};
+  for (const c of COURSES) {
+    courses[c.courseCode] = await prisma.course.create({
+      data: {
+        ...c,
+        lecturerId: lecturer.id,  // Lecturer table id, NOT user id
+      },
+    });
+    console.log(`  ✓ ${c.courseCode} – ${c.courseName}`);
+  }
+
+  // ── 5. Create TimeSlots + CourseSlots (timetable) ───────────────────
+  console.log("\n📅 Creating TimeSlots and CourseSlots...\n");
+
+  const timeSlots = {};
+  for (const slot of [...AVAILABILITY_TIME_SLOTS, ...COURSE_TIME_SLOTS]) {
+    timeSlots[`${slot.startMinute}-${slot.endMinute}`] = await prisma.timeSlot.upsert({
       where: { startMinute_endMinute: { startMinute: slot.startMinute, endMinute: slot.endMinute } },
       update: {},
       create: slot,
     });
   }
 
-  const ts10to12 = await prisma.timeSlot.upsert({
-    where: { startMinute_endMinute: { startMinute: 600, endMinute: 720 } },
-    update: {},
-    create: { startMinute: 600, endMinute: 720 },
+  const courseSlots = {};
+  for (const s of COURSE_SLOT_DEFS) {
+    // A course slot is identified by course + weekday; reuse it if a previous
+    // run left one behind, otherwise create it against its TimeSlot.
+    let slot = await prisma.courseSlot.findFirst({
+      where: { courseId: courses[s.code].id, dayOfWeek: s.day },
+    });
+    if (!slot) {
+      slot = await prisma.courseSlot.create({
+        data: {
+          courseId: courses[s.code].id,
+          dayOfWeek: s.day,
+          timeSlotId: timeSlots[`${s.start}-${s.end}`].id,
+        },
+      });
+    }
+    courseSlots[`${s.code}-${s.day}`] = slot;
+  }
+  console.log(`  ✓ ${COURSE_SLOT_DEFS.length} course slots created`);
+
+  // ── 6. Create Applicants (Available Tutors pool) ────────────────────
+  console.log("\n📋 Creating Applicants (available tutors)...\n");
+
+  const applicantData = [
+    // COMS1015 applicants — varied marks for ranking
+    { email: "alex@tutorflow.test",    code: "COMS1015", mark: 92 },
+    { email: "sarah.j@wits.ac.za",     code: "COMS1015", mark: 88 },
+    { email: "david.k@wits.ac.za",     code: "COMS1015", mark: 85 },
+    { email: "thabo.m@wits.ac.za",     code: "COMS1015", mark: 78 },
+    { email: "lerato.k@wits.ac.za",    code: "COMS1015", mark: 74 },
+    // MATH2002 applicants
+    { email: "sarah.j@wits.ac.za",     code: "MATH2002", mark: 91 },
+    { email: "priya.n@wits.ac.za",     code: "MATH2002", mark: 84 },
+    { email: "marcus.w@wits.ac.za",    code: "MATH2002", mark: 72 },
+    // COMS3055 applicants
+    { email: "priya.n@wits.ac.za",     code: "COMS3055", mark: 95 },
+    { email: "marcus.w@wits.ac.za",    code: "COMS3055", mark: 81 },
+    { email: "thabo.m@wits.ac.za",     code: "COMS3055", mark: 77 },
+    { email: "lerato.k@wits.ac.za",    code: "COMS3055", mark: 70 },
+  ];
+
+  for (const a of applicantData) {
+    await prisma.applicant.create({
+      data: {
+        userId: users[a.email].id,
+        courseId: courses[a.code].id,
+        courseMark: a.mark,
+        status: "PENDING",
+        availability: "Mon–Fri afternoons",
+      },
+    });
+    console.log(`  ✓ ${a.email.padEnd(28)} → ${a.code}  (mark: ${a.mark}%)`);
+  }
+
+  // ── 7. Pre-assign 2 tutors (Assigned Tutors pool) ───────────────────
+  console.log("\n📌 Pre-assigning tutors (TutorAssignments)...\n");
+
+  // Create Tutor rows for the pre-assigned students first
+  const assignedUsers = ["alex@tutorflow.test", "david.k@wits.ac.za"];
+  const tutorRows = {};
+
+  for (const email of assignedUsers) {
+    tutorRows[email] = await prisma.tutor.create({
+      data: {
+        userId: users[email].id,
+        hourlyRate: null,
+        maxHoursPerWeek: 10,
+        availableHours: 10,
+        currentHours: 0,
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  // COMS1015 — Alex assigned (mark 92, ACCEPTED)
+  const alexApplicant = await prisma.applicant.findFirst({
+    where: {
+      userId: users["alex@tutorflow.test"].id,
+      courseId: courses["COMS1015"].id,
+    },
   });
 
-  const ts14to16 = await prisma.timeSlot.upsert({
-    where: { startMinute_endMinute: { startMinute: 840, endMinute: 960 } },
-    update: {},
-    create: { startMinute: 840, endMinute: 960 },
+  await prisma.tutorAssignment.create({
+    data: {
+      tutorId: tutorRows["alex@tutorflow.test"].id,
+      courseId: courses["COMS1015"].id,
+      applicantId: alexApplicant.id,
+      allocatedHours: 5,
+      semester: "2026-S2",
+      status: "ACTIVE",
+    },
+  });
+  await prisma.applicant.update({
+    where: { id: alexApplicant.id },
+    data: { status: "ASSIGNED", reviewedAt: new Date() },
+  });
+  console.log("  ✓ Alex Mercer → COMS1015 (ACCEPTED & assigned)");
+
+  // COMS3055 — Priya assigned (mark 95, ASSIGNED)
+  const priyaApplicant = await prisma.applicant.findFirst({
+    where: {
+      userId: users["priya.n@wits.ac.za"].id,
+      courseId: courses["COMS3055"].id,
+    },
   });
 
-  const ts9to10 = await prisma.timeSlot.upsert({
-    where: { startMinute_endMinute: { startMinute: 540, endMinute: 600 } },
-    update: {},
-    create: { startMinute: 540, endMinute: 600 },
+  await prisma.tutorAssignment.create({
+    data: {
+      courseId: courses["COMS3055"].id,
+      applicantId: priyaApplicant.id,
+      allocatedHours: 5,
+      semester: "2026-S2",
+      status: "ACTIVE",
+    },
+  });
+  await prisma.applicant.update({
+    where: { id: priyaApplicant.id },
+    data: { status: "ASSIGNED", reviewedAt: new Date() },
+  });
+  console.log("  ✓ Priya Nair  → COMS3055 (assigned, no Tutor row yet)");
+
+  // ── 8. Excuse / volunteer feature data (issue #37) ──────────────────
+  console.log("\n🎯 Creating excuse / volunteer feature data...\n");
+
+  // The feature tutor gets a Tutor row and one assignment per course, so the
+  // Tutor Dashboard has sessions to excuse.
+  const featureTutor = await prisma.tutor.create({
+    data: {
+      userId: users[FEATURE_TUTOR_EMAIL].id,
+      maxHoursPerWeek: 20,
+      status: "APPROVED",
+    },
   });
 
-  // ── Course Slots ───────────────────────────────────────────────────
-  let cs101Mon = await prisma.courseSlot.findFirst({ where: { courseId: cs101.id, dayOfWeek: 1 } });
-  if (!cs101Mon) {
-    cs101Mon = await prisma.courseSlot.create({
-      data: { courseId: cs101.id, dayOfWeek: 1, timeSlotId: ts10to12.id, venue: "Lab 3B", sessionType: "TUTORIAL" },
+  const featureAssignments = {};
+  for (const code of ["COMS1015", "COMS3055"]) {
+    featureAssignments[code] = await prisma.tutorAssignment.create({
+      data: {
+        tutorId: featureTutor.id,
+        courseId: courses[code].id,
+        allocatedHours: code === "COMS1015" ? 6 : 4,
+        semester: "2026-S2",
+        status: "ACTIVE",
+      },
     });
   }
 
-  let cs101Wed = await prisma.courseSlot.findFirst({ where: { courseId: cs101.id, dayOfWeek: 3 } });
-  if (!cs101Wed) {
-    cs101Wed = await prisma.courseSlot.create({
-      data: { courseId: cs101.id, dayOfWeek: 3, timeSlotId: ts14to16.id, venue: "Lab 1A", sessionType: "TUTORIAL" },
-    });
-  }
-
-  let cs305Fri = await prisma.courseSlot.findFirst({ where: { courseId: cs305.id, dayOfWeek: 5 } });
-  if (!cs305Fri) {
-    cs305Fri = await prisma.courseSlot.create({
-      data: { courseId: cs305.id, dayOfWeek: 5, timeSlotId: ts9to10.id, venue: "Lab 2C", sessionType: "TUTORIAL" },
-    });
-  }
-
-  // ── Sessions ───────────────────────────────────────────────────────
-  const cs101SessionCount = await prisma.session.count({ where: { assignmentId: cs101Assignment.id } });
-  if (cs101SessionCount === 0) {
-    await prisma.session.createMany({
-      data: [
-        { assignmentId: cs101Assignment.id, courseSlotId: cs101Mon.id, date: nextWeekdayAt(1, 0, 0), status: "SCHEDULED" },
-        { assignmentId: cs101Assignment.id, courseSlotId: cs101Wed.id, date: nextWeekdayAt(3, 0, 0), status: "SCHEDULED" },
-        { assignmentId: cs101Assignment.id, courseSlotId: cs101Mon.id, date: nextWeekdayAt(1, 0, 0), status: "UNASSIGNED", excuseReason: "Medical appointment I could not move" },
-      ],
-    });
-  }
-
-  const cs305SessionCount = await prisma.session.count({ where: { assignmentId: cs305Assignment.id } });
-  if (cs305SessionCount === 0) {
-    const cs305Sessions = await Promise.all([
-      prisma.session.create({
-        data: { assignmentId: cs305Assignment.id, courseSlotId: cs305Fri.id, date: nextWeekdayAt(5, 0, 0), status: "SCHEDULED" },
-      }),
-      prisma.session.create({
-        data: { assignmentId: cs305Assignment.id, courseSlotId: cs305Fri.id, date: nextWeekdayAt(5, 0, 0), status: "UNASSIGNED", excuseReason: "Conference travel" },
-      }),
-    ]);
-
-    // Nduvho already volunteered — tests the "already volunteered" error path.
-    await prisma.sessionVolunteer.create({
-      data: { sessionId: cs305Sessions[1].id, userId: busyStudent.id, status: "PENDING" },
-    });
-    await prisma.session.update({
-      where: { id: cs305Sessions[1].id },
-      data: { status: "PENDING" },
-    });
-  }
-
-  // ── Summary ────────────────────────────────────────────────────────
-  const allSessions = await prisma.session.findMany({
-    include: { assignment: { include: { course: true } }, courseSlot: { include: { timeSlot: true } } },
+  // COMS1015 — two SCHEDULED sessions plus one already excused (UNASSIGNED).
+  await prisma.session.createMany({
+    data: [
+      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-1"].id, date: nextWeekdayAt(1, 0, 0), status: "SCHEDULED" },
+      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-3"].id, date: nextWeekdayAt(3, 0, 0), status: "SCHEDULED" },
+      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-1"].id, date: nextWeekdayAt(1, 0, 0), status: "UNASSIGNED", excuseReason: "Medical appointment I could not move" },
+    ],
   });
 
-  const firebaseReady = !!getFirebaseAdmin;
-
-  console.log("\n═══════════════════════════════════════════════════════════");
-  console.log("  Seed complete — Excuse + Volunteer feature test data");
-  console.log("═══════════════════════════════════════════════════════════\n");
-  console.log("Logins (password for all: " + TEST_PASSWORD + "):");
-  console.log(`  Tutor:    tutor.demo@wits.ac.za`);
-  console.log(`  Student:  student.demo@wits.ac.za`);
-  console.log(`  Student2: nduvo.demo@wits.ac.za`);
-  console.log(`  Lecturer: kg.newuser@wits.ac.za`);
-  if (!firebaseReady) {
-    console.log("\n  ⚠  Firebase Admin SDK was NOT configured.");
-    console.log("     The accounts above do NOT have real Firebase logins.");
-    console.log("     Set FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY");
-    console.log("     (or GOOGLE_APPLICATION_CREDENTIALS) in your .env and re-run.");
-  }
-  console.log(`\nSessions seeded: ${allSessions.length}`);
-  allSessions.forEach((s) => {
-    const ts = s.courseSlot?.timeSlot;
-    const timeRange = ts
-      ? `${Math.floor(ts.startMinute / 60)}:${String(ts.startMinute % 60).padStart(2, "0")}–${Math.floor(ts.endMinute / 60)}:${String(ts.endMinute % 60).padStart(2, "0")}`
-      : "no slot";
-    console.log(`  [${s.status.padEnd(10)}] ${s.assignment.course.courseCode} ${timeRange}  ${s.excuseReason || ""}`);
+  // COMS3055 — one SCHEDULED session plus one with a PENDING volunteer.
+  const pendingSession = await prisma.session.create({
+    data: {
+      assignmentId: featureAssignments["COMS3055"].id,
+      courseSlotId: courseSlots["COMS3055-5"].id,
+      date: nextWeekdayAt(5, 0, 0),
+      status: "UNASSIGNED",
+      excuseReason: "Conference travel",
+    },
+  });
+  await prisma.session.create({
+    data: {
+      assignmentId: featureAssignments["COMS3055"].id,
+      courseSlotId: courseSlots["COMS3055-5"].id,
+      date: nextWeekdayAt(5, 0, 0),
+      status: "SCHEDULED",
+    },
   });
 
-  console.log("\n── How to test ────────────────────────────────────────────\n");
-  if (firebaseReady) {
-    console.log("1. Start the backend and frontend locally.");
-    console.log("2. Log in as the TUTOR:   tutor.demo@wits.ac.za / " + TEST_PASSWORD);
-    console.log("   → Go to Tutor Dashboard → click 'Excuse Myself' on an Active session.");
-    console.log("3. Log out, then log in as a STUDENT:  student.demo@wits.ac.za / " + TEST_PASSWORD);
-    console.log("   → Go to Volunteer View → the excused session appears → click 'Apply to Volunteer'.");
-    console.log("4. The session disappears from the list (it is now PENDING, not UNASSIGNED).");
-  } else {
-    console.log("Firebase Admin SDK is not configured — cannot create real logins.");
-    console.log("Add these to your backend/.env and re-run `npm run seed`:");
-    console.log("  FIREBASE_PROJECT_ID=your-project-id");
-    console.log("  FIREBASE_CLIENT_EMAIL=your-service-account@...gserviceaccount.com");
-    console.log("  FIREBASE_PRIVATE_KEY=\"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\"");
-  }
-  console.log("═══════════════════════════════════════════════════════════\n");
+  // Nduvho already volunteered — tests the "already volunteered" error path.
+  await prisma.sessionVolunteer.create({
+    data: { sessionId: pendingSession.id, userId: users["nduvo.demo@wits.ac.za"].id, status: "PENDING" },
+  });
+  await prisma.session.update({
+    where: { id: pendingSession.id },
+    data: { status: "PENDING" },
+  });
+  console.log("  ✓ 5 sessions across SCHEDULED / UNASSIGNED / PENDING states");
+  console.log("  ✓ Nduvho Demovolunteer holds the pending volunteer request");
+
+  // ── Done! ───────────────────────────────────────────────────────────
+  console.log("\n" + "═".repeat(60));
+  console.log("✅  Seed complete!\n");
+  console.log("  Loggable accounts (password: " + PASSWORD + "):\n");
+  console.log("    🏢 Organiser → organiser@tutorflow.test");
+  console.log("    🎓 Lecturer  → lecturer@tutorflow.test");
+  console.log("    🧑 Student   → alex@tutorflow.test");
+  console.log("    🧑 Tutor     → tutor.demo@wits.ac.za        (excuse flow)");
+  console.log("    🧑 Student   → student.demo@wits.ac.za      (volunteer flow)");
+  console.log("    🧑 Student   → nduvo.demo@wits.ac.za        (pending volunteer)");
+  console.log("");
+  console.log("  Board state after seed:\n");
+  console.log("    COMS1015 (Introduction to Programming):");
+  console.log("      Assigned:  Alex Mercer (verified/ASSIGNED)");
+  console.log("      Available: Sarah Jenkins, David Kim, Thabo Mokoena, Lerato Khumalo");
+  console.log("");
+  console.log("    MATH2002 (Discrete Mathematics):");
+  console.log("      Assigned:  (none)");
+  console.log("      Available: Sarah Jenkins, Priya Nair, Marcus Webb");
+  console.log("");
+  console.log("    COMS3055 (Database Systems):");
+  console.log("      Assigned:  Priya Nair");
+  console.log("      Available: Marcus Webb, Thabo Mokoena, Lerato Khumalo");
+  console.log("");
+  console.log("  Excuse / volunteer flow (issue #37):\n");
+  console.log("    1. Log in as tutor.demo@wits.ac.za → Tutor Dashboard → 'Excuse Myself' on an Active session.");
+  console.log("    2. Log in as student.demo@wits.ac.za → Volunteer View → the excused session appears.");
+  console.log("    3. 'Apply to Volunteer' — the session leaves the list (now PENDING).");
+  console.log("");
+  console.log("  Run with:  cd backend && npm run seed");
+  console.log("═".repeat(60) + "\n");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("\n❌ Seed failed:\n", e);
     process.exit(1);
   })
   .finally(async () => {

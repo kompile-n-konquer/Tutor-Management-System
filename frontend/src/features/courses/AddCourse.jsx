@@ -34,14 +34,19 @@ const AddCourse = () => {
     tutorsRequired: '',
   });
 
-  useEffect(() => {
-    if (!loading && !currentUser) {
-      navigate('/login');
-    }
-  }, [currentUser, loading, navigate]);
+  const isLecturer = currentUser?.role?.toLowerCase() === 'lecturer';
 
   useEffect(() => {
-    if (loading || !currentUser) return;
+    if (loading) return;
+    if (!currentUser) {
+      navigate('/login');
+    } else if (!isLecturer) {
+      navigate('/tutor-dashboard');
+    }
+  }, [currentUser, loading, navigate, isLecturer]);
+
+  useEffect(() => {
+    if (loading || !currentUser || !isLecturer) return;
 
     const loadTimeSlots = async () => {
       const response = await execute(() => api.get('/courses/time-slots'));
@@ -61,10 +66,10 @@ const AddCourse = () => {
     };
 
     loadTimeSlots();
-  }, [currentUser, loading, execute]);
+  }, [currentUser, loading, isLecturer, execute]);
 
   if (loading) return null;
-  if (!currentUser) return null;
+  if (!currentUser || !isLecturer) return null;
 
   const handleChange = (event, name) => {
     setError('');

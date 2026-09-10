@@ -3,7 +3,7 @@
 // "roles" controls who sees the link; "to" must match a <Route path> in App.jsx.
 
 export const NAV_LINKS = [
-  { to: "/courses", icon: "menu_book", label: "Courses", roles: ["lecturer", "organiser"] },
+  { to: "/courses/add", icon: "menu_book", label: "Courses", roles: ["lecturer", "organiser"] },
   { to: "/allocation-board", icon: "dashboard", label: "Allocation Board", roles: ["organiser"] },
   { to: "/tutor-dashboard", icon: "assignment_ind", label: "Tutor Dashboard", roles: ["tutor"] },
   { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor", "student"] },

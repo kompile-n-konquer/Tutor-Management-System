@@ -1,11 +1,10 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "../../firebase/firebase.js";
 import api from "../../utils/axiosInstance.js";
+import AuthContext from "./AuthContext.js";
 
-const AuthContext = createContext(null);
-
-const AuthProvider = ({ children }) => {
+export default function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,16 +52,4 @@ const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export default AuthProvider;
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (context === null) {
-    throw new Error("The useAuth must be used within an AuthProvider and not directly");
-  }
-
-  return context;
 }

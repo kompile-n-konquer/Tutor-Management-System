@@ -1,6 +1,6 @@
 import Sidebar from "./Sidebar";
 import TopNavBar from "./TopNavBar";
-import { useAuth } from "../../features/context/AuthContext";
+import useAuth from "../../hooks/useAuth";
 
 /**
  * AppLayout

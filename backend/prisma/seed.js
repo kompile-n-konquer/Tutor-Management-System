@@ -2,6 +2,46 @@ require("dotenv/config");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// Firebase Admin SDK — used to create real login accounts for seeded users.
+// Falls back to fake UIDs if the SDK is not configured.
+let getFirebaseAdmin = null;
+try {
+  getFirebaseAdmin = require("../firebase/admin");
+} catch {
+  // Admin SDK not available — seed will use placeholder UIDs.
+}
+
+const TEST_PASSWORD = "Test1234!";
+
+// Creates a Firebase Auth user (or retrieves the existing one) and returns the real UID.
+// This lets you log in with the seeded email + TEST_PASSWORD.
+async function ensureFirebaseUser(email, firstName, lastName) {
+  if (!getFirebaseAdmin) {
+    console.warn(`  ⚠  Firebase Admin SDK not configured — using placeholder UID for ${email}`);
+    return `seed-${email.split("@")[0]}-uid`;
+  }
+
+  const { getAuth } = getFirebaseAdmin();
+  const auth = getAuth();
+
+  try {
+    const existing = await auth.getUserByEmail(email);
+    // Update password so it always matches TEST_PASSWORD (in case it was changed).
+    await auth.updateUser(existing.uid, { password: TEST_PASSWORD });
+    return existing.uid;
+  } catch (error) {
+    if (error.code === "auth/user-not-found") {
+      const created = await auth.createUser({
+        email,
+        password: TEST_PASSWORD,
+        displayName: `${firstName} ${lastName}`,
+      });
+      return created.uid;
+    }
+    throw error;
+  }
+}
+
 // Returns the next occurrence of a weekday (0 = Sunday) at the given time.
 const nextWeekdayAt = (weekday, hour, minute) => {
   const date = new Date();
@@ -13,14 +53,15 @@ const nextWeekdayAt = (weekday, hour, minute) => {
 
 async function main() {
   // ── Lecturer ────────────────────────────────────────────────────────
+  const lecturerUid = await ensureFirebaseUser("kg.newuser@wits.ac.za", "Kgaogelo", "Testuser");
   const lecturerUser = await prisma.user.upsert({
     where: { email: "kg.newuser@wits.ac.za" },
-    update: {},
+    update: { firebaseUid: lecturerUid },
     create: {
       firstName: "Kgaogelo",
       lastName: "Testuser",
       email: "kg.newuser@wits.ac.za",
-      firebaseUid: "seed-lecturer-uid",
+      firebaseUid: lecturerUid,
       role: "LECTURER",
       employeeNumber: "KG-EMP003",
       studentNumber: "N/A-KG003",
@@ -34,14 +75,15 @@ async function main() {
   });
 
   // ── Tutor ───────────────────────────────────────────────────────────
+  const tutorUid = await ensureFirebaseUser("tutor.demo@wits.ac.za", "Thabo", "Demotutor");
   const tutorUser = await prisma.user.upsert({
     where: { email: "tutor.demo@wits.ac.za" },
-    update: {},
+    update: { firebaseUid: tutorUid },
     create: {
       firstName: "Thabo",
       lastName: "Demotutor",
       email: "tutor.demo@wits.ac.za",
-      firebaseUid: "seed-tutor-uid",
+      firebaseUid: tutorUid,
       role: "TUTOR",
       studentNumber: "1234567",
     },
@@ -54,29 +96,31 @@ async function main() {
   });
 
   // ── Students ────────────────────────────────────────────────────────
+  const studentUid = await ensureFirebaseUser("student.demo@wits.ac.za", "Lerato", "Demostudent");
   const studentUser = await prisma.user.upsert({
     where: { email: "student.demo@wits.ac.za" },
-    update: {},
+    update: { firebaseUid: studentUid },
     create: {
       firstName: "Lerato",
       lastName: "Demostudent",
       email: "student.demo@wits.ac.za",
-      firebaseUid: "seed-student-uid",
+      firebaseUid: studentUid,
       role: "STUDENT",
       studentNumber: "7654321",
     },
   });
 
-  // A second student who already volunteered — used to test the "another student
+  // A second student who already volunteered — tests the "another student
   // has already volunteered" error path.
+  const busyUid = await ensureFirebaseUser("nduvo.demo@wits.ac.za", "Nduvho", "Demovolunteer");
   const busyStudent = await prisma.user.upsert({
     where: { email: "nduvo.demo@wits.ac.za" },
-    update: {},
+    update: { firebaseUid: busyUid },
     create: {
       firstName: "Nduvho",
       lastName: "Demovolunteer",
       email: "nduvo.demo@wits.ac.za",
-      firebaseUid: "seed-volunteer-uid",
+      firebaseUid: busyUid,
       role: "STUDENT",
       studentNumber: "9876543",
     },
@@ -134,7 +178,6 @@ async function main() {
   });
 
   // ── Course Slots ───────────────────────────────────────────────────
-  // CS101 Monday 10:00–12:00
   let cs101Mon = await prisma.courseSlot.findFirst({ where: { courseId: cs101.id, dayOfWeek: 1 } });
   if (!cs101Mon) {
     cs101Mon = await prisma.courseSlot.create({
@@ -142,7 +185,6 @@ async function main() {
     });
   }
 
-  // CS101 Wednesday 14:00–16:00
   let cs101Wed = await prisma.courseSlot.findFirst({ where: { courseId: cs101.id, dayOfWeek: 3 } });
   if (!cs101Wed) {
     cs101Wed = await prisma.courseSlot.create({
@@ -150,7 +192,6 @@ async function main() {
     });
   }
 
-  // CS305 Friday 09:00–10:00
   let cs305Fri = await prisma.courseSlot.findFirst({ where: { courseId: cs305.id, dayOfWeek: 5 } });
   if (!cs305Fri) {
     cs305Fri = await prisma.courseSlot.create({
@@ -159,15 +200,12 @@ async function main() {
   }
 
   // ── Sessions ───────────────────────────────────────────────────────
-  // Guard with a count check so re-running the seed is idempotent.
   const cs101SessionCount = await prisma.session.count({ where: { assignmentId: cs101Assignment.id } });
   if (cs101SessionCount === 0) {
     await prisma.session.createMany({
       data: [
-        // SCHEDULED — tutor can excuse from these
         { assignmentId: cs101Assignment.id, courseSlotId: cs101Mon.id, date: nextWeekdayAt(1, 0, 0), status: "SCHEDULED" },
         { assignmentId: cs101Assignment.id, courseSlotId: cs101Wed.id, date: nextWeekdayAt(3, 0, 0), status: "SCHEDULED" },
-        // UNASSIGNED — student can volunteer for this one
         { assignmentId: cs101Assignment.id, courseSlotId: cs101Mon.id, date: nextWeekdayAt(1, 0, 0), status: "UNASSIGNED", excuseReason: "Medical appointment I could not move" },
       ],
     });
@@ -176,21 +214,18 @@ async function main() {
   const cs305SessionCount = await prisma.session.count({ where: { assignmentId: cs305Assignment.id } });
   if (cs305SessionCount === 0) {
     const cs305Sessions = await Promise.all([
-      // SCHEDULED
       prisma.session.create({
         data: { assignmentId: cs305Assignment.id, courseSlotId: cs305Fri.id, date: nextWeekdayAt(5, 0, 0), status: "SCHEDULED" },
       }),
-      // PENDING — Nduvho already volunteered (tests the "already volunteered" error path)
       prisma.session.create({
         data: { assignmentId: cs305Assignment.id, courseSlotId: cs305Fri.id, date: nextWeekdayAt(5, 0, 0), status: "UNASSIGNED", excuseReason: "Conference travel" },
       }),
     ]);
 
-    // Create a pending volunteer for the second CS305 session
+    // Nduvho already volunteered — tests the "already volunteered" error path.
     await prisma.sessionVolunteer.create({
       data: { sessionId: cs305Sessions[1].id, userId: busyStudent.id, status: "PENDING" },
     });
-    // Flip it to PENDING so it no longer appears in the volunteer view
     await prisma.session.update({
       where: { id: cs305Sessions[1].id },
       data: { status: "PENDING" },
@@ -202,14 +237,22 @@ async function main() {
     include: { assignment: { include: { course: true } }, courseSlot: { include: { timeSlot: true } } },
   });
 
+  const firebaseReady = !!getFirebaseAdmin;
+
   console.log("\n═══════════════════════════════════════════════════════════");
   console.log("  Seed complete — Excuse + Volunteer feature test data");
   console.log("═══════════════════════════════════════════════════════════\n");
-  console.log("Users seeded:");
-  console.log(`  Tutor:    ${tutorUser.email}  (firebaseUid: ${tutorUser.firebaseUid})`);
-  console.log(`  Student:  ${studentUser.email}  (firebaseUid: ${studentUser.firebaseUid})`);
-  console.log(`  Student2: ${busyStudent.email}  (firebaseUid: ${busyStudent.firebaseUid})`);
-  console.log(`  Lecturer: ${lecturerUser.email}  (firebaseUid: ${lecturerUser.firebaseUid})`);
+  console.log("Logins (password for all: " + TEST_PASSWORD + "):");
+  console.log(`  Tutor:    tutor.demo@wits.ac.za`);
+  console.log(`  Student:  student.demo@wits.ac.za`);
+  console.log(`  Student2: nduvo.demo@wits.ac.za`);
+  console.log(`  Lecturer: kg.newuser@wits.ac.za`);
+  if (!firebaseReady) {
+    console.log("\n  ⚠  Firebase Admin SDK was NOT configured.");
+    console.log("     The accounts above do NOT have real Firebase logins.");
+    console.log("     Set FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY");
+    console.log("     (or GOOGLE_APPLICATION_CREDENTIALS) in your .env and re-run.");
+  }
   console.log(`\nSessions seeded: ${allSessions.length}`);
   allSessions.forEach((s) => {
     const ts = s.courseSlot?.timeSlot;
@@ -219,16 +262,21 @@ async function main() {
     console.log(`  [${s.status.padEnd(10)}] ${s.assignment.course.courseCode} ${timeRange}  ${s.excuseReason || ""}`);
   });
 
-  console.log("\n── To test the excuse + volunteer flow ──────────────────\n");
-  console.log("1. Sign up or log in with a real Firebase account.");
-  console.log("   Then update that user's firebaseUid to match a seeded user:");
-  console.log(`     UPDATE "User" SET "firebaseUid" = 'seed-tutor-uid' WHERE email = 'your-email@wits.ac.za';`);
-  console.log("   (Or vice versa — update the seeded user's firebaseUid to your real UID.)");
-  console.log("");
-  console.log("2. As the TUTOR:  Visit Tutor Dashboard → click 'Excuse Myself' on any Active session.");
-  console.log("3. As a STUDENT:  Visit Volunteer View → the excused session appears → click 'Apply to Volunteer'.");
-  console.log("4. Conflict test: As the STUDENT, try volunteering for the CS305 PENDING session");
-  console.log("   (it should be invisible — only UNASSIGNED sessions show up).");
+  console.log("\n── How to test ────────────────────────────────────────────\n");
+  if (firebaseReady) {
+    console.log("1. Start the backend and frontend locally.");
+    console.log("2. Log in as the TUTOR:   tutor.demo@wits.ac.za / " + TEST_PASSWORD);
+    console.log("   → Go to Tutor Dashboard → click 'Excuse Myself' on an Active session.");
+    console.log("3. Log out, then log in as a STUDENT:  student.demo@wits.ac.za / " + TEST_PASSWORD);
+    console.log("   → Go to Volunteer View → the excused session appears → click 'Apply to Volunteer'.");
+    console.log("4. The session disappears from the list (it is now PENDING, not UNASSIGNED).");
+  } else {
+    console.log("Firebase Admin SDK is not configured — cannot create real logins.");
+    console.log("Add these to your backend/.env and re-run `npm run seed`:");
+    console.log("  FIREBASE_PROJECT_ID=your-project-id");
+    console.log("  FIREBASE_CLIENT_EMAIL=your-service-account@...gserviceaccount.com");
+    console.log("  FIREBASE_PRIVATE_KEY=\"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\"");
+  }
   console.log("═══════════════════════════════════════════════════════════\n");
 }
 

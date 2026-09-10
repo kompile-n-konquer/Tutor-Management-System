@@ -315,7 +315,9 @@ export default function Organiser() {
         <div className="flex-1 flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden">
           <div className="p-stack-md border-b border-surface-variant bg-surface flex justify-between items-center flex-wrap gap-2">
             <div>
-              <h2 className="font-headline-md text-headline-md text-on-surface">{course.code} Allocation</h2>
+              <h2 className="font-headline-md text-headline-md text-on-surface">
+                {course ? `${course.code} Allocation` : "Loading..."}
+              </h2>
               <p className="font-label-caps text-label-caps text-on-surface-variant mt-unit">
                 Drag tutors, or use ↑↓ to move, ←→ to switch pools, Enter to assign, Esc to clear focus
               </p>
@@ -343,6 +345,10 @@ export default function Organiser() {
                 <p className="font-body-sm text-on-surface-variant mt-stack-sm">{fetchError}</p>
               </div>
             </div>
+          ) : !course ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="font-body-sm text-on-surface-variant">No courses found. Seed or create a course to get started.</p>
+            </div>
           ) : (
             <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg">
               <Pool
@@ -361,8 +367,8 @@ export default function Organiser() {
               />
               <Pool
                 id="allocated"
-                label={`Assigned to ${course.code}`}
-                count={`${allocated.length}/${course.req}`}
+                label={`Assigned to ${course?.code ?? "…"}`}
+                count={`${allocated.length}/${course?.req ?? 0}`}
                 tutors={allocated}
                 cardRefs={cardRefs}
                 focus={focus}

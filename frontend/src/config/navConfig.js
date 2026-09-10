@@ -1,6 +1,6 @@
 // Single source of truth for sidebar links, keyed by role.
 // Add a route here once its page exists and it will appear for the right role(s) automatically.
-// "roles" controls who sees the link; "to" must match a <Route path> in App.jsx.
+// "roles" controls who sees the link; "to" must match a <Route path> in Router.jsx.
 
 export const NAV_LINKS = [
   { to: "/tutor-dashboard", icon: "assignment_ind", label: "Tutor Dashboard", roles: ["tutor"] },

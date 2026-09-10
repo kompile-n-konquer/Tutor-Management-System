@@ -13,7 +13,7 @@ export default function TutorDashboard() {
   const { isFirstVisit, markSeen } = useFirstVisit("tutor-dashboard");
 
   return (
-    <AppLayout role="tutor" title="Tutor Management System">
+    <AppLayout title="Tutor Management System">
       {isFirstVisit && <OnboardingWalkthrough steps={TUTOR_ONBOARDING_STEPS} onDismiss={markSeen} />}
 
       <div className="p-margin-page max-w-container-max mx-auto w-full">

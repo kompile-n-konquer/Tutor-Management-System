@@ -1,9 +1,8 @@
-import React from 'react';
 import AppLayout from "../../components/layout/AppLayout.jsx";
 
 export default function VolunteerView() {
   return (
-     <AppLayout role="tutor" title="Volunteer View" showSearch={true}>
+     <AppLayout title="Volunteer View" showSearch={true}>
     <main className="flex-1 overflow-y-auto p-stack-md md:p-margin-page bg-background space-y-gutter">
       <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-surface-variant shadow-sm">
         <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-unit">Volunteer Opportunities</h2>

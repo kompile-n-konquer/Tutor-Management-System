@@ -159,6 +159,26 @@ async function main() {
   }
 
   // ── Time Slots (minutes since midnight) ────────────────────────────
+  // Availability timetable slots (from main — used by the profile timetable).
+  const timetableSlots = [
+    { startMinute: 480, endMinute: 525 },  // 08:00-08:45
+    { startMinute: 540, endMinute: 585 },  // 09:00-09:45
+    { startMinute: 615, endMinute: 660 },  // 10:15-11:00
+    { startMinute: 675, endMinute: 720 },  // 11:15-12:00
+    { startMinute: 750, endMinute: 795 },  // 12:30-13:15
+    { startMinute: 855, endMinute: 900 },  // 14:15-15:00
+    { startMinute: 915, endMinute: 960 },  // 15:15-16:00
+    { startMinute: 975, endMinute: 1020 }, // 16:15-17:00
+  ];
+
+  for (const slot of timetableSlots) {
+    await prisma.timeSlot.upsert({
+      where: { startMinute_endMinute: { startMinute: slot.startMinute, endMinute: slot.endMinute } },
+      update: {},
+      create: slot,
+    });
+  }
+
   const ts10to12 = await prisma.timeSlot.upsert({
     where: { startMinute_endMinute: { startMinute: 600, endMinute: 720 } },
     update: {},

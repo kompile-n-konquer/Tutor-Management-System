@@ -8,12 +8,12 @@ const api = axios.create({
   },
 });
 
-// Attach the signed-in user's Firebase ID token to every request, so authenticated
-// endpoints receive it without each caller building the header manually.
+// Attach the Firebase ID token to every request so the backend can verify the user
 api.interceptors.request.use(async (config) => {
   const user = auth.currentUser;
   if (user) {
-    config.headers.Authorization = `Bearer ${await user.getIdToken()}`;
+    const token = await user.getIdToken();
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });

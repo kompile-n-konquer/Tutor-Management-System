@@ -4,9 +4,18 @@ import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const TIME_SLOTS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+const TIME_SLOTS = [
+  '08:00-08:45',
+  '09:00-09:45',
+  '10:15-11:00',
+  '11:15-12:00',
+  '12:30-13:15',
+  '14:15-15:00',
+  '15:15-16:00',
+  '16:15-17:00',
+];
 
-const buildEmptyGrid = () => {
+const buildInitialGrid = () => {
   const grid = {};
   TIME_SLOTS.forEach((time) => {
     grid[time] = {};
@@ -14,12 +23,23 @@ const buildEmptyGrid = () => {
       grid[time][day] = 'empty';
     });
   });
+
+  // Dummy availability data
+  grid['08:00-08:45'] = { Mon: 'available', Tue: 'empty', Wed: 'available', Thu: 'empty', Fri: 'available' };
+  grid['09:00-09:45'] = { Mon: 'available', Tue: 'available', Wed: 'empty', Thu: 'available', Fri: 'empty' };
+  grid['10:15-11:00'] = { Mon: 'empty', Tue: 'available', Wed: 'available', Thu: 'empty', Fri: 'available' };
+  grid['11:15-12:00'] = { Mon: 'available', Tue: 'empty', Wed: 'available', Thu: 'available', Fri: 'empty' };
+  grid['12:30-13:15'] = { Mon: 'empty', Tue: 'empty', Wed: 'empty', Thu: 'empty', Fri: 'empty' };
+  grid['14:15-15:00'] = { Mon: 'available', Tue: 'available', Wed: 'empty', Thu: 'available', Fri: 'available' };
+  grid['15:15-16:00'] = { Mon: 'empty', Tue: 'available', Wed: 'available', Thu: 'empty', Fri: 'available' };
+  grid['16:15-17:00'] = { Mon: 'available', Tue: 'empty', Wed: 'empty', Thu: 'available', Fri: 'empty' };
+
   return grid;
 };
 
 const EditTimetable = () => {
   const navigate = useNavigate();
-  const [grid, setGrid] = useState(buildEmptyGrid);
+  const [grid, setGrid] = useState(buildInitialGrid);
 
   const toggleSlot = (time, day) => {
     setGrid((prev) => {
@@ -66,7 +86,7 @@ const EditTimetable = () => {
           </div>
           <div className="flex gap-2">
             <Button onClick={handleCancel}>Cancel</Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button onClick={handleSave} className="min-w-40">Save Changes</Button>
           </div>
         </div>
 

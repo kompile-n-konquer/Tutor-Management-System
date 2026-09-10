@@ -8,6 +8,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
     css: true,
+    // The self-hosted CI runner is heavily contended: a plain render can take
+    // seconds there (vs ~50ms locally), which blows the 5s default and makes
+    // tests fail for timing reasons rather than real regressions.
+    testTimeout: 20000,
+    hookTimeout: 20000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

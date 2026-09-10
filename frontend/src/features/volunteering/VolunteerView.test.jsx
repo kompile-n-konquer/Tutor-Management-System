@@ -57,13 +57,17 @@ describe('VolunteerView — student view of unassigned sessions (#37)', () => {
     expect(screen.getAllByRole('button', { name: /apply to volunteer/i })).toHaveLength(2);
   });
 
-  test('explains that volunteering is a request, not an instant assignment', () => {
+  test('explains that volunteering is a request, not an instant assignment', async () => {
     mockGet.mockResolvedValue({ status: 200, data: [] });
 
     renderVolunteerView();
 
     expect(
       screen.getByText(/does not assign the session to you straight away/i),
+    ).toBeInTheDocument();
+    // Await the settled (empty) list so the state update lands inside act().
+    expect(
+      await screen.findByText('No sessions currently need a volunteer. Check back later.'),
     ).toBeInTheDocument();
   });
 

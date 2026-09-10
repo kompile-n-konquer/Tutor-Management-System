@@ -1,6 +1,19 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
-import { COURSES, TUTORS, TIMESHEETS } from "../../data/mockData";
+import api from "../../utils/axiosInstance";
+import { TUTORS, TIMESHEETS } from "../../data/mockData";
+
+function mapApiCourse(c) {
+  return {
+    id: c.id,
+    code: c.courseCode,
+    name: c.courseName,
+    req: c.requiredTutors,
+    budget: c.budgetHours,
+    rate: c.hourlyRate,
+    assignedCount: c.assignedCount,
+  };
+}
 
 /**
  * Sum approved hours per course code from a list of timesheets.
@@ -44,16 +57,28 @@ function StatCard({ icon, label, value, accent = "text-primary", subtext }) {
 }
 
 export default function OrganiserAnalytics() {
+  const [courses, setCourses] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/courses").then((res) => {
+      if (!cancelled && res.status === 200 && res.data?.courses) {
+        setCourses(res.data.courses.map(mapApiCourse));
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const courseHours = useMemo(() => getApprovedHoursByCourse(TIMESHEETS), []);
   const tutorHours = useMemo(() => getApprovedHoursByTutor(TIMESHEETS), []);
 
   const totalApprovedHours = Object.values(courseHours).reduce((a, b) => a + b, 0);
-  const totalBudgetHours = COURSES.reduce((a, c) => a + c.budget, 0);
-  const totalSpend = COURSES.reduce(
+  const totalBudgetHours = courses.reduce((a, c) => a + c.budget, 0);
+  const totalSpend = courses.reduce(
     (a, c) => a + (courseHours[c.code] || 0) * c.rate,
     0
   );
-  const totalBudgetValue = COURSES.reduce((a, c) => a + c.budget * c.rate, 0);
+  const totalBudgetValue = courses.reduce((a, c) => a + c.budget * c.rate, 0);
   const activeTutorCount = Object.keys(tutorHours).length;
 
   return (
@@ -86,9 +111,9 @@ export default function OrganiserAnalytics() {
           <StatCard
             icon="school"
             label="Courses"
-            value={COURSES.length}
+            value={courses.length}
             accent="text-primary"
-            subtext={`${COURSES.filter((c) => (courseHours[c.code] || 0) > 0).length} with approved hours`}
+            subtext={`${courses.filter((c) => (courseHours[c.code] || 0) > 0).length} with approved hours`}
           />
           <StatCard
             icon="group"
@@ -108,7 +133,7 @@ export default function OrganiserAnalytics() {
             </p>
           </div>
           <div className="p-stack-lg space-y-stack-lg">
-            {COURSES.map((c) => {
+            {courses.map((c) => {
               const hours = courseHours[c.code] || 0;
               const pct = c.budget ? Math.round((hours / c.budget) * 100) : 0;
               const isOver = pct > 90;
@@ -163,7 +188,7 @@ export default function OrganiserAnalytics() {
                 </tr>
               </thead>
               <tbody>
-                {COURSES.map((c) => {
+                {courses.map((c) => {
                   const hours = courseHours[c.code] || 0;
                   const spend = hours * c.rate;
                   const budgetValue = c.budget * c.rate;

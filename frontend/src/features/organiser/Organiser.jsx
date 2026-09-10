@@ -1,9 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
 import api from "../../utils/axiosInstance";
-import { COURSES } from "../../data/mockData";
 
 const MAX_AVAILABLE_TUTORS = 15;
+
+/**
+ * Maps a backend course record into the shape the sidebar expects.
+ */
+function mapApiCourse(c) {
+  return {
+    id: c.id,
+    code: c.courseCode,
+    name: c.courseName,
+    req: c.requiredTutors,
+    budget: c.budgetHours,
+    rate: c.hourlyRate,
+    assignedCount: c.assignedCount,
+  };
+}
 
 /**
  * Maps a backend available-tutor record into the shape the board expects.
@@ -103,7 +117,8 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
 }
 
 export default function Organiser() {
-  const [selectedCourse, setSelectedCourse] = useState(COURSES[0].code);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState(null);
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -111,24 +126,34 @@ export default function Organiser() {
   const [focus, setFocus] = useState({ pool: "available", index: 0 });
   const cardRefs = useRef({});
 
-  // Fetch top-ranked available tutors from the backend
+  // Fetch courses and available tutors from the backend
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchAvailableTutors() {
+    async function fetchBoardData() {
       setLoading(true);
       setFetchError(null);
       try {
-        const response = await api.get("/allocation/available-tutors");
+        const [coursesRes, tutorsRes] = await Promise.all([
+          api.get("/courses"),
+          api.get("/allocation/available-tutors"),
+        ]);
         if (cancelled) return;
 
-        if (response.status === 200 && response.data?.availableTutors) {
-          const mapped = response.data.availableTutors
+        if (coursesRes.status === 200 && coursesRes.data?.courses) {
+          const mappedCourses = coursesRes.data.courses.map(mapApiCourse);
+          setCourses(mappedCourses);
+          // Auto-select the first course
+          if (mappedCourses.length > 0) {
+            setSelectedCourse(mappedCourses[0].code);
+          }
+        }
+
+        if (tutorsRes.status === 200 && tutorsRes.data?.availableTutors) {
+          const mapped = tutorsRes.data.availableTutors
             .slice(0, MAX_AVAILABLE_TUTORS)
             .map(mapApiTutor);
           setTutors(mapped);
-        } else {
-          setFetchError("Failed to load available tutors");
         }
       } catch (err) {
         if (!cancelled) setFetchError(err.message || "Network error");
@@ -137,11 +162,11 @@ export default function Organiser() {
       }
     }
 
-    fetchAvailableTutors();
+    fetchBoardData();
     return () => { cancelled = true; };
   }, []);
 
-  const course = COURSES.find((c) => c.code === selectedCourse);
+  const course = courses.find((c) => c.code === selectedCourse);
   const available = tutors.filter((t) => t.courseCode === null);
   const allocated = tutors.filter((t) => t.courseCode === selectedCourse);
   const pools = { available, allocated };
@@ -245,9 +270,9 @@ export default function Organiser() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm">
-            {COURSES.map((c) => {
+            {courses.map((c) => {
               const isActive = c.code === selectedCourse;
-              const allocatedCount = tutors.filter((t) => t.courseCode === c.code).length;
+              const allocatedCount = c.assignedCount ?? tutors.filter((t) => t.courseCode === c.code).length;
               const pct = c.req ? Math.round((allocatedCount / c.req) * 100) : 0;
               const isLow = pct < 50;
               const border = isActive

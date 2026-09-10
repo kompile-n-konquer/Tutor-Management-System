@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const authenticateFirebaseToken = require('../middleware/auth');
-const { getAllUsers, createUser, deleteUser } = require('../controllers/auth');
+const { getAllUsers, getUser, createUser, deleteUser } = require('../controllers/auth');
 
 router.get('/', getAllUsers);
+router.get('/:firebaseUid', authenticateFirebaseToken, getUser);
 router.post('/', createUser);
 router.delete('/', authenticateFirebaseToken, deleteUser);
 

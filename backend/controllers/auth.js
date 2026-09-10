@@ -7,6 +7,19 @@ exports.getAllUsers = catchAsync(async (req, res, next) => {
   res.json(users);
 });
 
+exports.getUser = catchAsync(async (req, res, next) => {
+  const firebaseUid = req.params.firebaseUid;
+
+  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  res.status(200).json(user);
+});
+
 exports.createUser = catchAsync(async (req, res, next) => {
   const { firstName, lastName, email, firebaseUid } = req.body;
 

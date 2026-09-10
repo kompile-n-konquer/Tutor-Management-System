@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "../../firebase/firebase.js";
+import api from "../../utils/axiosInstance.js";
 
 const AuthContext = createContext(null);
 
@@ -10,8 +11,12 @@ const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Listen for auth state changes to always get the latest user state  
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const response = await api.get(`/users/${user.uid}`);
+      if(response && response.status === 200 && response.data) {
+        setCurrentUser({ ...user, role: response.data.role });
+      }
+      
       setLoading(false);
     });
 

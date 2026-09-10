@@ -17,6 +17,8 @@ import Profile from "./features/profile/Profile.jsx";
 import EditTimetable from "./features/timetable/EditTimetable.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
 import Settings from "./features/settings/Placeholder.jsx";
+import LecturerView from "./features/lecturer-view/LecturerView.jsx";
+import AdminView from "./features/admin-view/AdminView.jsx";
 
 const router = createBrowserRouter([
   {
@@ -37,6 +39,8 @@ const router = createBrowserRouter([
       { path: "timetable/edit", element: <EditTimetable /> },
       { path: "timesheets", element: <Timesheets /> },
       { path: "settings", element: <Settings /> },
+      { path: "lecturer-view", element: <LecturerView /> },
+      { path: "admin-view", element: <AdminView /> },
     ],
   },
 ]);

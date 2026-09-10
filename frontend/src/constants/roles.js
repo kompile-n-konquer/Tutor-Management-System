@@ -7,7 +7,7 @@ export const ROLES = Object.freeze({
 });
 
 export const ROLE_HOME_ROUTE = Object.freeze({
-  [ROLES.ORGANISER]: '/allocation-board',
+  [ROLES.ORGANISER]: '/organiser',
   [ROLES.TUTOR]: '/tutor-dashboard',
   [ROLES.STUDENT]: '/volunteer',
   [ROLES.LECTURER]: '/lecturer-view',

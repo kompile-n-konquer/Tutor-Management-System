@@ -13,6 +13,7 @@ import AllocationBoard from "./features/allocation-board/AllocationBoard.jsx";
 import TutorDashboard from "./features/tutor-dashboard/TutorDashboard.jsx";
 import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
+import EditTimetable from "./features/timetable/EditTimetable.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
 import Settings from "./features/settings/Placeholder.jsx";
 
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       { path: "tutor-dashboard", element: <TutorDashboard /> },
       { path: "volunteer", element: <VolunteerView /> },
       { path: "profile", element: <Profile /> },
+      { path: "timetable/edit", element: <EditTimetable /> },
       { path: "timesheets", element: <Timesheets /> },
       { path: "settings", element: <Settings /> },
     ],

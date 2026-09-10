@@ -1,6 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
-import { COURSES, TUTORS as INITIAL_TUTORS } from "../../data/mockData";
+import api from "../../utils/axiosInstance";
+import { COURSES } from "../../data/mockData";
+
+const MAX_AVAILABLE_TUTORS = 15;
+
+/**
+ * Maps a backend available-tutor record into the shape the board expects.
+ * `courseCode` is set to null so the component treats them as "available".
+ */
+function mapApiTutor(t) {
+  return {
+    id: `applicant-${t.applicantId}`,
+    applicantId: t.applicantId,
+    name: t.name,
+    email: t.email,
+    courseMark: t.courseMark,
+    applicationStatus: t.applicationStatus,
+    verified: t.applicationStatus === "ACCEPTED",
+    clash: false,
+    courseCode: null,
+  };
+}
 
 function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart }) {
   const clashClasses = tutor.clash
@@ -29,11 +50,7 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart 
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-start">
           <h4 className="font-body-md font-bold text-on-surface truncate">{tutor.name}</h4>
-          {tutor.clash ? (
-            <span className="font-data-mono text-data-mono text-xs text-clash-bg bg-clash-bg/10 px-1 rounded border border-clash-bg/20">
-              Schedule Clash
-            </span>
-          ) : tutor.verified ? (
+          {tutor.verified ? (
             <span className="font-data-mono text-data-mono text-xs text-trust-blue bg-trust-blue/10 px-1 rounded border border-trust-blue/20">
               Verified
             </span>
@@ -41,10 +58,10 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart 
         </div>
         <div className="flex gap-stack-md mt-unit">
           <span className="font-label-caps text-label-caps text-on-surface-variant flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">star</span> {tutor.rating}
+            <span className="material-symbols-outlined text-[14px]">school</span> {tutor.courseMark}%
           </span>
-          <span className={`font-label-caps text-label-caps flex items-center gap-1 ${tutor.hoursLeft <= 3 ? "text-urgent-orange" : "text-on-surface-variant"}`}>
-            <span className="material-symbols-outlined text-[14px]">schedule</span> {tutor.hoursLeft}h left
+          <span className={`font-label-caps text-label-caps text-on-surface-variant flex items-center gap-1`}>
+            <span className="material-symbols-outlined text-[14px]">badge</span> {tutor.applicationStatus}
           </span>
         </div>
       </div>
@@ -87,10 +104,42 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
 
 export default function Organiser() {
   const [selectedCourse, setSelectedCourse] = useState(COURSES[0].code);
-  const [tutors, setTutors] = useState(INITIAL_TUTORS);
+  const [tutors, setTutors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const [dragOverPool, setDragOverPool] = useState(null);
   const [focus, setFocus] = useState({ pool: "available", index: 0 });
   const cardRefs = useRef({});
+
+  // Fetch top-ranked available tutors from the backend
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchAvailableTutors() {
+      setLoading(true);
+      setFetchError(null);
+      try {
+        const response = await api.get("/allocation/available-tutors");
+        if (cancelled) return;
+
+        if (response.status === 200 && response.data?.availableTutors) {
+          const mapped = response.data.availableTutors
+            .slice(0, MAX_AVAILABLE_TUTORS)
+            .map(mapApiTutor);
+          setTutors(mapped);
+        } else {
+          setFetchError("Failed to load available tutors");
+        }
+      } catch (err) {
+        if (!cancelled) setFetchError(err.message || "Network error");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchAvailableTutors();
+    return () => { cancelled = true; };
+  }, []);
 
   const course = COURSES.find((c) => c.code === selectedCourse);
   const available = tutors.filter((t) => t.courseCode === null);
@@ -255,36 +304,52 @@ export default function Organiser() {
               </button>
             </div>
           </div>
-          <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg">
-            <Pool
-              id="available"
-              label="Available Tutors"
-              count={available.length}
-              tutors={available}
-              cardRefs={cardRefs}
-              focus={focus}
-              onCardKeyDown={handleCardKeyDown}
-              onCardFocus={handleCardFocus}
-              onDragStart={handleDragStartMouse}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              highlighted={dragOverPool}
-            />
-            <Pool
-              id="allocated"
-              label={`Assigned to ${course.code}`}
-              count={`${allocated.length}/${course.req}`}
-              tutors={allocated}
-              cardRefs={cardRefs}
-              focus={focus}
-              onCardKeyDown={handleCardKeyDown}
-              onCardFocus={handleCardFocus}
-              onDragStart={handleDragStartMouse}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              highlighted={dragOverPool}
-            />
-          </div>
+          {loading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+                <p className="font-body-sm text-on-surface-variant mt-stack-sm">Loading available tutors...</p>
+              </div>
+            </div>
+          ) : fetchError ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <span className="material-symbols-outlined text-4xl text-urgent-orange">error</span>
+                <p className="font-body-sm text-on-surface-variant mt-stack-sm">{fetchError}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg">
+              <Pool
+                id="available"
+                label="Available Tutors"
+                count={available.length}
+                tutors={available}
+                cardRefs={cardRefs}
+                focus={focus}
+                onCardKeyDown={handleCardKeyDown}
+                onCardFocus={handleCardFocus}
+                onDragStart={handleDragStartMouse}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                highlighted={dragOverPool}
+              />
+              <Pool
+                id="allocated"
+                label={`Assigned to ${course.code}`}
+                count={`${allocated.length}/${course.req}`}
+                tutors={allocated}
+                cardRefs={cardRefs}
+                focus={focus}
+                onCardKeyDown={handleCardKeyDown}
+                onCardFocus={handleCardFocus}
+                onDragStart={handleDragStartMouse}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                highlighted={dragOverPool}
+              />
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

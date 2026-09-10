@@ -13,6 +13,7 @@ async function main() {
       role: "LECTURER",
       employeeNumber: "KG-EMP003",
       studentNumber: "N/A-KG003",
+      firebaseUid: "seed-kg-newuser-003",
     },
   });
 

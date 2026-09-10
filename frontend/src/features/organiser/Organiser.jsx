@@ -37,7 +37,26 @@ function mapApiTutor(t) {
   };
 }
 
-function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart }) {
+/**
+ * Maps a backend assigned-tutor record into the board shape.
+ * `courseCode` is set so the component treats them as "allocated".
+ */
+function mapApiAssignedTutor(t) {
+  return {
+    id: `assigned-${t.assignmentId}`,
+    applicantId: t.applicantId,
+    assignmentId: t.assignmentId,
+    name: t.name,
+    email: t.email,
+    courseMark: null,
+    applicationStatus: t.status || "ASSIGNED",
+    verified: t.status === "ACCEPTED",
+    clash: false,
+    courseCode: t.courseCode,
+  };
+}
+
+function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart, onRemove, isMutating }) {
   const clashClasses = tutor.clash
     ? "bg-clash-bg/10 border-2 border-clash-bg"
     : "bg-surface-container-lowest border border-surface-variant";
@@ -46,19 +65,29 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart 
       ref={cardRef}
       tabIndex={isFocused ? 0 : -1}
       role="button"
-      aria-label={`${tutor.name}. Press Enter to move between pools.`}
+      aria-label={`${tutor.name}. Press Enter to move between pools, Delete to remove.`}
       onKeyDown={onKeyDown}
       onFocus={onFocus}
       draggable
       onDragStart={onDragStart}
       className={`${clashClasses} p-stack-sm rounded cursor-grab hover:shadow-sm transition-shadow flex items-start gap-stack-sm relative group outline-none ${
         isFocused ? "ring-2 ring-primary ring-offset-1" : ""
-      }`}
+      } ${isMutating ? "opacity-50 pointer-events-none" : ""}`}
     >
       {tutor.clash && (
         <div className="absolute -top-2 -right-2 bg-clash-bg text-white rounded-full p-1 shadow-sm">
           <span className="material-symbols-outlined text-[16px]">error</span>
         </div>
+      )}
+      {onRemove && (
+        <button
+          className="absolute -top-1.5 -right-1.5 bg-urgent-orange text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-sm hover:bg-urgent-orange/80 z-10"
+          onClick={(e) => { e.stopPropagation(); onRemove(tutor); }}
+          tabIndex={isFocused ? 0 : -1}
+          title="Remove tutor"
+        >
+          <span className="material-symbols-outlined text-[14px]">close</span>
+        </button>
       )}
       <div className={`w-10 h-10 rounded-full bg-surface-variant overflow-hidden shrink-0 border ${tutor.clash ? "border-clash-bg" : "border-outline-variant"}`} />
       <div className="flex-1 min-w-0">
@@ -71,9 +100,11 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart 
           ) : null}
         </div>
         <div className="flex gap-stack-md mt-unit">
-          <span className="font-label-caps text-label-caps text-on-surface-variant flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px]">school</span> {tutor.courseMark}%
-          </span>
+          {tutor.courseMark != null && (
+            <span className="font-label-caps text-label-caps text-on-surface-variant flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">school</span> {tutor.courseMark}%
+            </span>
+          )}
           <span className={`font-label-caps text-label-caps text-on-surface-variant flex items-center gap-1`}>
             <span className="material-symbols-outlined text-[14px]">badge</span> {tutor.applicationStatus}
           </span>
@@ -83,7 +114,7 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart 
   );
 }
 
-function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCardFocus, onDragStart, onDragOver, onDrop, highlighted }) {
+function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCardFocus, onDragStart, onDragOver, onDrop, highlighted, onRemove, mutatingId }) {
   return (
     <div className="w-1/2 flex flex-col bg-surface-container-low rounded-lg border border-outline-variant/50">
       <div className="p-stack-sm border-b border-outline-variant/50 flex justify-between items-center">
@@ -109,6 +140,8 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
             onKeyDown={(e) => onCardKeyDown(e, id, index)}
             onFocus={() => onCardFocus(id, index)}
             onDragStart={(e) => onDragStart(e, t.id)}
+            onRemove={id === "allocated" ? onRemove : null}
+            isMutating={t.applicantId === mutatingId}
           />
         ))}
       </div>
@@ -123,10 +156,11 @@ export default function Organiser() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
   const [dragOverPool, setDragOverPool] = useState(null);
+  const [mutatingId, setMutatingId] = useState(null);
   const [focus, setFocus] = useState({ pool: "available", index: 0 });
   const cardRefs = useRef({});
 
-  // Fetch courses and available tutors from the backend
+  // Fetch courses, available tutors, and assigned tutors from the backend
   useEffect(() => {
     let cancelled = false;
 
@@ -134,27 +168,33 @@ export default function Organiser() {
       setLoading(true);
       setFetchError(null);
       try {
-        const [coursesRes, tutorsRes] = await Promise.all([
+        const [coursesRes, availableRes, assignedRes] = await Promise.all([
           api.get("/courses"),
           api.get("/allocation/available-tutors"),
+          api.get("/allocation/assignments"),
         ]);
         if (cancelled) return;
 
         if (coursesRes.status === 200 && coursesRes.data?.courses) {
           const mappedCourses = coursesRes.data.courses.map(mapApiCourse);
           setCourses(mappedCourses);
-          // Auto-select the first course
-          if (mappedCourses.length > 0) {
+          // Auto-select the first course on initial load only
+          if (mappedCourses.length > 0 && !selectedCourse) {
             setSelectedCourse(mappedCourses[0].code);
           }
         }
 
-        if (tutorsRes.status === 200 && tutorsRes.data?.availableTutors) {
-          const mapped = tutorsRes.data.availableTutors
-            .slice(0, MAX_AVAILABLE_TUTORS)
-            .map(mapApiTutor);
-          setTutors(mapped);
-        }
+        const availableMapped =
+          availableRes.status === 200 && availableRes.data?.availableTutors
+            ? availableRes.data.availableTutors.slice(0, MAX_AVAILABLE_TUTORS).map(mapApiTutor)
+            : [];
+
+        const assignedMapped =
+          assignedRes.status === 200 && assignedRes.data?.assignedTutors
+            ? assignedRes.data.assignedTutors.map(mapApiAssignedTutor)
+            : [];
+
+        setTutors([...availableMapped, ...assignedMapped]);
       } catch (err) {
         if (!cancelled) setFetchError(err.message || "Network error");
       } finally {
@@ -164,7 +204,32 @@ export default function Organiser() {
 
     fetchBoardData();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refetch tutor pools after mutations (courses stay stable)
+  async function refetchTutors() {
+    try {
+      const [availableRes, assignedRes] = await Promise.all([
+        api.get("/allocation/available-tutors"),
+        api.get("/allocation/assignments"),
+      ]);
+
+      const availableMapped =
+        availableRes.status === 200 && availableRes.data?.availableTutors
+          ? availableRes.data.availableTutors.slice(0, MAX_AVAILABLE_TUTORS).map(mapApiTutor)
+          : [];
+
+      const assignedMapped =
+        assignedRes.status === 200 && assignedRes.data?.assignedTutors
+          ? assignedRes.data.assignedTutors.map(mapApiAssignedTutor)
+          : [];
+
+      setTutors([...availableMapped, ...assignedMapped]);
+    } catch {
+      // Silently fall back to the optimistic state
+    }
+  }
 
   const course = courses.find((c) => c.code === selectedCourse);
   const available = tutors.filter((t) => t.courseCode === null);
@@ -192,12 +257,60 @@ export default function Organiser() {
     cardRefs.current[key]?.focus();
   }, [focus, available.length, allocated.length]);
 
-  function moveTutor(tutorId, fromPool) {
-    setTutors((prev) =>
-      prev.map((t) =>
-        t.id === tutorId ? { ...t, courseCode: fromPool === "available" ? selectedCourse : null } : t
-      )
-    );
+  async function moveTutor(tutor, fromPool) {
+    const { applicantId } = tutor;
+    const toPool = fromPool === "available" ? "allocated" : "available";
+
+    // Optimistic update
+    setTutors((prev) => {
+      let next = prev.filter((t) => t.applicantId !== applicantId);
+      if (toPool === "allocated") {
+        next = [...next, { ...tutor, courseCode: selectedCourse, id: `temp-${applicantId}` }];
+      }
+      return next;
+    });
+
+    try {
+      if (toPool === "allocated") {
+        const res = await api.post("/allocation/assignments", { applicantId });
+        if (res.status !== 201) {
+          setTutors((prev) => [...prev.filter((t) => t.applicantId !== applicantId), tutor]);
+          return;
+        }
+      } else {
+        const res = await api.delete(`/allocation/assignments/${applicantId}`);
+        if (res.status !== 204) {
+          setTutors((prev) => [...prev, tutor]);
+          return;
+        }
+      }
+      await refetchTutors();
+    } catch {
+      // Rollback
+      setTutors((prev) => [...prev.filter((t) => t.applicantId !== applicantId), tutor]);
+    }
+  }
+
+  async function removeAssignedTutor(tutor) {
+    const { applicantId } = tutor;
+
+    // Optimistic removal
+    setTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
+    setMutatingId(applicantId);
+
+    try {
+      const res = await api.delete(`/allocation/assignments/${applicantId}/remove`);
+      if (res.status !== 204) {
+        // Rollback on failure
+        setTutors((prev) => [...prev, tutor]);
+      } else {
+        await refetchTutors();
+      }
+    } catch {
+      setTutors((prev) => [...prev, tutor]);
+    } finally {
+      setMutatingId(null);
+    }
   }
 
   function handleCardKeyDown(e, pool, index) {
@@ -223,7 +336,13 @@ export default function Organiser() {
       case " ": {
         e.preventDefault();
         const tutor = list[index];
-        if (tutor) moveTutor(tutor.id, pool);
+        if (tutor) moveTutor(tutor, pool);
+        break;
+      }
+      case "Delete": {
+        e.preventDefault();
+        const tutor = list[index];
+        if (tutor && pool === "allocated") removeAssignedTutor(tutor);
         break;
       }
       case "Escape":
@@ -252,7 +371,7 @@ export default function Organiser() {
     const draggedTutor = tutors.find((t) => t.id === tutorId);
     if (!draggedTutor) return;
     const fromPool = draggedTutor.courseCode === null ? "available" : "allocated";
-    if (fromPool !== poolId) moveTutor(tutorId, fromPool);
+    if (fromPool !== poolId) moveTutor(draggedTutor, fromPool);
   }
 
   return (
@@ -319,7 +438,7 @@ export default function Organiser() {
                 {course ? `${course.code} Allocation` : "Loading..."}
               </h2>
               <p className="font-label-caps text-label-caps text-on-surface-variant mt-unit">
-                Drag tutors, or use ↑↓ to move, ←→ to switch pools, Enter to assign, Esc to clear focus
+                Drag tutors, or use ↑↓ to move, ←→ to switch pools, Enter to assign, Delete to remove, Esc to clear focus
               </p>
             </div>
             <div className="flex gap-stack-sm">
@@ -364,6 +483,7 @@ export default function Organiser() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 highlighted={dragOverPool}
+                mutatingId={mutatingId}
               />
               <Pool
                 id="allocated"
@@ -378,6 +498,8 @@ export default function Organiser() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 highlighted={dragOverPool}
+                onRemove={removeAssignedTutor}
+                mutatingId={mutatingId}
               />
             </div>
           )}

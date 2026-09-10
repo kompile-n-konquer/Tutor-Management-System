@@ -3,19 +3,11 @@ import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
 import ErrorMessage from '../../components/error-message/ErrorMessage';
+import SlotGrid from '../../components/slot-grid/SlotGrid';
 import api from '../../utils/axiosInstance';
 import useAsync from '../../hooks/useAsync';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-
-// Converts minutes since midnight (480) into a time label ("08:00")
-const minutesToLabel = (minutes) => {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-};
 
 const AddCourse = () => {
   const navigate = useNavigate();
@@ -158,11 +150,18 @@ const AddCourse = () => {
   return (
     <AppLayout role="lecturer" title="Courses">
       <div className="p-gutter md:p-margin-page">
-        <div className="mb-stack-lg">
-          <h2 className="font-display text-display text-primary">Add a Course</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-            Register a course and mark the slots when it will be tutored.
-          </p>
+        <div className="mb-stack-lg max-w-4xl flex flex-wrap items-center justify-between gap-gutter">
+          <div>
+            <h2 className="font-display text-display text-primary">Add A Course</h2>
+            <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
+              Register a course and mark the slots when it will be tutored.
+            </p>
+          </div>
+          <div>
+            <Button className="min-w-40" onClick={() => navigate('/courses')}>
+              View All Courses
+            </Button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-gutter max-w-4xl">
@@ -217,45 +216,7 @@ const AddCourse = () => {
             </div>
 
             <div className="overflow-x-auto calendar-scroll">
-              <div className="min-w-[600px] grid grid-cols-6 gap-px bg-outline-variant/30">
-                <div className="bg-surface-container-lowest p-2" />
-                {DAYS.map((d) => (
-                  <div
-                    key={d}
-                    className="bg-surface-container-lowest p-2 text-center font-label-caps text-label-caps text-on-surface-variant"
-                  >
-                    {d}
-                  </div>
-                ))}
-
-                {timeSlots.map((slot) => (
-                  <div key={slot.id} className="contents">
-                    <div className="bg-surface-container-lowest p-2 text-right font-data-mono text-body-sm text-outline border-b border-outline-variant/20">
-                      {minutesToLabel(slot.startMinute)}-{minutesToLabel(slot.endMinute)}
-                    </div>
-                    {DAYS.map((day, dayIndex) => {
-                      const status = grid[slot.id]?.[dayIndex] || 'empty';
-                      return (
-                        <div
-                          key={`${slot.id}-${day}`}
-                          onClick={() => toggleSlot(slot.id, dayIndex)}
-                          className={`p-2 border-b border-outline-variant/20 relative cursor-pointer transition-colors ${
-                            status === 'selected' ? 'bg-primary/5 hover:bg-primary/10' : 'bg-surface-container-lowest hover:bg-surface-container-low'
-                          }`}
-                        >
-                          <div className="h-8">
-                            {status === 'selected' && (
-                              <div className="absolute inset-1 bg-primary/20 border border-primary/30 rounded flex items-center justify-center font-label-caps text-[10px] text-primary cursor-pointer">
-                                Tutor
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
+              <SlotGrid timeSlots={timeSlots} grid={grid} onToggle={toggleSlot} />
             </div>
           </div>
 

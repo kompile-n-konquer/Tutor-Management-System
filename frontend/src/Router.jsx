@@ -15,6 +15,9 @@ import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
 import EditTimetable from "./features/timetable/EditTimetable.jsx";
 import AddCourse from "./features/courses/AddCourse.jsx";
+import ViewAllCourses from "./features/courses/ViewAllCourses.jsx";
+import CourseDetails from "./features/courses/CourseDetails.jsx";
+import EditCourse from "./features/courses/EditCourse.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
 import Settings from "./features/settings/Placeholder.jsx";
 
@@ -37,7 +40,10 @@ const router = createBrowserRouter([
       { path: "timesheets", element: <Timesheets /> },
       { path: "settings", element: <Settings /> },
       { path: "courses", children: [
+        { index: true, element: <ViewAllCourses /> },
         { path: "add", element: <AddCourse /> },
+        { path: ":courseId", element: <CourseDetails /> },
+        { path: ":courseId/edit", element: <EditCourse /> },
       ]  
       },
     ],

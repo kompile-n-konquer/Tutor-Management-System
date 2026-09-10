@@ -61,6 +61,8 @@ model Course {
   courseName       String
   minimumMark      Float
   tutorsRequired   Int               @default(1) // number of tutors needed for this course
+  acceptingApplications Boolean     @default(false) // opened for tutor applications; managed via the bulk start-application-process action
+  createdAt        DateTime          @default(now())
   userId           Int
   applications     Applicant[]
   user             User              @relation(fields: [userId], references: [id])

@@ -9,7 +9,7 @@ export const NAV_LINKS = [
   { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor", "student"] },
   { to: "/profile", icon: "account_circle", label: "Profile", roles: ["organiser", "tutor", "student", "lecturer"] },
   { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["organiser", "tutor", "lecturer"] },
-  { to: "/timetable/edit", icon: "calendar_month", label: "Timetable", roles: ["organiser", "tutor", "lecturer", "student"]  },
+  { to: "/timetable/edit", icon: "calendar_month", label: "Timetable", roles: ["tutor", "student"]  },
 
   // Not yet built — flagged in the page-to-role mapping phase as a structural gap:
   // { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"] },

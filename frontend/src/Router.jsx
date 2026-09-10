@@ -14,6 +14,7 @@ import TutorDashboard from "./features/tutor-dashboard/TutorDashboard.jsx";
 import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
 import EditTimetable from "./features/timetable/EditTimetable.jsx";
+import AddCourse from "./features/courses/AddCourse.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
 import Settings from "./features/settings/Placeholder.jsx";
 
@@ -35,6 +36,10 @@ const router = createBrowserRouter([
       { path: "timetable/edit", element: <EditTimetable /> },
       { path: "timesheets", element: <Timesheets /> },
       { path: "settings", element: <Settings /> },
+      { path: "courses", children: [
+        { path: "add", element: <AddCourse /> },
+      ]  
+      },
     ],
   },
 ]);

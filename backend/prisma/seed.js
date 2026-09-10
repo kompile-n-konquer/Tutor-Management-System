@@ -3,20 +3,6 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 async function main() {
-  const user = await prisma.user.upsert({
-    where: { email: "kg.newuser@wits.ac.za" },
-    update: {},
-    create: {
-      firstName: "Kgaogelo",
-      lastName: "Testuser",
-      email: "kg.newuser@wits.ac.za",
-      role: "LECTURER",
-      employeeNumber: "KG-EMP003",
-      studentNumber: "N/A-KG003",
-      firebaseUid: "DummyUID"
-    },
-  });
-
   const timeSlots = [
     { startMinute: 480, endMinute: 525 },  // 08:00-08:45
     { startMinute: 540, endMinute: 585 },  // 09:00-09:45
@@ -36,7 +22,6 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${timeSlots.length} time slots`);
 }
 
 main()

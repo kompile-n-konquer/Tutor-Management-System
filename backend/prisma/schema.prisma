@@ -21,7 +21,7 @@ model User {
   updatedAt      DateTime    @updatedAt
   firebaseUid    String      @unique
   applications   Applicant[]
-  lecturer       Lecturer?
+  courses        Course[]
   tutor          Tutor?
   availability   Availability[]
 }
@@ -39,16 +39,6 @@ model Tutor {
   user             User              @relation(fields: [userId], references: [id])
   assignments      TutorAssignment[]
   courseTutorMarks CourseTutorMark[]
-}
-
-model Lecturer {
-  id             Int      @id @default(autoincrement())
-  userId         Int      @unique
-  department     String
-  officeLocation String?
-  officeHours    String?
-  courses        Course[]
-  user           User     @relation(fields: [userId], references: [id])
 }
 
 model Applicant {
@@ -70,10 +60,10 @@ model Course {
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
-  budget           Float? // course tutoring budget, used by the spend-vs-budget report (Issue 11)
-  lecturerId       Int
+  tutorsRequired   Int               @default(1) // number of tutors needed for this course
+  userId           Int
   applications     Applicant[]
-  lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
   slots            CourseSlot[]
   overflowWork     OverflowWork[]
   timesheetEntries TimesheetEntry[]

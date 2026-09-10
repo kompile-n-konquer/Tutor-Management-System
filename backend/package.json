@@ -9,6 +9,7 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "seed": "node prisma/seed.js",
+        "seed:organiser": "node prisma/seedOrganiser.js",
     "postinstall": "prisma generate"
   },
   "keywords": [],

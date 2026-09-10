@@ -1,17 +1,34 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "../../firebase/firebase.js";
+import api from "../../utils/axiosInstance.js";
 
 const AuthContext = createContext(null);
 
 const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listen for auth state changes to always get the latest user state  
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
+      if (user) {
+        try {
+          const response = await api.get('/users/me');
+          if (response.status === 200) {
+            setRole(response.data.role?.toLowerCase() || null);
+          } else {
+            setRole(null);
+          }
+        } catch {
+          setRole(null);
+        }
+      } else {
+        setRole(null);
+      }
+
       setLoading(false);
     });
 
@@ -21,10 +38,12 @@ const AuthProvider = ({ children }) => {
   const signOut = async () => {
     await firebaseSignOut(auth);
     setCurrentUser(null);
+    setRole(null);
   }
 
   const value = {
     currentUser,
+    role,
     loading,
     signOut,
   };

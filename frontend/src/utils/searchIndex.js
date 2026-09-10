@@ -1,9 +1,10 @@
-import { COURSES, TUTORS, TIMESHEETS } from "../data/mockData";
+import { TUTORS, TIMESHEETS } from "../data/mockData";
 
-// Flattens all three entity types into one list the search bar can filter over.
-// Each entry knows where clicking it should navigate to.
-export function buildSearchIndex() {
-  const courseEntries = COURSES.map((c) => ({
+// Flattens all entity types into one list the search bar can filter over.
+// `courses` is passed in (fetched from the API by GlobalSearch) so we stay
+// decoupled from the mock data source.
+export function buildSearchIndex(courses = []) {
+  const courseEntries = courses.map((c) => ({
     type: "course",
     id: c.code,
     title: c.code,
@@ -11,7 +12,7 @@ export function buildSearchIndex() {
     to: "/organiser",
   }));
 
-  const analyticsEntries = COURSES.map((c) => ({
+  const analyticsEntries = courses.map((c) => ({
     type: "analytics",
     id: `analytics-${c.code}`,
     title: `${c.code} Analytics`,
@@ -38,10 +39,10 @@ export function buildSearchIndex() {
   return [...courseEntries, ...analyticsEntries, ...peopleEntries, ...timesheetEntries];
 }
 
-export function searchAll(query) {
+export function searchAll(query, courses = []) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return buildSearchIndex().filter(
+  return buildSearchIndex(courses).filter(
     (entry) => entry.title.toLowerCase().includes(q) || entry.subtitle.toLowerCase().includes(q)
   );
 }

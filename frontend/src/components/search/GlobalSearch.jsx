@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchAll } from "../../utils/searchIndex";
+import api from "../../utils/axiosInstance";
 
 const TYPE_LABELS = { course: "Courses", analytics: "Analytics", person: "People", timesheet: "Timesheets" };
 const TYPE_ICONS = { course: "menu_book", analytics: "analytics", person: "person", timesheet: "history_edu" };
+
+function mapApiCourse(c) {
+  return { code: c.courseCode, name: c.courseName };
+}
 
 /**
  * GlobalSearch
@@ -14,10 +19,22 @@ export default function GlobalSearch() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [courses, setCourses] = useState([]);
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
-  const results = searchAll(query);
+  // Fetch courses once on mount for the search index
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/courses").then((res) => {
+      if (!cancelled && res.status === 200 && res.data?.courses) {
+        setCourses(res.data.courses.map(mapApiCourse));
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const results = searchAll(query, courses);
   const grouped = results.reduce((acc, r) => {
     (acc[r.type] ||= []).push(r);
     return acc;

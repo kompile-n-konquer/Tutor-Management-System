@@ -255,3 +255,41 @@ exports.unassignTutor = catchAsync(async (req, res, next) => {
 
   res.status(204).end();
 });
+
+/**
+ * DELETE /api/allocation/assignments/:applicantId/remove
+ *
+ * Permanently remove a tutor from a course.  Unlike unassignTutor
+ * (which returns the applicant to the Available pool), this sets the
+ * applicant status to REJECTED so they will not reappear anywhere.
+ */
+exports.removeTutor = catchAsync(async (req, res, next) => {
+  const applicantId = parseInt(req.params.applicantId, 10);
+
+  if (isNaN(applicantId)) {
+    const error = new Error('applicantId must be a valid integer');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const assignment = await prisma.tutorAssignment.findUnique({
+    where: { applicantId },
+  });
+
+  if (!assignment) {
+    const error = new Error('Assignment not found for this applicant');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.tutorAssignment.delete({ where: { id: assignment.id } });
+
+    await tx.applicant.update({
+      where: { id: applicantId },
+      data: { status: 'REJECTED', reviewedAt: new Date() },
+    });
+  });
+
+  res.status(204).end();
+});

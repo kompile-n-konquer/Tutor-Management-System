@@ -6,6 +6,12 @@ import AppLayout from './AppLayout.jsx';
 vi.mock('../../features/context/AuthContext', () => ({
   useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
 }));
+// The top bar's search fetches /courses through axios on mount; mock the API
+// client with a never-settling promise so the Firebase import chain stays out
+// of this suite and the late state update cannot fire outside act().
+vi.mock('../../utils/axiosInstance.js', () => ({
+  default: { get: vi.fn().mockReturnValue(new Promise(() => {})) },
+}));
 
 describe('AppLayout — shared chrome for authenticated pages', () => {
   test('renders the sidebar, top bar and the page content', () => {

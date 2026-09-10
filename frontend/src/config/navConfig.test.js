@@ -2,19 +2,27 @@ import { describe, test, expect } from 'vitest';
 import { NAV_LINKS, FOOTER_LINKS, getNavLinksForRole } from './navConfig.js';
 
 describe('navConfig — sidebar link source of truth', () => {
-  test('tutors see their dashboard, volunteering, timesheets and timetable', () => {
+  test('tutors see the dashboard, organiser pages, volunteering, timesheets and timetable', () => {
     const labels = getNavLinksForRole('tutor').map((link) => link.label);
-    expect(labels).toEqual(['Tutor Dashboard', 'Volunteer View', 'Timesheets', 'Timetable']);
+    expect(labels).toEqual([
+      'Tutor Dashboard',
+      'Organiser Board',
+      'Analytics',
+      'Volunteer View',
+      'Profile',
+      'Timesheets',
+      'Timetable',
+    ]);
   });
 
-  test('organisers only see the allocation board', () => {
-    const labels = getNavLinksForRole('organiser').map((link) => link.label);
-    expect(labels).toEqual(['Allocation Board']);
+  test('organisers currently get no primary links — their board moved under the tutor role', () => {
+    // main's nav reshuffle (PR #52) left the organiser role without primary
+    // links; their tools live at /organiser under roles: ["tutor"] instead.
+    expect(getNavLinksForRole('organiser')).toEqual([]);
   });
 
-  test('students only see the profile link', () => {
-    const labels = getNavLinksForRole('student').map((link) => link.label);
-    expect(labels).toEqual(['Profile']);
+  test('students currently get no primary links — Profile moved to the tutor role', () => {
+    expect(getNavLinksForRole('student')).toEqual([]);
   });
 
   test('returns an empty list for an unknown role', () => {

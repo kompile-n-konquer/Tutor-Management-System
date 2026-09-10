@@ -30,11 +30,13 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.queryByText('Allocation Board')).not.toBeInTheDocument();
   });
 
-  test('organisers see the allocation board and the conflict-resolution button', () => {
+  test('organisers still see the conflict-resolution button', () => {
     renderSidebar('organiser');
 
-    expect(screen.getByText('Allocation Board')).toBeInTheDocument();
+    // main's nav reshuffle (PR #52) moved the board to the tutor role, so the
+    // organiser rail now only carries the role-specific conflict button.
     expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
+    expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 
   test('lecturers also see the conflict-resolution button', () => {
@@ -42,10 +44,10 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
   });
 
-  test('students see the profile link instead of tutor pages', () => {
+  test('students see no primary links — Profile moved to the tutor role', () => {
     renderSidebar('student');
 
-    expect(screen.getByText('Profile')).toBeInTheDocument();
+    expect(screen.queryByText('Profile')).not.toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 

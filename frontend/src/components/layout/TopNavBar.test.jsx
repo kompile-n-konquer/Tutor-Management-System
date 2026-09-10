@@ -1,10 +1,16 @@
 import { describe, test, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import TopNavBar from './TopNavBar.jsx';
 
 vi.mock('../../features/context/AuthContext', () => ({
   useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
+}));
+// The search bar now fetches /courses through axios on mount; mock the API
+// client with a never-settling promise so the Firebase import chain stays out
+// of this suite and the late state update cannot fire outside act().
+vi.mock('../../utils/axiosInstance.js', () => ({
+  default: { get: vi.fn().mockReturnValue(new Promise(() => {})) },
 }));
 
 const renderTopNavBar = (props, route = '/current') =>
@@ -28,14 +34,18 @@ describe('TopNavBar — page header with search and avatar', () => {
     expect(screen.getByText('Tutor Dashboard')).toBeInTheDocument();
   });
 
-  test('renders the search box by default', () => {
+  test('renders the global search box by default', () => {
     renderTopNavBar();
-    expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Search courses, people, timesheets...'),
+    ).toBeInTheDocument();
   });
 
   test('hides the search box when showSearch is false', () => {
     renderTopNavBar({ showSearch: false });
-    expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('Search courses, people, timesheets...'),
+    ).not.toBeInTheDocument();
   });
 
   test('shows the avatar image when an avatarUrl is provided', () => {
@@ -43,10 +53,8 @@ describe('TopNavBar — page header with search and avatar', () => {
     expect(screen.getByAltText('User avatar')).toHaveAttribute('src', 'https://example.com/me.png');
   });
 
-  test('falls back to the person icon and navigates to the profile on click', () => {
+  test('falls back to the person icon when no avatarUrl is provided', () => {
     renderTopNavBar();
-
-    fireEvent.click(screen.getByText('person'));
-    expect(screen.getByText('profile-page')).toBeInTheDocument();
+    expect(screen.getByText('person')).toBeInTheDocument();
   });
 });

@@ -6,6 +6,12 @@ import Placeholder from './Placeholder.jsx';
 vi.mock('../../features/context/AuthContext', () => ({
   useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
 }));
+// The top bar's search fetches /courses through axios on mount; mock the API
+// client with a never-settling promise so the Firebase import chain stays out
+// of this suite and the late state update cannot fire outside act().
+vi.mock('../../utils/axiosInstance.js', () => ({
+  default: { get: vi.fn().mockReturnValue(new Promise(() => {})) },
+}));
 
 describe('Placeholder — unbuilt backlog screens', () => {
   test('renders the default label with the backlog note', () => {
@@ -29,7 +35,9 @@ describe('Placeholder — unbuilt backlog screens', () => {
     );
 
     expect(screen.getByText('Unique Screen Label')).toBeInTheDocument();
-    // The organiser sidebar is rendered for the given role.
-    expect(screen.getByText('Allocation Board')).toBeInTheDocument();
+    // The organiser rail is rendered for the given role — main's nav
+    // reshuffle left that role with only the conflict-resolution button.
+    expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
+    expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 });

@@ -10,6 +10,15 @@ vi.mock('../../utils/axiosInstance.js', () => ({
 vi.mock('../../features/context/AuthContext', () => ({
   useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
 }));
+// main's redesign added a first-visit onboarding modal and the global search
+// (which fetches /courses on mount). Both are excluded from this branch's
+// coverage scope; stub them so they cannot pollute the /sessions mock queues.
+vi.mock('../../hooks/useFirstVisit.js', () => ({
+  useFirstVisit: () => ({ isFirstVisit: false, markSeen: vi.fn() }),
+}));
+vi.mock('../../components/search/GlobalSearch', () => ({
+  default: () => null,
+}));
 
 import TutorDashboard from './TutorDashboard.jsx';
 

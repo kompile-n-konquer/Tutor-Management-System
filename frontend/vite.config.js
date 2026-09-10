@@ -11,14 +11,22 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.{ts,tsx}'],
+      include: ['src/**/*.{js,jsx}'],
       exclude: [
         'src/**/*.d.ts',
-        'src/main.tsx',
+        'src/main.jsx', // entry point: mounts the app, no logic of its own
+        'src/App.jsx', // dead code: imports ./pages/* which no longer exist (main.jsx uses Router.jsx)
         'src/setupTests.ts',
         'src/**/__tests__/**',
-        'src/**/*.test.{ts,tsx}',
+        'src/**/*.test.{js,jsx}',
+        'src/__mocks__/**',
       ],
+      thresholds: {
+        statements: 90,
+        branches: 90,
+        functions: 90,
+        lines: 90,
+      },
     },
   },
   server: {

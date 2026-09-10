@@ -71,7 +71,9 @@ model Course {
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
-  budget           Float? // course tutoring budget, used by the spend-vs-budget report (Issue 11)
+  requiredTutors   Int               @default(1)
+  budgetHours      Float             @default(0)
+  hourlyRate       Float             @default(0)
   lecturerId       Int
   applications     Applicant[]
   lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])

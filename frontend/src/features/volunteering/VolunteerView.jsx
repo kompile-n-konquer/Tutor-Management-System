@@ -3,7 +3,7 @@ import AppLayout from "../../components/layout/AppLayout.jsx";
 import Button from "../../components/button/Button.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import api from "../../utils/axiosInstance.js";
-import { formatSessionDate, formatSessionTime, sessionDurationHours } from "../../utils/formatSession.js";
+import { formatSessionDate, formatSessionTimeRange, sessionDurationHours } from "../../utils/formatSession.js";
 
 export default function VolunteerView() {
   const [sessions, setSessions] = useState([]);
@@ -85,7 +85,7 @@ export default function VolunteerView() {
                       )}
                     </div>
                     <p className="font-body-sm text-on-surface-variant font-data-mono">
-                      {formatSessionDate(session.date)} · {formatSessionTime(session.startTime)} – {formatSessionTime(session.endTime)}
+                      {formatSessionDate(session.date)} · {formatSessionTimeRange(session)}
                     </p>
                   </div>
                   <div className="mt-stack-md">

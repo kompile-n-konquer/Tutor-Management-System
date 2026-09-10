@@ -50,7 +50,7 @@ async function main() {
   const tutor = await prisma.tutor.upsert({
     where: { userId: tutorUser.id },
     update: {},
-    create: { userId: tutorUser.id, maxHoursPerWeek: 20, availableHours: 20, status: "APPROVED" },
+    create: { userId: tutorUser.id, maxHoursPerWeek: 20, status: "APPROVED" },
   });
 
   const studentUser = await prisma.user.upsert({
@@ -87,32 +87,28 @@ async function main() {
     });
   }
 
+  // TimeSlot for 10:00–12:00 (minutes since midnight)
+  const timeSlot = await prisma.timeSlot.upsert({
+    where: { startMinute_endMinute: { startMinute: 600, endMinute: 720 } },
+    update: {},
+    create: { startMinute: 600, endMinute: 720 },
+  });
+
+  // CourseSlot linking CS101 to Monday's 10:00–12:00 slot. No natural unique key, so guard with a lookup.
+  let courseSlot = await prisma.courseSlot.findFirst({ where: { courseId: course.id, dayOfWeek: 1 } });
+  if (!courseSlot) {
+    courseSlot = await prisma.courseSlot.create({
+      data: { courseId: course.id, dayOfWeek: 1, timeSlotId: timeSlot.id, venue: "Lab 3B", sessionType: "TUTORIAL" },
+    });
+  }
+
   const existingSession = await prisma.session.findFirst({ where: { assignmentId: assignment.id } });
   if (!existingSession) {
     await prisma.session.createMany({
       data: [
-        {
-          assignmentId: assignment.id,
-          date: nextWeekdayAt(1, 10, 0),
-          startTime: nextWeekdayAt(1, 10, 0),
-          endTime: nextWeekdayAt(1, 12, 0),
-          status: "SCHEDULED",
-        },
-        {
-          assignmentId: assignment.id,
-          date: nextWeekdayAt(3, 14, 0),
-          startTime: nextWeekdayAt(3, 14, 0),
-          endTime: nextWeekdayAt(3, 16, 0),
-          status: "SCHEDULED",
-        },
-        {
-          assignmentId: assignment.id,
-          date: nextWeekdayAt(5, 9, 0),
-          startTime: nextWeekdayAt(5, 9, 0),
-          endTime: nextWeekdayAt(5, 10, 0),
-          status: "UNASSIGNED",
-          excuseReason: "Seeded example — tutor excused themselves",
-        },
+        { assignmentId: assignment.id, courseSlotId: courseSlot.id, date: nextWeekdayAt(1, 0, 0), status: "SCHEDULED" },
+        { assignmentId: assignment.id, courseSlotId: courseSlot.id, date: nextWeekdayAt(3, 0, 0), status: "SCHEDULED" },
+        { assignmentId: assignment.id, courseSlotId: courseSlot.id, date: nextWeekdayAt(5, 0, 0), status: "UNASSIGNED", excuseReason: "Seeded example — tutor excused themselves" },
       ],
     });
   }

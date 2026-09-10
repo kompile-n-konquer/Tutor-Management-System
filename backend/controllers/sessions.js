@@ -27,8 +27,13 @@ exports.getUnassignedSessions = catchAsync(async (req, res, next) => {
           course: { select: { courseCode: true, courseName: true } },
         },
       },
+      courseSlot: {
+        include: {
+          timeSlot: true,
+        },
+      },
     },
-    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    orderBy: [{ date: 'asc' }],
   });
 
   res.json(sessions);
@@ -54,8 +59,13 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
           course: { select: { courseCode: true, courseName: true } },
         },
       },
+      courseSlot: {
+        include: {
+          timeSlot: true,
+        },
+      },
     },
-    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    orderBy: [{ date: 'asc' }],
   });
 
   res.json(sessions);

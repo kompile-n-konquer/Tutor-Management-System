@@ -3,7 +3,7 @@ import AppLayout from "../../components/layout/AppLayout.jsx";
 import Button from "../../components/button/Button.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import api from "../../utils/axiosInstance.js";
-import { formatSessionDate, formatSessionTime } from "../../utils/formatSession.js";
+import { formatSessionDate, formatSessionTimeRange } from "../../utils/formatSession.js";
 
 const sessionStatusBadge = (status) => {
   switch (status) {
@@ -148,7 +148,7 @@ export default function TutorDashboard() {
                           {course ? `${course.courseCode} — ${course.courseName}` : "Tutoring Session"}
                         </td>
                         <td className="py-stack-sm px-stack-md font-data-mono">
-                          {formatSessionDate(session.date)} / {formatSessionTime(session.startTime)} – {formatSessionTime(session.endTime)}
+                          {formatSessionDate(session.date)} / {formatSessionTimeRange(session)}
                         </td>
                         <td className="py-stack-sm px-stack-md">
                           <span className={`${badge.className} px-2 py-1 rounded text-xs font-semibold`}>{badge.label}</span>

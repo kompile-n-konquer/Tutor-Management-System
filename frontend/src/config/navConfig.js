@@ -3,11 +3,12 @@
 // "roles" controls who sees the link; "to" must match a <Route path> in App.jsx.
 
 export const NAV_LINKS = [
-  { to: "/allocation-board", icon: "dashboard", label: "Allocation Board", roles: ["organiser"] },
   { to: "/tutor-dashboard", icon: "assignment_ind", label: "Tutor Dashboard", roles: ["tutor"] },
-  { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor", "student"] },
-  { to: "/profile", icon: "account_circle", label: "Profile", roles: ["organiser", "tutor", "student", "lecturer"] },
-  { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["organiser", "tutor", "lecturer"] },
+  { to: "/organiser", icon: "dashboard", label: "Organiser Board", roles: ["tutor"] },
+  { to: "/organiser-analytics", icon: "analytics", label: "Analytics", roles: ["tutor"] },
+  { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor"] },
+  { to: "/profile", icon: "account_circle", label: "Profile", roles: ["tutor"] },
+  { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["tutor"] },
   // Not yet built — flagged in the page-to-role mapping phase as a structural gap:
   // { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"] },
 ];

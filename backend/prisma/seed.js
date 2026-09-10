@@ -246,8 +246,6 @@ async function main() {
         userId: users[email].id,
         hourlyRate: null,
         maxHoursPerWeek: 10,
-        availableHours: 10,
-        currentHours: 0,
         status: "ACTIVE",
       },
     });

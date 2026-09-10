@@ -125,8 +125,6 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
           userId: applicant.userId,
           hourlyRate: null,
           maxHoursPerWeek: 10,
-          availableHours: 10,
-          currentHours: 0,
           status: 'ACTIVE',
         },
       });

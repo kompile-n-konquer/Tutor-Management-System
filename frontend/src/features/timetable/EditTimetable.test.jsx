@@ -9,8 +9,8 @@ const { mockGet, mockPut, authState } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../utils/axiosInstance.js', () => ({ default: { get: mockGet, put: mockPut } }));
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: authState.currentUser, loading: authState.loading }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: authState.currentUser, role: 'tutor', loading: authState.loading }),
 }));
 
 import EditTimetable from './EditTimetable.jsx';

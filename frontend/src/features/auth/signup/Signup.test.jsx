@@ -4,9 +4,10 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 
-const { mockAuth, mockPost } = vi.hoisted(() => ({
+const { mockAuth, mockPost, mockGet } = vi.hoisted(() => ({
   mockAuth: { currentUser: null },
   mockPost: vi.fn(),
+  mockGet: vi.fn(),
 }));
 
 vi.mock('firebase/app', () => ({
@@ -23,7 +24,7 @@ vi.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: vi.fn(),
 }));
 vi.mock('../../../utils/axiosInstance.js', () => ({
-  default: { post: mockPost },
+  default: { post: mockPost, get: mockGet },
 }));
 
 import Signup from './Signup.jsx';
@@ -76,6 +77,7 @@ describe('Signup — Firebase account + backend profile creation', () => {
   test('creates the Firebase user and the backend profile, then navigates', async () => {
     createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-42' } });
     mockPost.mockResolvedValue({ status: 201 });
+    mockGet.mockResolvedValue({ status: 200, data: { role: 'tutor' } });
     renderSignup();
 
     fillSignupForm();

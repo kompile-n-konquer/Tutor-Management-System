@@ -7,8 +7,8 @@ const { mockGet, mockPost } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPost: vi
 vi.mock('../../utils/axiosInstance.js', () => ({
   default: { get: mockGet, post: mockPost },
 }));
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'student', loading: false, signOut: vi.fn() }),
 }));
 
 import VolunteerView from './VolunteerView.jsx';

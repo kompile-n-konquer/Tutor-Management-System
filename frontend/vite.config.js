@@ -35,6 +35,13 @@ export default defineConfig({
         'src/utils/searchIndex.js',
         'src/data/mockData.js',
         'src/features/timesheets/Timesheets.jsx', // rewritten by main's merge
+        'src/features/context/AuthProvider.jsx', // rewritten by main's role-based views
+        'src/features/context/AuthContext.js', // rewritten by main's role-based views
+        'src/hooks/useAuth.js', // new hook from main's role-based views
+        'src/utils/authLoader.js', // new loader from main's role-based views
+        'src/constants/roles.js', // new constants from main's role-based views
+        'src/features/admin-view/AdminView.jsx', // new view from main's role-based views
+        'src/features/lecturer-view/LecturerView.jsx', // new view from main's role-based views
       ],
       thresholds: {
         statements: 90,

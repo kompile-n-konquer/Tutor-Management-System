@@ -4,9 +4,10 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 
-const { mockAuth, mockProvider } = vi.hoisted(() => ({
+const { mockAuth, mockProvider, mockGet } = vi.hoisted(() => ({
   mockAuth: { currentUser: null },
   mockProvider: { providerId: 'google.com' },
+  mockGet: vi.fn(),
 }));
 
 vi.mock('firebase/app', () => ({
@@ -25,6 +26,9 @@ vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: class {},
 }));
 vi.mock('../../../firebase/googleProvider.js', () => ({ default: mockProvider }));
+vi.mock('../../../utils/axiosInstance.js', () => ({
+  default: { get: mockGet },
+}));
 
 import Login from './Login.jsx';
 
@@ -78,6 +82,7 @@ describe('Login — email/password + Google sign-in', () => {
 
   test('signs in with Firebase and navigates to the tutor dashboard', async () => {
     signInWithEmailAndPassword.mockResolvedValue({ user: { uid: 'user-1' } });
+    mockGet.mockResolvedValue({ status: 200, data: { role: 'tutor' } });
     renderLogin();
 
     submitLoginForm('tutor@wits.ac.za', 'password123');
@@ -100,6 +105,7 @@ describe('Login — email/password + Google sign-in', () => {
 
   test('signs in with Google via a popup when the Google button is clicked', async () => {
     signInWithPopup.mockResolvedValue({ user: { uid: 'user-2' } });
+    mockGet.mockResolvedValue({ status: 200, data: { role: 'tutor' } });
     renderLogin();
 
     fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }));

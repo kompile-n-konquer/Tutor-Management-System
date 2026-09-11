@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AppLayout from './AppLayout.jsx';
 
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: vi.fn() }),
 }));
 // The top bar's search fetches /courses through axios on mount; mock the API
 // client with a never-settling promise so the Firebase import chain stays out

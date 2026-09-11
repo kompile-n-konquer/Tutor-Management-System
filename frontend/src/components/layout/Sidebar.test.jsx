@@ -6,8 +6,8 @@ import Sidebar from './Sidebar.jsx';
 const { mockSignOut } = vi.hoisted(() => ({ mockSignOut: vi.fn() }));
 
 // Sidebar only needs the useAuth hook; mocking the module keeps Firebase out of this test.
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: mockSignOut }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: mockSignOut }),
 }));
 
 const renderSidebar = (role) =>

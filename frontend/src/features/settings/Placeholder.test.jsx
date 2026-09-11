@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Placeholder from './Placeholder.jsx';
 
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: vi.fn() }),
 }));
 // The top bar's search fetches /courses through axios on mount; mock the API
 // client with a never-settling promise so the Firebase import chain stays out
@@ -27,17 +27,15 @@ describe('Placeholder — unbuilt backlog screens', () => {
     ).toBeInTheDocument();
   });
 
-  test('accepts a custom label and role through to the layout', () => {
+  test('accepts a custom label through to the layout', () => {
     render(
       <MemoryRouter>
-        <Placeholder role="organiser" label="Unique Screen Label" />
+        <Placeholder label="Unique Screen Label" />
       </MemoryRouter>,
     );
 
     expect(screen.getByText('Unique Screen Label')).toBeInTheDocument();
-    // The organiser rail is rendered for the given role — main's nav
-    // reshuffle left that role with only the conflict-resolution button.
-    expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
-    expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
+    // The sidebar is rendered with the role from useAuth (mocked as tutor above).
+    expect(screen.getByText('Tutor Dashboard')).toBeInTheDocument();
   });
 });

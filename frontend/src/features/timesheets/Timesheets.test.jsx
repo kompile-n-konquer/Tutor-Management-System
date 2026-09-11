@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Timesheets from './Timesheets.jsx';
 
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: vi.fn() }),
 }));
 // The top bar's search fetches /courses through axios on mount; keep that
 // (and the Firebase import chain behind it) out of this suite.

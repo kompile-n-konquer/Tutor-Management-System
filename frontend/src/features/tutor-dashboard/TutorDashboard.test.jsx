@@ -7,8 +7,8 @@ const { mockGet, mockPatch } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPatch: 
 vi.mock('../../utils/axiosInstance.js', () => ({
   default: { get: mockGet, patch: mockPatch },
 }));
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: { uid: 'u1' }, loading: false, signOut: vi.fn() }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: vi.fn() }),
 }));
 // main's redesign added a first-visit onboarding modal and the global search
 // (which fetches /courses on mount). Both are excluded from this branch's

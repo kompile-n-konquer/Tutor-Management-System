@@ -13,8 +13,8 @@ const { mockAuth, authState, mockGet, mockDelete, mockSignOut } = vi.hoisted(() 
 vi.mock('../../firebase/firebase', () => ({ auth: mockAuth }));
 vi.mock('firebase/auth', () => ({ signOut: mockSignOut }));
 vi.mock('../../utils/axiosInstance.js', () => ({ default: { get: mockGet, delete: mockDelete } }));
-vi.mock('../../features/context/AuthContext', () => ({
-  useAuth: () => ({ currentUser: authState.currentUser, loading: authState.loading }),
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: authState.currentUser, role: 'tutor', loading: authState.loading }),
 }));
 
 import Profile from './Profile.jsx';

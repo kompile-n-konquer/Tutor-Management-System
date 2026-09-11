@@ -1,5 +1,6 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const getLockedSlots = require('../utils/availabilityLocks');
 
 exports.getAvailability = catchAsync(async (req, res, next) => {
   const firebaseUid = req.user.user_id;
@@ -20,7 +21,9 @@ exports.getAvailability = catchAsync(async (req, res, next) => {
     select: { dayOfWeek: true, timeSlotId: true },
   });
 
-  res.status(200).json({ timeSlots, availability });
+  const lockedSlots = await getLockedSlots(user.id);
+
+  res.status(200).json({ timeSlots, availability, lockedSlots });
 });
 
 exports.updateAvailability = catchAsync(async (req, res, next) => {
@@ -51,6 +54,21 @@ exports.updateAvailability = catchAsync(async (req, res, next) => {
       error.statusCode = 400;
       return next(error);
     }
+  }
+
+  // Slots locked by submitted applications must stay in the availability set —
+  // new availability can be added, but locked entries cannot be dropped
+  const lockedSlots = await getLockedSlots(user.id);
+  const submittedKeys = new Set(availability.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
+  const removedLockedSlots = lockedSlots.filter(
+    (entry) => !submittedKeys.has(`${entry.dayOfWeek}-${entry.timeSlotId}`)
+  );
+  if (removedLockedSlots.length > 0) {
+    const error = new Error(
+      'Availability for slots locked by a submitted application cannot be removed. Keep the locked slots selected.'
+    );
+    error.statusCode = 400;
+    return next(error);
   }
 
   // Replace strategy: delete existing entries, then create the new set in one transaction

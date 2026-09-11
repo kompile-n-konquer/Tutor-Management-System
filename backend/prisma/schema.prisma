@@ -20,7 +20,7 @@ model User {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   firebaseUid    String      @unique
-  applications   Applicant[]
+  applications   Application[]
   courses        Course[]
   tutor          Tutor?
   availability   Availability[]
@@ -41,13 +41,12 @@ model Tutor {
   courseTutorMarks CourseTutorMark[]
 }
 
-model Applicant {
+model Application {
   id             Int       @id @default(autoincrement())
   userId         Int
   courseId       Int
   courseMark     Float
   transcriptPath String?
-  availability   String?
   status         String    @default("PENDING")
   appliedAt      DateTime  @default(now())
   reviewedAt     DateTime?
@@ -64,13 +63,19 @@ model Course {
   acceptingApplications Boolean     @default(false) // opened for tutor applications; managed via the bulk start-application-process action
   createdAt        DateTime          @default(now())
   userId           Int
-  applications     Applicant[]
+  applications     Application[]
   user             User              @relation(fields: [userId], references: [id])
   slots            CourseSlot[]
   overflowWork     OverflowWork[]
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
   courseTutorMarks CourseTutorMark[]
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model CourseTutorMark {

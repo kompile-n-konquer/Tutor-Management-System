@@ -16,7 +16,7 @@ sequenceDiagram
   L->>FE: Select tutor for course, click "Assign"
   FE->>BE: POST /assignments/validate {tutorId, courseId}
 
-  BE->>DB: Get Applicant.courseMark for (tutorId, courseId)
+  BE->>DB: Get Application.courseMark for (tutorId, courseId)
   DB-->>BE: courseMark
   BE->>DB: Get Course.minimumMark
   DB-->>BE: minimumMark

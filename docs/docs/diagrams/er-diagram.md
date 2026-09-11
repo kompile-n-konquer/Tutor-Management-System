@@ -10,10 +10,10 @@ This reflects the current `schema.prisma`. It covers three user roles (student, 
 erDiagram
   USER ||--o| TUTOR : "becomes"
   USER ||--o| LECTURER : "is"
-  USER ||--o{ APPLICANT : "applies as"
+  USER ||--o{ APPLICATION : "submits"
 
   LECTURER ||--o{ COURSE : "teaches"
-  COURSE ||--o{ APPLICANT : "receives"
+  COURSE ||--o{ APPLICATION : "receives"
   COURSE ||--o{ TUTOR_ASSIGNMENT : "has"
   COURSE ||--o{ COURSE_SLOT : "scheduled at"
   COURSE ||--o{ OVERFLOW_WORK : "posts"
@@ -36,12 +36,12 @@ erDiagram
     string role
     boolean isActive
   }
-  APPLICANT {
+  APPLICATION {
     int id PK
     int userId FK
     int courseId FK
     float courseMark
-    string status "PENDING, WAITLISTED, ACCEPTED, REJECTED"
+    string status "PENDING, WAITLISTED, APPROVED, REJECTED"
     datetime appliedAt
   }
   LECTURER {
@@ -116,6 +116,6 @@ erDiagram
 ## Notes on modeling decisions
 
 - **Three roles, one `User` table**: `User.role` distinguishes student / tutor / lecturer, with `Tutor` and `Lecturer` as optional 1-to-1 extension tables holding role-specific fields (hours, department). A student who hasn't applied yet has neither.
-- **Waitlist is a status, not a new entity**: `Applicant.status` moves through `PENDING → WAITLISTED / ACCEPTED / REJECTED`. When an accepted applicant declines or a `TutorAssignment` frees up, the next-ranked `WAITLISTED` applicant (ordered by `courseMark`) can be promoted to `ACCEPTED` without any schema change.
+- **Waitlist is a status, not a new entity**: `Application.status` moves through `PENDING → WAITLISTED / APPROVED / REJECTED`. When an approved applicant declines or a `TutorAssignment` frees up, the next-ranked `WAITLISTED` application (ordered by `courseMark`) can be promoted to `APPROVED` without any schema change.
 - **`TutorAssignment` is the join entity** between `Tutor` and `Course`, carrying `allocatedHours` and `status` — this is where the three live-validation checks (marks, clash, hours) get enforced before a row is created.
 - **Availability vs `CourseSlot`**: a tutor's own weekly availability (`Availability`) is checked against each course's fixed teaching times (`CourseSlot`) to detect scheduling clashes — these are separate tables because tutors set availability once per term, while course slots are fixed by the timetable.

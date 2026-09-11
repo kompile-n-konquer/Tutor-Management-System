@@ -25,6 +25,7 @@ export default function Profile() {
 
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [availability, setAvailability] = useState([]); // [{ dayOfWeek, timeSlotId }]
+  const [lockedSlots, setLockedSlots] = useState([]); // [{ dayOfWeek, timeSlotId }] held by submitted applications
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -40,6 +41,7 @@ export default function Profile() {
       if (response && response.status === 200) {
         setTimeSlots(response.data.timeSlots);
         setAvailability(response.data.availability);
+        setLockedSlots(response.data.lockedSlots || []);
       }
     };
 
@@ -50,6 +52,7 @@ export default function Profile() {
   if (!currentUser) return null;
 
   const availableKeys = new Set(availability.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
+  const lockedKeys = new Set(lockedSlots.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
 
   const handleDeleteAccount = async () => {
     if (auth.currentUser) {
@@ -196,18 +199,28 @@ export default function Profile() {
                       </div>
                       {DAYS.map((day, dayIndex) => {
                         const isAvailable = availableKeys.has(`${dayIndex}-${slot.id}`);
+                        const isLocked = lockedKeys.has(`${dayIndex}-${slot.id}`);
                         return (
                           <div
                             key={`${slot.id}-${day}`}
                             className={`p-2 border-b border-outline-variant/20 relative ${
-                              isAvailable ? 'bg-primary/5' : 'bg-surface-container-lowest'
+                              isLocked
+                                ? 'bg-urgent-orange/5'
+                                : isAvailable
+                                ? 'bg-primary/5'
+                                : 'bg-surface-container-lowest'
                             }`}
                           >
-                            {isAvailable && (
+                            {isLocked ? (
+                              <div className="absolute inset-1 bg-urgent-orange/20 border border-urgent-orange/30 rounded flex items-center justify-center gap-1 font-label-caps text-[10px] text-urgent-orange">
+                                <span className="material-symbols-outlined text-[12px]">lock</span>
+                                Locked
+                              </div>
+                            ) : isAvailable ? (
                               <div className="absolute inset-1 bg-primary/20 border border-primary/30 rounded flex items-center justify-center font-label-caps text-[10px] text-primary">
                                 Available
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         );
                       })}

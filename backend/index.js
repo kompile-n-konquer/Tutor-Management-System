@@ -7,6 +7,8 @@ const { globalErrorHandler, notFoundErrorHandler } = require('./controllers/erro
 const usersRouter = require('./routes/auth');
 const availabilityRouter = require('./routes/availability');
 const coursesRouter = require('./routes/courses');
+const applicationsRouter = require('./routes/applications');
+const settingsRouter = require('./routes/settings');
 
 const app = express();
 
@@ -42,6 +44,8 @@ app.get('/health', async (req, res) => {
 app.use('/api/users', usersRouter);
 app.use('/api/availability', availabilityRouter);
 app.use('/api/courses', coursesRouter);
+app.use('/api/applications', applicationsRouter);
+app.use('/api/settings', settingsRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

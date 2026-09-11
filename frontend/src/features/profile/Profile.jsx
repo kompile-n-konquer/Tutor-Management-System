@@ -6,7 +6,7 @@ import useAsync from '../../hooks/useAsync';
 import api from '../../utils/axiosInstance';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { useAuth } from '../context/AuthContext';
+import useAuth from '../../hooks/useAuth';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -21,7 +21,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
   const { execute, isLoading } = useAsync();
-  const { execute: executeTimetable, isLoading: isLoadingTimetable } = useAsync();
+  const { execute: executeTimetable } = useAsync();
 
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [availability, setAvailability] = useState([]); // [{ dayOfWeek, timeSlotId }]
@@ -96,7 +96,7 @@ export default function Profile() {
   };
 
   return (
-    <AppLayout role="tutor" title="Settings" showSearch={false}>
+    <AppLayout title="Settings" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>

@@ -22,23 +22,24 @@ model User {
   firebaseUid    String      @unique
   applications   Application[]
   courses        Course[]
-  tutor          Tutor?
   availability   Availability[]
+  assignments    TutorAssignment[]
+  busyBlocks     BusyBlock[]
+  timesheets     Timesheet[]
+  overflowClaims OverflowWork[]
 }
 
-model Tutor {
-  id               Int               @id @default(autoincrement())
-  userId           Int               @unique
-  hourlyRate       Float?
-  maxHoursPerWeek  Int // weekly hour cap; hours remaining is derived as cap - sum of assigned session durations for the week (Issue 32)
-  status           String
-  approvedAt       DateTime?
-  busyBlocks       BusyBlock[]
-  overflowClaims   OverflowWork[]
-  timesheets       Timesheet[]
-  user             User              @relation(fields: [userId], references: [id])
-  assignments      TutorAssignment[]
-  courseTutorMarks CourseTutorMark[]
+// Join table between User (role TUTOR) and Course — one row records that a user
+// with the tutor role tutors a course in a given semester. Hours are derived from
+// the course's slots, so only the semester is stored here.
+model TutorAssignment {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  courseId  Int
+  semester  String
+  sessions  Session[]
+  user      User      @relation(fields: [userId], references: [id])
+  course    Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
 }
 
 model Application {
@@ -69,36 +70,12 @@ model Course {
   overflowWork     OverflowWork[]
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
-  courseTutorMarks CourseTutorMark[]
 }
 
 model SystemSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
-}
-
-model CourseTutorMark {
-  id       Int    @id @default(autoincrement())
-  tutorId  Int
-  courseId Int
-  mark     Float
-  tutor    Tutor  @relation(fields: [tutorId], references: [id])
-  course   Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-
-  @@unique([tutorId, courseId])
-}
-
-model TutorAssignment {
-  id             Int       @id @default(autoincrement())
-  tutorId        Int
-  courseId       Int
-  allocatedHours Int
-  semester       String
-  status         String
-  sessions       Session[]
-  course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  tutor          Tutor     @relation(fields: [tutorId], references: [id])
 }
 
 model TimeSlot {
@@ -122,29 +99,29 @@ model Availability {
   @@unique([userId, dayOfWeek, timeSlotId])
 }
 
-// Per-tutor busy time ranges (Issue 32). Free-form minute-of-day values rather than a
-// TimeSlot FK so tutors can block arbitrary unavailable ranges; a tutor may have many blocks.
+// Per-user busy time ranges (Issue 32) for users with the tutor role. Free-form minute-of-day
+// values rather than a TimeSlot FK so tutors can block arbitrary unavailable ranges.
 model BusyBlock {
   id          Int   @id @default(autoincrement())
-  tutorId     Int
+  userId      Int
   dayOfWeek   Int
   startMinute Int
   endMinute   Int
-  tutor       Tutor @relation(fields: [tutorId], references: [id])
+  user        User  @relation(fields: [userId], references: [id])
 
-  @@unique([tutorId, dayOfWeek, startMinute, endMinute])
+  @@unique([userId, dayOfWeek, startMinute, endMinute])
 }
 
 model Timesheet {
   id            Int              @id @default(autoincrement())
-  tutorId       Int
+  userId        Int
   payrollNumber String?
   totalHours    Float
   totalAmount   Float?
   status        String           @default("DRAFT")
   submittedAt   DateTime?
   approvedAt    DateTime?
-  tutor         Tutor            @relation(fields: [tutorId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
   entries       TimesheetEntry[]
 }
 
@@ -197,6 +174,6 @@ model OverflowWork {
   postedBy    Int
   claimedBy   Int?
   status      String
-  tutor       Tutor? @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user        User?  @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course      Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
 }

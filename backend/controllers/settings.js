@@ -1,8 +1,6 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
-
-// The number of hours a tutor is supposed to claim in a month (organiser-managed policy)
-const TUTOR_MONTHLY_CLAIMABLE_HOURS = 'TUTOR_MONTHLY_CLAIMABLE_HOURS';
+const { TUTOR_MONTHLY_CLAIMABLE_HOURS } = require('../utils/systemSettings');
 
 // A month has at most 744 hours (31 days), so anything above that cannot be a monthly target
 const MAX_MONTHLY_HOURS = 744;

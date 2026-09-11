@@ -220,9 +220,36 @@ const OpportunityDetails = () => {
               </div>
             </div>
 
-            {/* Apply — full width at bottom */}
+            {/* Apply — full width at bottom. When accepting the course would push the
+                student above the maximum claimable hours, a notice replaces the apply form. */}
             <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
-              <form onSubmit={handleApply}>
+              {opportunity.hoursExceeded ? (
+                <>
+                  <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
+                    You cannot apply for this opportunity
+                  </h2>
+                  <p className="font-body-md text-on-surface-variant">
+                    You are already assigned to{' '}
+                    <span className="font-data-mono font-semibold text-on-surface">
+                      {opportunity.assignedHours} hour{opportunity.assignedHours === 1 ? '' : 's'}
+                    </span>{' '}
+                    and tutoring {opportunity.courseCode} would add{' '}
+                    <span className="font-data-mono font-semibold text-on-surface">
+                      {opportunity.weeklyHours} hour{opportunity.weeklyHours === 1 ? '' : 's'}
+                    </span>
+                    , bringing you to{' '}
+                    <span className="font-data-mono font-semibold text-on-surface">
+                      {opportunity.assignedHours + opportunity.weeklyHours} hours
+                    </span>
+                    . This is above the maximum of{' '}
+                    <span className="font-data-mono font-semibold text-on-surface">
+                      {opportunity.maxClaimableHours} claimable hour{opportunity.maxClaimableHours === 1 ? '' : 's'}
+                    </span>
+                    , so you cannot apply for this opportunity.
+                  </p>
+                </>
+              ) : (
+                <form onSubmit={handleApply}>
                   <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
                     Apply to tutor {opportunity.courseCode}
                   </h2>
@@ -250,6 +277,7 @@ const OpportunityDetails = () => {
                     </Button>
                   </div>
                 </form>
+              )}
             </div>
           </div>
         )}

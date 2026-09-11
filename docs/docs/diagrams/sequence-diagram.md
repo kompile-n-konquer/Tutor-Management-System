@@ -14,17 +14,17 @@ sequenceDiagram
   participant DB as Database
 
   L->>FE: Select tutor for course, click "Assign"
-  FE->>BE: POST /assignments/validate {tutorId, courseId}
+  FE->>BE: POST /assignments/validate {userId, courseId}
 
-  BE->>DB: Get Application.courseMark for (tutorId, courseId)
+  BE->>DB: Get Application.courseMark for (userId, courseId)
   DB-->>BE: courseMark
   BE->>DB: Get Course.minimumMark
   DB-->>BE: minimumMark
 
-  BE->>DB: Get Tutor.currentHours, maxHoursPerWeek
-  DB-->>BE: hours data
+  BE->>DB: Get SystemSetting max claimable hours + assigned courses' slots
+  DB-->>BE: maxClaimableHours, assigned hours
 
-  BE->>DB: Get Tutor.Availability + Course.CourseSlot
+  BE->>DB: Get User.Availability + Course.CourseSlot
   DB-->>BE: availability, slot times
 
   Note over BE: Run all 3 checks:<br/>marksOk, hoursOk, clashOk
@@ -34,7 +34,7 @@ sequenceDiagram
   alt All checks pass
     FE-->>L: Show green — ready to confirm
     L->>FE: Click "Confirm"
-    FE->>BE: POST /assignments {tutorId, courseId, allocatedHours}
+    FE->>BE: POST /assignments {userId, courseId, semester}
     BE->>DB: Re-validate + create TutorAssignment
     DB-->>BE: Assignment created
     BE-->>FE: 201 Created

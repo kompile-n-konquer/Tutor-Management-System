@@ -1,6 +1,7 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const getLockedSlots = require('../utils/availabilityLocks');
+const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
 
 // Only students and tutors take part in the tutor application workflow
 const isApplicantRole = (role) => role === 'STUDENT' || role === 'TUTOR';
@@ -22,6 +23,19 @@ const weeklyClaimableHours = (courseSlots) =>
       total + Math.max(1, Math.ceil((slot.timeSlot.endMinute - slot.timeSlot.startMinute) / 60)),
     0
   );
+
+// Weekly hours the user is already committed to through their assigned courses,
+// using the same round-up rule as the opportunity serializer
+const assignedWeeklyHours = async (userId) => {
+  const assignments = await prisma.tutorAssignment.findMany({
+    where: { userId },
+    include: { course: { include: { slots: { include: { timeSlot: true } } } } },
+  });
+  return assignments.reduce(
+    (total, assignment) => total + weeklyClaimableHours(assignment.course.slots),
+    0
+  );
+};
 
 // Shapes a course (with its slots + owner) into the opportunity payload for students
 const serializeOpportunity = (course) => ({
@@ -154,8 +168,20 @@ exports.getOpportunity = catchAsync(async (req, res, next) => {
   const lockedSlots = await getLockedSlots(user.id);
   const lockedKeys = new Set(lockedSlots.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
 
+  // Hours cap: once the organiser has set a maximum, the page replaces the apply form with a
+  // notice when accepting this course would push the student above it
+  const [maxClaimableHours, assignedHours] = await Promise.all([
+    getTutorMonthlyClaimableHours(),
+    assignedWeeklyHours(user.id),
+  ]);
+  const hoursExceeded =
+    maxClaimableHours !== null && assignedHours + weeklyClaimableHours(course.slots) > maxClaimableHours;
+
   res.status(200).json({
     ...serializeOpportunity(course),
+    assignedHours,
+    maxClaimableHours,
+    hoursExceeded,
     lockedSlots: course.slots
       .filter((slot) => lockedKeys.has(`${slot.dayOfWeek}-${slot.timeSlotId}`))
       .map((slot) => ({ dayOfWeek: slot.dayOfWeek, timeSlotId: slot.timeSlotId })),
@@ -245,6 +271,21 @@ exports.createApplication = catchAsync(async (req, res, next) => {
     );
     error.statusCode = 403;
     return next(error);
+  }
+
+  // Backstop for the hours cap the opportunity page warns about: an application that would
+  // push the student above the organiser-set maximum claimable hours is rejected here too
+  const maxClaimableHours = await getTutorMonthlyClaimableHours();
+  if (maxClaimableHours !== null) {
+    const courseHours = weeklyClaimableHours(course.slots);
+    const assignedHours = await assignedWeeklyHours(user.id);
+    if (assignedHours + courseHours > maxClaimableHours) {
+      const error = new Error(
+        `Tutoring this course would give you ${assignedHours + courseHours} hours, above the maximum of ${maxClaimableHours} claimable hours`
+      );
+      error.statusCode = 403;
+      return next(error);
+    }
   }
 
   const application = await prisma.application.create({

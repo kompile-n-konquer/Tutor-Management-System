@@ -137,7 +137,7 @@ exports.getCourse = catchAsync(async (req, res, next) => {
         orderBy: [{ dayOfWeek: 'asc' }, { timeSlot: { startMinute: 'asc' } }],
       },
       assignments: {
-        include: { tutor: { include: { user: { select: { firstName: true, lastName: true, email: true } } } } },
+        include: { user: { select: { firstName: true, lastName: true, email: true } } },
       },
       _count: { select: { applications: true } },
     },
@@ -150,12 +150,10 @@ exports.getCourse = catchAsync(async (req, res, next) => {
   }
 
   const assignedTutors = course.assignments.map((assignment) => ({
-    tutorId: assignment.tutorId,
-    tutorName: `${assignment.tutor.user.firstName} ${assignment.tutor.user.lastName}`,
-    tutorEmail: assignment.tutor.user.email,
-    allocatedHours: assignment.allocatedHours,
+    userId: assignment.userId,
+    tutorName: `${assignment.user.firstName} ${assignment.user.lastName}`,
+    tutorEmail: assignment.user.email,
     semester: assignment.semester,
-    status: assignment.status,
   }));
 
   const assignedCount = assignedTutors.length;

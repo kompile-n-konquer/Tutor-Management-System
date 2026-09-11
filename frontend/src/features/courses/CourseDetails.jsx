@@ -228,25 +228,17 @@ const CourseDetails = () => {
                     <thead>
                       <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                         <th className="py-stack-sm px-stack-md">Tutor</th>
-                        <th className="py-stack-sm px-stack-md">Allocated Hours</th>
                         <th className="py-stack-sm px-stack-md">Semester</th>
-                        <th className="py-stack-sm px-stack-md">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-variant font-body-md">
                       {course.assignedTutors.map((tutor) => (
-                        <tr key={tutor.tutorId}>
+                        <tr key={tutor.userId}>
                           <td className="py-stack-sm px-stack-md">
                             <span className="font-semibold text-on-surface">{tutor.tutorName}</span>
                             <p className="font-body-sm text-outline mt-1">{tutor.tutorEmail}</p>
                           </td>
-                          <td className="py-stack-sm px-stack-md font-data-mono">{tutor.allocatedHours} hrs</td>
                           <td className="py-stack-sm px-stack-md">{tutor.semester}</td>
-                          <td className="py-stack-sm px-stack-md">
-                            <span className="bg-trust-blue/10 text-trust-blue px-2 py-1 rounded text-xs font-semibold">
-                              {tutor.status}
-                            </span>
-                          </td>
                         </tr>
                       ))}
                     </tbody>

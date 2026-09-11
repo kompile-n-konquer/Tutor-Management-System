@@ -88,7 +88,7 @@ const CourseDetails = () => {
   return (
     <AppLayout role="lecturer" title="Courses">
       <div className="p-gutter md:p-margin-page">
-        <div className="mb-stack-lg max-w-4xl flex flex-wrap items-center justify-between gap-gutter">
+        <div className="mb-stack-lg flex flex-wrap items-center justify-between gap-gutter">
           <div>
             <h2 className="font-display text-display text-primary">
               {course ? `${course.courseCode}` : 'Course'}
@@ -116,85 +116,104 @@ const CourseDetails = () => {
         )}
 
         {course && (
-          <div className="space-y-gutter max-w-4xl">
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
-                <div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Added</p>
-                  <p className="font-body-md text-on-surface mt-1 font-data-mono">{formatDate(course.createdAt)}</p>
+          <div className="space-y-gutter">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+              {/* Course details — left column */}
+              <div className="lg:col-span-4">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                  <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                    <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                      Course Details
+                    </h3>
+                    <p className="font-body-sm text-outline mt-1">
+                      Core information about this course.
+                    </p>
+                  </div>
+                  <div className="flex-1 space-y-6">
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Added</p>
+                      <p className="font-body-md text-on-surface mt-1 font-data-mono">{formatDate(course.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Lecturer</p>
+                      <p className="font-body-md text-on-surface mt-1">
+                        {course.lecturer
+                          ? `${course.lecturer.firstName} ${course.lecturer.lastName} (${course.lecturer.email})`
+                          : 'Unknown'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Minimum Mark</p>
+                      <p className="font-body-md text-on-surface mt-1 font-data-mono">{course.minimumMark}</p>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Tutors</p>
+                      <p className="font-body-md text-on-surface mt-1">
+                        <span className="font-semibold font-data-mono">
+                          {course.assignedCount}/{course.tutorsRequired}
+                        </span>{' '}
+                        allocated
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                        Accepting Applications
+                      </p>
+                      <p className="font-body-md text-on-surface mt-1">
+                        {course.acceptingApplications ? (
+                          <span className="bg-trust-blue/10 text-trust-blue px-2 py-1 rounded text-xs font-semibold">
+                            Yes - open for tutor applications
+                          </span>
+                        ) : (
+                          <span className="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-semibold">
+                            No
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                        Allocation Status
+                      </p>
+                      <p className="font-body-md text-on-surface mt-1">
+                        {course.isAllocated ? (
+                          <span className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-semibold">
+                            Tutors allocated
+                          </span>
+                        ) : (
+                          <span className="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-semibold">
+                            No tutors allocated yet
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Lecturer</p>
-                  <p className="font-body-md text-on-surface mt-1">
-                    {course.lecturer
-                      ? `${course.lecturer.firstName} ${course.lecturer.lastName} (${course.lecturer.email})`
-                      : 'Unknown'}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Minimum Mark</p>
-                  <p className="font-body-md text-on-surface mt-1 font-data-mono">{course.minimumMark}</p>
-                </div>
-                <div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Tutors</p>
-                  <p className="font-body-md text-on-surface mt-1">
-                    <span className="font-semibold font-data-mono">
-                      {course.assignedCount}/{course.tutorsRequired}
-                    </span>{' '}
-                    allocated
-                  </p>
-                </div>
-                <div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                    Accepting Applications
-                  </p>
-                  <p className="font-body-md text-on-surface mt-1">
-                    {course.acceptingApplications ? (
-                      <span className="bg-trust-blue/10 text-trust-blue px-2 py-1 rounded text-xs font-semibold">
-                        Yes - open for tutor applications
-                      </span>
-                    ) : (
-                      <span className="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-semibold">
-                        No
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                    Allocation Status
-                  </p>
-                  <p className="font-body-md text-on-surface mt-1">
-                    {course.isAllocated ? (
-                      <span className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-semibold">
-                        Tutors allocated
-                      </span>
-                    ) : (
-                      <span className="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-semibold">
-                        No tutors allocated yet
-                      </span>
-                    )}
-                  </p>
+              </div>
+
+              {/* Tutoring slots — right column */}
+              <div className="lg:col-span-8">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                  <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                    <div>
+                      <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                        Tutoring Slots
+                      </h3>
+                      <p className="font-body-sm text-outline mt-1">
+                        The weekly slots when this course is tutored. Edit them on the edit page.
+                      </p>
+                    </div>
+                    <span className="font-body-sm text-on-surface-variant">{course.slots.length} slots</span>
+                  </div>
+
+                  <div className="flex-1 min-h-0">
+                    <SlotGrid timeSlots={timeSlots} grid={grid} readOnly label="Tutor" fill />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
-              <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
-                <div>
-                  <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                    Tutoring Slots
-                  </h3>
-                  <p className="font-body-sm text-outline mt-1">
-                    The weekly slots when this course is tutored. Edit them on the edit page.
-                  </p>
-                </div>
-                <span className="font-body-sm text-on-surface-variant">{course.slots.length} slots</span>
-              </div>
-
-              <SlotGrid timeSlots={timeSlots} grid={grid} readOnly label="Tutor" />
-            </div>
-
+            {/* Allocated Tutors — full width at bottom */}
             <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
               <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
                 Allocated Tutors

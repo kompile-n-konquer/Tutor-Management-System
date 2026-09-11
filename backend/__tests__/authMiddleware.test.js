@@ -1,9 +1,16 @@
 const authenticateFirebaseToken = require('../middleware/auth');
 const getFirebaseAdmin = require('../firebase/admin');
+const prisma = require('../prisma/client');
 
 // Factory mock — the real module must never load (firebase-admin ships ESM-only deps
 // like jose that Jest cannot parse), so we replace it with a bare jest.fn().
 jest.mock('../firebase/admin', () => jest.fn());
+jest.mock('../prisma/client', () => ({
+  user: { findUnique: jest.fn() },
+}));
+jest.mock('../utils/roles', () => ({
+  normaliseRole: (role) => role?.toLowerCase() || null,
+}));
 
 describe('authenticateFirebaseToken middleware', () => {
   let req, res, next, verifyIdToken;
@@ -55,13 +62,23 @@ describe('authenticateFirebaseToken middleware', () => {
 
   test('attaches the decoded token to req.user and calls next() for a valid token', async () => {
     req.headers.authorization = 'Bearer valid-token';
-    const decodedToken = { user_id: 'firebase-uid-1', email: 'tutor@wits.ac.za' };
+    const decodedToken = { uid: 'firebase-uid-1', email: 'tutor@wits.ac.za' };
     verifyIdToken.mockResolvedValue(decodedToken);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 42,
+      email: 'tutor@wits.ac.za',
+      role: 'TUTOR',
+    });
 
     await authenticateFirebaseToken(req, res, next);
 
     expect(verifyIdToken).toHaveBeenCalledWith('valid-token');
-    expect(req.user).toBe(decodedToken);
+    expect(req.user).toEqual({
+      ...decodedToken,
+      id: 42,
+      email: 'tutor@wits.ac.za',
+      role: 'tutor',
+    });
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith(); // no error
     expect(res.status).not.toHaveBeenCalled();

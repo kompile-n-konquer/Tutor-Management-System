@@ -49,37 +49,7 @@ export default function Profile() {
   if (loading) return null; // TODO: Create a professional loading state 
   if (!currentUser) return null;
 
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-
-  // Only show the slots around the current hour: 1 hour before, the current hour, and 1 hour after.
-  // If the current time is outside every slot (early morning / evening), fall back to the
-  // 3 slots nearest to now so the grid is never empty.
-  const currentHourStart = Math.floor(nowMinutes / 60) * 60;
-  let visibleSlots = timeSlots.filter(
-    (slot) => slot.endMinute > currentHourStart - 60 && slot.startMinute < currentHourStart + 120
-  );
-
-  if (visibleSlots.length === 0 && timeSlots.length > 0) {
-    if (nowMinutes < timeSlots[0].startMinute) {
-      visibleSlots = timeSlots.slice(0, 3);
-    } else {
-      visibleSlots = timeSlots.slice(-3);
-    }
-  }
-
   const availableKeys = new Set(availability.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
-
-  // Position of the thin grey current-time line as a percentage of the grid height.
-  // The first grid row is the day header, so the line is offset by one row.
-  let currentTimeTop = null;
-  if (visibleSlots.length > 0) {
-    const firstStart = visibleSlots[0].startMinute;
-    const lastEnd = visibleSlots[visibleSlots.length - 1].endMinute;
-    if (nowMinutes >= firstStart && nowMinutes <= lastEnd) {
-      const fraction = (nowMinutes - firstStart) / (lastEnd - firstStart);
-      currentTimeTop = ((1 + fraction * visibleSlots.length) / (visibleSlots.length + 1)) * 100;
-    }
-  }
 
   const handleDeleteAccount = async () => {
     if (auth.currentUser) {
@@ -208,12 +178,6 @@ export default function Profile() {
                 </button>
               </div>
               <div className="flex-1 overflow-x-auto calendar-scroll relative">
-                {currentTimeTop !== null && (
-                  <div
-                    className="absolute left-0 right-0 z-10 border-t border-outline-variant pointer-events-none"
-                    style={{ top: `${currentTimeTop}%` }}
-                  />
-                )}
                 <div className="min-w-[600px] h-full grid grid-cols-6 gap-px bg-outline-variant/30">
                   <div className="bg-surface-container-lowest p-2" />
                   {DAYS.map((d) => (
@@ -225,7 +189,7 @@ export default function Profile() {
                     </div>
                   ))}
 
-                  {visibleSlots.map((slot) => (
+                  {timeSlots.map((slot) => (
                     <div key={slot.id} className="contents">
                       <div className="bg-surface-container-lowest p-2 text-right font-data-mono text-body-sm text-outline border-b border-outline-variant/20">
                         {minutesToLabel(slot.startMinute)}

@@ -150,7 +150,7 @@ const AddCourse = () => {
   return (
     <AppLayout role="lecturer" title="Courses">
       <div className="p-gutter md:p-margin-page">
-        <div className="mb-stack-lg max-w-4xl flex flex-wrap items-center justify-between gap-gutter">
+        <div className="mb-stack-lg flex flex-wrap items-center justify-between gap-gutter">
           <div>
             <h2 className="font-display text-display text-primary">Add A Course</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
@@ -164,59 +164,75 @@ const AddCourse = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-gutter max-w-4xl">
-          <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
-              <Input
-                labelText="Course Code"
-                icon="code_blocks"
-                placeholder="COMS3005"
-                value={data.courseCode}
-                onChange={(e) => handleChange(e, 'courseCode')}
-              />
-              <Input
-                labelText="Course Name"
-                icon="menu_book"
-                placeholder="Advanced Algorithms"
-                value={data.courseName}
-                onChange={(e) => handleChange(e, 'courseName')}
-              />
-              <Input
-                labelText="Minimum Mark"
-                icon="grade"
-                type="number"
-                placeholder="70"
-                value={data.minimumMark}
-                onChange={(e) => handleChange(e, 'minimumMark')}
-              />
-              <Input
-                labelText="Tutors Required"
-                icon="groups"
-                type="number"
-                placeholder="1"
-                value={data.tutorsRequired}
-                onChange={(e) => handleChange(e, 'tutorsRequired')}
-              />
-            </div>
-          </div>
-
-          <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
-              <div>
-                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                  Tutoring Slots
-                </h3>
-                <p className="font-body-sm text-outline mt-1">
-                  Click on the slots when this course will be tutored.
-                </p>
+        <form onSubmit={handleSubmit} className="space-y-gutter">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+            {/* Course details — left column */}
+            <div className="lg:col-span-4">
+              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                  <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                    Course Details
+                  </h3>
+                  <p className="font-body-sm text-outline mt-1">
+                    Fill in the course information below.
+                  </p>
+                </div>
+                <div className="flex-1 space-y-8">
+                  <Input
+                    labelText="Course Code"
+                    icon="code_blocks"
+                    placeholder="COMS3005"
+                    value={data.courseCode}
+                    onChange={(e) => handleChange(e, 'courseCode')}
+                  />
+                  <Input
+                    labelText="Course Name"
+                    icon="menu_book"
+                    placeholder="Advanced Algorithms"
+                    value={data.courseName}
+                    onChange={(e) => handleChange(e, 'courseName')}
+                  />
+                  <Input
+                    labelText="Minimum Required Mark"
+                    icon="grade"
+                    type="number"
+                    placeholder="70"
+                    value={data.minimumMark}
+                    onChange={(e) => handleChange(e, 'minimumMark')}
+                  />
+                  <Input
+                    labelText="Tutors Required"
+                    icon="groups"
+                    type="number"
+                    placeholder="1"
+                    value={data.tutorsRequired}
+                    onChange={(e) => handleChange(e, 'tutorsRequired')}
+                  />
+                </div>
               </div>
-              <span className="font-body-sm text-on-surface-variant">
-                {selectedSlotCount} selected
-              </span>
             </div>
 
-            <div className="overflow-x-auto calendar-scroll">
-              <SlotGrid timeSlots={timeSlots} grid={grid} onToggle={toggleSlot} />
+            {/* Tutoring slots — right column */}
+            <div className="lg:col-span-8">
+              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                  <div>
+                    <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                      Tutoring Slots
+                    </h3>
+                    <p className="font-body-sm text-outline mt-1">
+                      Click on the slots when this course will be tutored.
+                    </p>
+                  </div>
+                  <span className="font-body-sm text-on-surface-variant">
+                    {selectedSlotCount} selected
+                  </span>
+                </div>
+
+                <div className="flex-1 min-h-0">
+                  <SlotGrid timeSlots={timeSlots} grid={grid} onToggle={toggleSlot} fill />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -228,6 +244,7 @@ const AddCourse = () => {
           )}
 
           <div className="flex gap-2">
+            <Button onClick={() => navigate('/courses')}>Cancel</Button>
             <Button type="submit" disabled={disableBtn} loading={isLoading} className="min-w-40">
               Add Course
             </Button>

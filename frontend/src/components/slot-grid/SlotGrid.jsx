@@ -12,10 +12,12 @@ export const minutesToLabel = (minutes) => {
  * Weekly Mon-Fri x time-slot grid shared by the course pages.
  * `grid` maps each timeSlot id to a per-day cell status ('selected' | 'empty').
  * Pass `readOnly` to render a static grid (no clicking, like the Profile timetable).
+ * Pass `fill` to make the grid stretch to fill its parent container height
+ * (rows distribute evenly, cells match Profile sizing with no fixed inner height).
  */
-const SlotGrid = ({ timeSlots, grid, onToggle, readOnly = false, label = 'Tutor' }) => (
-  <div className="overflow-x-auto calendar-scroll">
-    <div className="min-w-[600px] grid grid-cols-6 gap-px bg-outline-variant/30">
+const SlotGrid = ({ timeSlots, grid, onToggle, readOnly = false, label = 'Tutor', fill = false }) => (
+  <div className={fill ? 'h-full' : 'overflow-x-auto calendar-scroll'}>
+    <div className={`grid grid-cols-6 gap-px bg-outline-variant/30 ${fill ? 'h-full' : 'min-w-[600px]'}`}>
       <div className="bg-surface-container-lowest p-2" />
       {DAYS.map((d) => (
         <div
@@ -44,17 +46,31 @@ const SlotGrid = ({ timeSlots, grid, onToggle, readOnly = false, label = 'Tutor'
                   status === 'selected' ? 'bg-primary/5' : 'bg-surface-container-lowest'
                 }${interactive ? ' hover:bg-primary/10' : ''}`}
               >
-                <div className="h-8">
-                  {status === 'selected' && (
-                    <div
-                      className={`absolute inset-1 bg-primary/20 border border-primary/30 rounded flex items-center justify-center font-label-caps text-[10px] text-primary ${
-                        readOnly ? '' : 'cursor-pointer'
-                      }`}
-                    >
-                      {label}
-                    </div>
-                  )}
-                </div>
+                {fill ? (
+                  <>
+                    {status === 'selected' && (
+                      <div
+                        className={`absolute inset-1 bg-primary/20 border border-primary/30 rounded flex items-center justify-center font-label-caps text-[10px] text-primary ${
+                          readOnly ? '' : 'cursor-pointer'
+                        }`}
+                      >
+                        {label}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="h-8">
+                    {status === 'selected' && (
+                      <div
+                        className={`absolute inset-1 bg-primary/20 border border-primary/30 rounded flex items-center justify-center font-label-caps text-[10px] text-primary ${
+                          readOnly ? '' : 'cursor-pointer'
+                        }`}
+                      >
+                        {label}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

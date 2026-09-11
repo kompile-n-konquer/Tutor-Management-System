@@ -43,7 +43,7 @@ export default function Sidebar() {
               [
                 "flex items-center gap-stack-md px-gutter py-stack-sm rounded-lg transition-colors group",
                 isActive
-                  ? "bg-primary-container text-on-primary-container font-semibold scale-[0.98] transition-transform duration-150"
+                  ? "bg-primary-container text-on-primary font-semibold scale-[0.98] transition-transform duration-150"
                   : "text-on-surface-variant hover:bg-surface-variant font-medium",
               ].join(" ")
             }

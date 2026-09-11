@@ -4,6 +4,7 @@ const authenticateFirebaseToken = require('../middleware/auth');
 const { requireRole } = require('../utils/roles');
 const {
   submitApplication,
+  getTutorEligibleCourses,
   getMyApplications,
   getPendingApplications,
   getApplicationById,
@@ -14,6 +15,10 @@ const {
 // ── Student routes ───────────────────────────────────────────────────────
 // Submit a role application (TUTOR or LECTURER)
 router.post('/apply', authenticateFirebaseToken, submitApplication);
+
+// Courses the current user can tutor without their availability clashing
+// with the course's session slots (used by the tutor application form)
+router.get('/tutor-eligible-courses', authenticateFirebaseToken, getTutorEligibleCourses);
 
 // View own applications
 router.get('/my-applications', authenticateFirebaseToken, getMyApplications);

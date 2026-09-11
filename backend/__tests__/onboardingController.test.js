@@ -5,6 +5,7 @@ jest.mock('../prisma/client', () => {
     user: { update: jest.fn() },
     tutor: { upsert: jest.fn() },
     lecturer: { upsert: jest.fn() },
+    applicant: { create: jest.fn() },
   };
 
   return {
@@ -19,7 +20,8 @@ jest.mock('../prisma/client', () => {
     tutor: { upsert: jest.fn() },
     lecturer: { upsert: jest.fn() },
     availability: { count: jest.fn(), findMany: jest.fn() },
-    applicant: { findMany: jest.fn() },
+    applicant: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
+    course: { findUnique: jest.fn(), findMany: jest.fn() },
     timeSlot: { count: jest.fn() },
     $transaction: jest.fn((fn) => fn(mockTx)),
     __tx: mockTx,
@@ -29,6 +31,7 @@ jest.mock('../prisma/client', () => {
 const prisma = require('../prisma/client');
 const {
   submitApplication,
+  getTutorEligibleCourses,
   getMyApplications,
   getPendingApplications,
   getApplicationById,
@@ -147,12 +150,28 @@ describe('submitApplication', () => {
     );
   });
 
-  test('creates tutor application successfully', async () => {
+  test('creates tutor application with course choice successfully', async () => {
     prisma.roleApplication.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
     prisma.availability.count.mockResolvedValue(10);
-    prisma.roleApplication.create.mockResolvedValue({
+    prisma.course.findUnique.mockResolvedValue({
+      id: 1,
+      courseCode: 'COMS1015',
+      courseName: 'Intro to Programming',
+      minimumMark: 65,
+      slots: [
+        { dayOfWeek: 1, timeSlotId: 2 },
+        { dayOfWeek: 3, timeSlotId: 4 },
+      ],
+    });
+    prisma.availability.findMany.mockResolvedValue([
+      { dayOfWeek: 1, timeSlotId: 2 },
+      { dayOfWeek: 3, timeSlotId: 4 },
+      { dayOfWeek: 2, timeSlotId: 6 },
+    ]);
+    prisma.applicant.findFirst.mockResolvedValue(null);
+    prisma.__tx.roleApplication.create.mockResolvedValue({
       id: 1,
       userId: 1,
       requestedRole: 'TUTOR',
@@ -161,9 +180,10 @@ describe('submitApplication', () => {
       maxHoursPerWeek: 10,
       user: { firstName: 'Alex', lastName: 'Mercer', email: 'alex@test.com' },
     });
+    prisma.__tx.applicant.create.mockResolvedValue({});
 
     const req = mockReq({
-      body: { requestedRole: 'TUTOR', hourlyRate: 150, maxHoursPerWeek: 10 },
+      body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 78, hourlyRate: 150, maxHoursPerWeek: 10 },
     });
     const res = mockRes();
     const next = jest.fn();
@@ -171,7 +191,7 @@ describe('submitApplication', () => {
     await submitApplication(req, res, next);
     await flushMicrotasks();
 
-    expect(prisma.roleApplication.create).toHaveBeenCalledWith(
+    expect(prisma.__tx.roleApplication.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           userId: 1,
@@ -181,8 +201,173 @@ describe('submitApplication', () => {
         }),
       }),
     );
+
+    // The per-course Applicant row is created alongside the role application
+    expect(prisma.__tx.applicant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: 1,
+          courseId: 1,
+          courseMark: 78,
+          status: 'PENDING',
+        }),
+      }),
+    );
+
     expect(res.status).toHaveBeenCalledWith(201);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when courseId is missing for tutor application', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prisma.availability.count.mockResolvedValue(10);
+
+    const req = mockReq({
+      body: { requestedRole: 'TUTOR', courseMark: 78, maxHoursPerWeek: 10 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('courseId') }),
+    );
+  });
+
+  test('returns 400 when courseMark is missing or invalid', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prisma.availability.count.mockResolvedValue(10);
+
+    const req = mockReq({
+      body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 150, maxHoursPerWeek: 10 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('courseMark') }),
+    );
+  });
+
+  test('returns 404 when the chosen course does not exist', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prisma.availability.count.mockResolvedValue(10);
+    prisma.course.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({
+      body: { requestedRole: 'TUTOR', courseId: 999, courseMark: 78, maxHoursPerWeek: 10 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Course not found' }),
+    );
+  });
+
+  test('returns 400 when courseMark is below the course minimumMark', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prisma.availability.count.mockResolvedValue(10);
+    prisma.course.findUnique.mockResolvedValue({
+      id: 1,
+      courseCode: 'COMS1015',
+      courseName: 'Intro to Programming',
+      minimumMark: 65,
+      slots: [],
+    });
+
+    const req = mockReq({
+      body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 60, maxHoursPerWeek: 10 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('below the minimum') }),
+    );
+  });
+
+  test('returns 400 when availability clashes with a course session slot', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prisma.availability.count.mockResolvedValue(10);
+    prisma.course.findUnique.mockResolvedValue({
+      id: 1,
+      courseCode: 'COMS1015',
+      courseName: 'Intro to Programming',
+      minimumMark: 65,
+      slots: [
+        { dayOfWeek: 1, timeSlotId: 2 }, // covered
+        { dayOfWeek: 5, timeSlotId: 4 }, // NOT covered → clash
+      ],
+    });
+    prisma.availability.findMany.mockResolvedValue([
+      { dayOfWeek: 1, timeSlotId: 2 },
+    ]);
+
+    const req = mockReq({
+      body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 78, maxHoursPerWeek: 10 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('clashes') }),
+    );
+    expect(prisma.__tx.applicant.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the user has already applied to tutor the course', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    prisma.availability.count.mockResolvedValue(10);
+    prisma.course.findUnique.mockResolvedValue({
+      id: 1,
+      courseCode: 'COMS1015',
+      courseName: 'Intro to Programming',
+      minimumMark: 65,
+      slots: [],
+    });
+    prisma.availability.findMany.mockResolvedValue([]);
+    prisma.applicant.findFirst.mockResolvedValue({ id: 55, userId: 1, courseId: 1 });
+
+    const req = mockReq({
+      body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 78, maxHoursPerWeek: 10 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: expect.stringContaining('already applied') }),
+    );
+    expect(prisma.__tx.applicant.create).not.toHaveBeenCalled();
   });
 
   test('creates lecturer application successfully', async () => {
@@ -480,6 +665,7 @@ describe('reviewApplication', () => {
       user: { id: 5 },
     });
     prisma.roleApplication.update.mockResolvedValue({});
+    prisma.applicant.updateMany.mockResolvedValue({ count: 1 });
 
     const req = mockReq({
       user: { id: 99, role: 'ORGANISER' },
@@ -502,11 +688,106 @@ describe('reviewApplication', () => {
       }),
     );
 
+    // Rejected tutor applicants leave the per-course available pool
+    expect(prisma.applicant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 5, status: 'PENDING' },
+        data: expect.objectContaining({ status: 'REJECTED' }),
+      }),
+    );
+
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('rejected'),
       }),
     );
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// getTutorEligibleCourses
+// ════════════════════════════════════════════════════════════════════════
+describe('getTutorEligibleCourses', () => {
+  test('returns only courses whose session slots fit the user availability', async () => {
+    prisma.availability.findMany.mockResolvedValue([
+      { dayOfWeek: 1, timeSlotId: 2 },
+      { dayOfWeek: 3, timeSlotId: 4 },
+      { dayOfWeek: 2, timeSlotId: 6 },
+    ]);
+    prisma.course.findMany.mockResolvedValue([
+      {
+        id: 1,
+        courseCode: 'COMS1015',
+        courseName: 'Intro to Programming',
+        minimumMark: 65,
+        requiredTutors: 2,
+        slots: [
+          { dayOfWeek: 1, timeSlotId: 2 },
+          { dayOfWeek: 3, timeSlotId: 4 },
+        ],
+        lecturer: { user: { firstName: 'Sarah', lastName: 'Van Wyk' } },
+      },
+      {
+        id: 2,
+        courseCode: 'MATH2002',
+        courseName: 'Discrete Mathematics',
+        minimumMark: 60,
+        requiredTutors: 1,
+        slots: [
+          { dayOfWeek: 1, timeSlotId: 2 },
+          { dayOfWeek: 5, timeSlotId: 4 }, // not in availability → clash
+        ],
+        lecturer: { user: { firstName: 'Sarah', lastName: 'Van Wyk' } },
+      },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getTutorEligibleCourses(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith({
+      eligibleCourses: [
+        expect.objectContaining({
+          id: 1,
+          courseCode: 'COMS1015',
+          lecturerName: 'Sarah Van Wyk',
+          slotCount: 2,
+        }),
+      ],
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns courses without slots as eligible (nothing to clash with)', async () => {
+    prisma.availability.findMany.mockResolvedValue([]);
+    prisma.course.findMany.mockResolvedValue([
+      {
+        id: 3,
+        courseCode: 'COMS3055',
+        courseName: 'Database Systems',
+        minimumMark: 65,
+        requiredTutors: 4,
+        slots: [],
+        lecturer: null,
+      },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getTutorEligibleCourses(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith({
+      eligibleCourses: [
+        expect.objectContaining({ courseCode: 'COMS3055', lecturerName: null, slotCount: 0 }),
+      ],
+    });
     expect(next).not.toHaveBeenCalled();
   });
 });

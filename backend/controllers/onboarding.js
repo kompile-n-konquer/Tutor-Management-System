@@ -7,7 +7,9 @@ const { ROLES } = require('../utils/roles');
 // Submit a role application (TUTOR or LECTURER).
 //
 // Body (tutor):
-//   { requestedRole: "TUTOR", hourlyRate: 150, maxHoursPerWeek: 10 }
+//   { requestedRole: "TUTOR", courseId: 1, courseMark: 78, hourlyRate: 150, maxHoursPerWeek: 10 }
+//   courseId/courseMark select the course the applicant wants to tutor; the
+//   course's session slots must fall inside the applicant's availability.
 //
 // Body (lecturer):
 //   { requestedRole: "LECTURER", department: "CSAM", officeLocation: "...", officeHours: "..." }
@@ -65,7 +67,7 @@ exports.submitApplication = catchAsync(async (req, res, next) => {
       return next(error);
     }
 
-    const { hourlyRate, maxHoursPerWeek } = req.body;
+    const { hourlyRate, maxHoursPerWeek, courseId, courseMark } = req.body;
 
     if (!maxHoursPerWeek || maxHoursPerWeek < 1 || maxHoursPerWeek > 40) {
       const error = new Error('maxHoursPerWeek is required and must be between 1 and 40');
@@ -73,14 +75,93 @@ exports.submitApplication = catchAsync(async (req, res, next) => {
       return next(error);
     }
 
-    const application = await prisma.roleApplication.create({
-      data: {
-        userId,
-        requestedRole,
-        hourlyRate: hourlyRate != null ? Number(hourlyRate) : null,
-        maxHoursPerWeek: Number(maxHoursPerWeek),
-      },
-      include: { user: { select: { firstName: true, lastName: true, email: true } } },
+    // ── Course choice: the applicant picks the course they want to tutor ──
+    const parsedCourseId = Number(courseId);
+    if (!courseId || !Number.isInteger(parsedCourseId)) {
+      const error = new Error('courseId is required: choose the course you want to tutor');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const parsedMark = Number(courseMark);
+    if (courseMark == null || isNaN(parsedMark) || parsedMark < 0 || parsedMark > 100) {
+      const error = new Error('courseMark is required and must be between 0 and 100');
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    const course = await prisma.course.findUnique({
+      where: { id: parsedCourseId },
+      include: { slots: { select: { dayOfWeek: true, timeSlotId: true } } },
+    });
+    if (!course) {
+      const error = new Error('Course not found');
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    if (parsedMark < course.minimumMark) {
+      const error = new Error(
+        `Your mark (${parsedMark}) is below the minimum required mark (${course.minimumMark}) for ${course.courseCode}`,
+      );
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    // Clash check: the lecturer specifies the slots in which the course's
+    // sessions take place, so every slot must fall inside the applicant's
+    // availability — a single uncovered slot is a clash.
+    const availability = await prisma.availability.findMany({
+      where: { userId },
+      select: { dayOfWeek: true, timeSlotId: true },
+    });
+    const availableSlots = new Set(availability.map((a) => `${a.dayOfWeek}:${a.timeSlotId}`));
+    const clashingSlot = course.slots.find(
+      (slot) => !availableSlots.has(`${slot.dayOfWeek}:${slot.timeSlotId}`),
+    );
+    if (clashingSlot) {
+      const error = new Error(
+        `Your availability clashes with the session slots for ${course.courseCode} - ${course.courseName}. ` +
+          'Add more available time slots on your timetable first.',
+      );
+      error.statusCode = 400;
+      return next(error);
+    }
+
+    // One application per course per user
+    const existingApplicant = await prisma.applicant.findFirst({
+      where: { userId, courseId: parsedCourseId },
+    });
+    if (existingApplicant) {
+      const error = new Error(`You have already applied to tutor ${course.courseCode}`);
+      error.statusCode = 409;
+      return next(error);
+    }
+
+    // Create the role application and the per-course Applicant row together
+    // (atomically) so the organiser's per-course available pool immediately
+    // reflects the chosen course.
+    const application = await prisma.$transaction(async (tx) => {
+      const roleApp = await tx.roleApplication.create({
+        data: {
+          userId,
+          requestedRole,
+          hourlyRate: hourlyRate != null ? Number(hourlyRate) : null,
+          maxHoursPerWeek: Number(maxHoursPerWeek),
+        },
+        include: { user: { select: { firstName: true, lastName: true, email: true } } },
+      });
+
+      await tx.applicant.create({
+        data: {
+          userId,
+          courseId: parsedCourseId,
+          courseMark: parsedMark,
+          status: 'PENDING',
+        },
+      });
+
+      return roleApp;
     });
 
     return res.status(201).json({ application });
@@ -109,6 +190,56 @@ exports.submitApplication = catchAsync(async (req, res, next) => {
 
     return res.status(201).json({ application });
   }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// GET /api/onboarding/tutor-eligible-courses
+// Courses the current user can apply to tutor. The lecturer specifies the
+// slots in which a course's sessions take place, so a course is eligible only
+// when EVERY course slot falls inside the user's availability — a single
+// uncovered slot is a clash and hides the course from the list.
+// ────────────────────────────────────────────────────────────────────────────
+exports.getTutorEligibleCourses = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+
+  const [availability, courses] = await Promise.all([
+    prisma.availability.findMany({
+      where: { userId },
+      select: { dayOfWeek: true, timeSlotId: true },
+    }),
+    prisma.course.findMany({
+      select: {
+        id: true,
+        courseCode: true,
+        courseName: true,
+        minimumMark: true,
+        requiredTutors: true,
+        slots: { select: { dayOfWeek: true, timeSlotId: true } },
+        lecturer: { select: { user: { select: { firstName: true, lastName: true } } } },
+      },
+      orderBy: { courseCode: 'asc' },
+    }),
+  ]);
+
+  const availableSlots = new Set(availability.map((a) => `${a.dayOfWeek}:${a.timeSlotId}`));
+
+  const eligibleCourses = courses
+    .filter((course) =>
+      course.slots.every((slot) => availableSlots.has(`${slot.dayOfWeek}:${slot.timeSlotId}`)),
+    )
+    .map((course) => ({
+      id: course.id,
+      courseCode: course.courseCode,
+      courseName: course.courseName,
+      minimumMark: course.minimumMark,
+      requiredTutors: course.requiredTutors,
+      lecturerName: course.lecturer?.user
+        ? `${course.lecturer.user.firstName} ${course.lecturer.user.lastName}`
+        : null,
+      slotCount: course.slots.length,
+    }));
+
+  res.json({ eligibleCourses });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -443,6 +574,16 @@ exports.reviewApplication = catchAsync(async (req, res, next) => {
       rejectionReason: rejectionReason || null,
     },
   });
+
+  // A rejected tutor applicant must not linger in the per-course available
+  // pool. Only PENDING rows are touched — an applicant who was already
+  // assigned keeps their assignment.
+  if (application.requestedRole === ROLES.TUTOR) {
+    await prisma.applicant.updateMany({
+      where: { userId: application.userId, status: 'PENDING' },
+      data: { status: 'REJECTED', reviewedAt: new Date() },
+    });
+  }
 
   res.json({
     message: `Application rejected.`,

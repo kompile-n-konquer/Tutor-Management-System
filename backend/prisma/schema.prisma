@@ -237,3 +237,23 @@ model RoleApplication {
 
   @@unique([userId, requestedRole, status])
 }
+
+/// Audit log for outgoing notification emails (assignment added/removed,
+/// timesheet approved/rejected). One row per send attempt; the dedupeKey
+/// makes duplicate sends of the same event impossible.
+model EmailLog {
+  id              Int       @id @default(autoincrement())
+  eventType       String // ASSIGNMENT_ADDED | ASSIGNMENT_REMOVED | TIMESHEET_APPROVED | TIMESHEET_REJECTED | TIMESHEET_STUCK_REMINDER
+  entityType      String // Prisma model name of the affected entity, e.g. TutorAssignment / Timesheet
+  entityId        Int
+  dedupeKey       String
+  recipientEmail  String
+  recipientUserId Int? // User.id of the recipient when known
+  status          String    @default("PENDING") // PENDING while in flight, then SENT or FAILED
+  subject         String?
+  attemptedAt     DateTime  @default(now())
+  sentAt          DateTime?
+  errorMessage    String? // failure details when status = FAILED
+
+  @@index([dedupeKey, status])
+}

@@ -1,5 +1,7 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { getTutorEventClaimMonths } = require('../utils/systemSettings');
+const { monthsBefore, dayOfWeekFor, deriveTimes, timesTotalHours } = require('../utils/claimRules');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,21 +24,6 @@ const parseEventDate = (value) => {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
 };
-
-// Maps a Date's JS weekday (Sun=0..Sat=6) onto the schema's Mon=0..Fri=4, null on weekends
-const dayOfWeekFor = (date) => {
-  const jsDay = date.getUTCDay();
-  return jsDay >= 1 && jsDay <= 5 ? jsDay - 1 : null;
-};
-
-// Times the event runs, derived from the course's tutoring slots on the event date's
-// weekday. Events store no time themselves, so editing course slots keeps every
-// event correct — same derived-never-stored approach as the availability locks.
-const deriveTimes = (courseSlots, dayOfWeek) =>
-  courseSlots
-    .filter((slot) => slot.dayOfWeek === dayOfWeek)
-    .map((slot) => ({ startMinute: slot.timeSlot.startMinute, endMinute: slot.timeSlot.endMinute }))
-    .sort((a, b) => a.startMinute - b.startMinute);
 
 // Everything the event serialization needs from the event's course. Used both as
 // the nested course select of EVENT_INCLUDE and directly as the select of the
@@ -161,6 +148,62 @@ exports.getEvents = catchAsync(async (req, res, next) => {
   });
 
   res.status(200).json(events.map((event) => serializeEvent(event, user)));
+});
+
+// ── GET /events/claimable ── Past events a tutor can still claim ────────────
+
+exports.getClaimableEvents = catchAsync(async (req, res, next) => {
+  const user = await getUser(req.user.user_id);
+  const role = user.role.toUpperCase();
+  if (role !== 'TUTOR') {
+    const error = new Error('Only tutors can claim events');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  const now = new Date();
+  const claimMonths = await getTutorEventClaimMonths();
+
+  // Past events on the tutor's allocated courses that nobody has claimed yet
+  // (the unique TimesheetEntry.eventId holds the claim) and that still sit inside
+  // the organiser-set claim window — while unset, every past event is claimable
+  const events = await prisma.event.findMany({
+    where: {
+      course: { assignments: { some: { userId: user.id } } },
+      date: {
+        lt: now,
+        ...(claimMonths !== null ? { gte: monthsBefore(now, claimMonths) } : {}),
+      },
+      claims: { none: {} },
+    },
+    include: EVENT_INCLUDE,
+    orderBy: [{ date: 'desc' }, { id: 'asc' }],
+  });
+
+  // The event data auto-populates an entire timesheet entry: course, date,
+  // description, supervisor (the course's lecturer) and the round-up duration
+  res.status(200).json(
+    events
+      .map((event) => {
+        const times = deriveTimes(event.course?.slots || [], dayOfWeekFor(event.date));
+        if (times.length === 0) return null; // the course's weekday slots were removed since
+        return {
+          id: event.id,
+          courseId: event.courseId,
+          courseCode: event.course?.courseCode || null,
+          courseName: event.course?.courseName || null,
+          date: event.date,
+          description: event.description,
+          lecturer: event.course?.user
+            ? `${event.course.user.firstName} ${event.course.user.lastName}`
+            : null,
+          supervisorId: event.course?.userId ?? null,
+          times,
+          duration: timesTotalHours(times),
+        };
+      })
+      .filter(Boolean)
+  );
 });
 
 // ── GET /events/my-courses ── Courses the lecturer can create events for ─────

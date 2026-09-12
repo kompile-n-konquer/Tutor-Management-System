@@ -14,7 +14,8 @@ const STATUS_STYLES = {
   REJECTED:  'bg-error/10 text-error',
 };
 
-const formatHours = (h) => `${Number(h).toFixed(1)} hrs`;
+// Hours are whole numbers under the round-up rule — display them without decimals
+const formatHours = (h) => `${Math.round(Number(h))} hrs`;
 
 const Timesheets = () => {
   const navigate = useNavigate();

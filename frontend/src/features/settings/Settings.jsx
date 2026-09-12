@@ -10,6 +10,8 @@ import { useNavigate } from "react-router-dom";
 
 // A month has at most 744 hours (31 days) — the backend enforces the same bound
 const MAX_MONTHLY_HOURS = 744;
+// The event claim window can span at most two years of past events
+const MAX_CLAIM_MONTHS = 24;
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -18,6 +20,8 @@ const Settings = () => {
 
   const [monthlyHours, setMonthlyHours] = useState(""); // string so the Input stays controllable
   const [savedMonthlyHours, setSavedMonthlyHours] = useState(null);
+  const [claimMonths, setClaimMonths] = useState("");
+  const [savedClaimMonths, setSavedClaimMonths] = useState(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -39,6 +43,9 @@ const Settings = () => {
         const hours = response.data.tutorMonthlyClaimableHours;
         setMonthlyHours(hours === null ? "" : String(hours));
         setSavedMonthlyHours(hours);
+        const months = response.data.tutorEventClaimMonths;
+        setClaimMonths(months === null ? "" : String(months));
+        setSavedClaimMonths(months);
       } else {
         setError("Could not load the settings. Please refresh the page.");
       }
@@ -60,6 +67,17 @@ const Settings = () => {
     parsedHours <= MAX_MONTHLY_HOURS;
   const hasChanges = hoursEntered && parsedHours !== savedMonthlyHours;
 
+  const parsedMonths = Number(claimMonths);
+  const monthsEntered = claimMonths !== "";
+  const monthsValid =
+    monthsEntered &&
+    !Number.isNaN(parsedMonths) &&
+    Number.isInteger(parsedMonths) &&
+    parsedMonths >= 1 &&
+    parsedMonths <= MAX_CLAIM_MONTHS;
+  const monthsChanged = monthsEntered && parsedMonths !== savedClaimMonths;
+  const monthsHasChanges = (monthsEntered && savedClaimMonths === null) || monthsChanged;
+
   const handleSave = async () => {
     setSaved(false);
     setError("");
@@ -70,6 +88,22 @@ const Settings = () => {
 
     if (response && response.status === 200) {
       setSavedMonthlyHours(response.data.tutorMonthlyClaimableHours);
+      setSaved(true);
+    } else {
+      setError(response?.data?.message || "Could not save the setting. Please try again.");
+    }
+  };
+
+  const handleSaveMonths = async () => {
+    setSaved(false);
+    setError("");
+
+    const response = await execute(() =>
+      api.put("/settings/tutor-event-claim-months", { tutorEventClaimMonths: parsedMonths })
+    );
+
+    if (response && response.status === 200) {
+      setSavedClaimMonths(response.data.tutorEventClaimMonths);
       setSaved(true);
     } else {
       setError(response?.data?.message || "Could not save the setting. Please try again.");
@@ -89,44 +123,89 @@ const Settings = () => {
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
         {isOrganiser ? (
-          <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] max-w-xl">
-            <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
-              <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                Max Claimable Hours
-              </h3>
-              <p className="font-body-sm text-outline mt-1">
-                The maximum number of hours a tutor can claim in a month.
-              </p>
+          <div className="flex flex-wrap items-stretch gap-gutter">
+            <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                  Max Claimable Hours
+                </h3>
+                <p className="font-body-sm text-outline mt-1">
+                  The maximum number of hours a tutor can claim in a month. Tutors may claim more in total as long as 
+                  a month stays within this maximum.
+                </p>
+              </div>
+
+              <Input
+                labelText="Hours per 31 days"
+                type="number"
+                icon="schedule"
+                placeholder="e.g. 60"
+                value={monthlyHours}
+                onChange={(event) => {
+                  setSaved(false);
+                  setMonthlyHours(event.target.value);
+                }}
+              />
+
+              {saved && (
+                <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  Setting saved successfully.
+                </p>
+              )}
+
+              <div className="mt-gutter flex items-center gap-4">
+                <Button
+                  onClick={handleSave}
+                  disabled={!hoursValid || !hasChanges}
+                  loading={isLoading}
+                  className="min-w-40"
+                >
+                  Save Changes
+                </Button>
+              </div>
             </div>
 
-            <Input
-              labelText="Hours per month"
-              type="number"
-              icon="schedule"
-              placeholder="e.g. 60"
-              value={monthlyHours}
-              onChange={(event) => {
-                setSaved(false);
-                setMonthlyHours(event.target.value);
-              }}
-            />
+            <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                  Event Claim Window
+                </h3>
+                <p className="font-body-sm text-outline mt-1">
+                  How many months back a tutor can claim an event on a timesheet. Events older than
+                  this window can no longer be claimed.
+                </p>
+              </div>
 
-            {saved && (
-              <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                Setting saved successfully.
-              </p>
-            )}
+              <Input
+                labelText="Months"
+                type="number"
+                icon="calendar_month"
+                placeholder="e.g. 3"
+                value={claimMonths}
+                onChange={(event) => {
+                  setSaved(false);
+                  setClaimMonths(event.target.value);
+                }}
+              />
 
-            <div className="mt-gutter flex items-center gap-4">
-              <Button
-                onClick={handleSave}
-                disabled={!hoursValid || !hasChanges}
-                loading={isLoading}
-                className="min-w-40"
-              >
-                Save Changes
-              </Button>
+              {saved && (
+                <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  Setting saved successfully.
+                </p>
+              )}
+
+              <div className="mt-gutter flex items-center gap-4">
+                <Button
+                  onClick={handleSaveMonths}
+                  disabled={!monthsValid || !monthsHasChanges}
+                  loading={isLoading}
+                  className="min-w-40"
+                >
+                  Save Changes
+                </Button>
+              </div>
             </div>
           </div>
         ) : (

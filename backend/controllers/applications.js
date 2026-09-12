@@ -2,6 +2,7 @@ const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const getLockedSlots = require('../utils/availabilityLocks');
 const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
+const { slotHours } = require('../utils/claimRules');
 
 // Only students and tutors take part in the tutor application workflow
 const isApplicantRole = (role) => role === 'STUDENT' || role === 'TUTOR';
@@ -19,8 +20,7 @@ const coversAllSlots = (courseSlots, availabilityEntries) => {
 // one full hour, rounded up to whole hours (08:00-08:45 -> 1 hour), summed over the Mon-Fri slots
 const weeklyClaimableHours = (courseSlots) =>
   courseSlots.reduce(
-    (total, slot) =>
-      total + Math.max(1, Math.ceil((slot.timeSlot.endMinute - slot.timeSlot.startMinute) / 60)),
+    (total, slot) => total + slotHours(slot.timeSlot.startMinute, slot.timeSlot.endMinute),
     0
   );
 

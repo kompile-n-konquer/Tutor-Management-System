@@ -135,13 +135,15 @@ model TimesheetEntry {
   timesheetId  Int
   courseId     Int
   supervisorId Int
+  eventId      Int?      @unique // the claimed event this entry was auto-created from; unique = an event can only be claimed once
   workDate     DateTime
-  duration     Float     // 1–8 hours
+  duration     Float     // 1–8 hours, whole numbers via the round-up rule (each timeslot counts as at least one full hour)
   description  String    // tutoring | marking | invigilation | admin
   status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
   course       Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   timesheet    Timesheet @relation(fields: [timesheetId], references: [id])
   supervisor   User      @relation("TimesheetSupervisor", fields: [supervisorId], references: [id], onUpdate: NoAction)
+  event        Event?    @relation(fields: [eventId], references: [id], onUpdate: NoAction)
 }
 
 model Session {
@@ -180,6 +182,7 @@ model Event {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   course      Course   @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  claims      TimesheetEntry[]
 
   @@index([courseId, date])
 }

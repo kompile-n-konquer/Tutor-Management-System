@@ -1,5 +1,7 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { getTutorMonthlyClaimableHours, getTutorEventClaimMonths } = require('../utils/systemSettings');
+const { monthsBefore, findExcessiveWindow, deriveEventEntry } = require('../utils/claimRules');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +25,7 @@ const serializeEntry = (entry) => ({
   supervisorName: entry.supervisor
     ? `${entry.supervisor.firstName} ${entry.supervisor.lastName}`
     : null,
+  eventId: entry.eventId ?? null,
   workDate: entry.workDate,
   duration: entry.duration,
   description: entry.description,
@@ -43,7 +46,16 @@ const serializeTimesheet = (timesheet) => ({
   entries: timesheet.entries ? timesheet.entries.map(serializeEntry) : [],
 });
 
-const VALID_DESCRIPTIONS = ['tutoring', 'marking', 'invigilation', 'admin'];
+// Event + course shape needed to derive a claimed entry's fields server-side
+const EVENT_CLAIM_INCLUDE = {
+  course: {
+    select: {
+      id: true,
+      userId: true,
+      slots: { include: { timeSlot: true } },
+    },
+  },
+};
 
 exports.getMyTimesheets = catchAsync(async (req, res, next) => {
   const user = await getUser(req.user.user_id);
@@ -126,20 +138,26 @@ exports.getSupervisors = catchAsync(async (req, res, next) => {
 exports.createTimesheet = catchAsync(async (req, res, next) => {
   const user = await getUser(req.user.user_id);
 
-  const { name } = req.body;
-  if (!name || !name.trim()) {
-    const error = new Error('A timesheet name is required');
-    error.statusCode = 400;
-    return next(error);
-  }
+  // The name is optional — a timesheet created without one gets the unique
+  // default "Untitled-<id>", so clients never need to send a body at all. The
+  // id only exists after creation, so create with a placeholder and rename in
+  // the same transaction.
+  const providedName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
 
-  const timesheet = await prisma.timesheet.create({
-    data: {
-      userId: user.id,
-      name: name.trim(),
-      totalHours: 0,
-      status: 'DRAFT',
-    },
+  const timesheet = await prisma.$transaction(async (tx) => {
+    const created = await tx.timesheet.create({
+      data: {
+        userId: user.id,
+        name: providedName || 'Untitled',
+        totalHours: 0,
+        status: 'DRAFT',
+      },
+    });
+    if (providedName) return created;
+    return tx.timesheet.update({
+      where: { id: created.id },
+      data: { name: `Untitled-${created.id}` },
+    });
   });
 
   res.status(201).json(serializeTimesheet({ ...timesheet, entries: [] }));
@@ -236,56 +254,121 @@ exports.updateTimesheet = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  // Validate every entry before writing
-  for (const entry of entries) {
-    if (!entry.courseId || !entry.supervisorId || !entry.workDate || !entry.duration || !entry.description) {
-      const error = new Error('Every entry requires courseId, supervisorId, workDate, duration and description');
-      error.statusCode = 400;
-      return next(error);
-    }
-    const duration = Number(entry.duration);
-    if (Number.isNaN(duration) || duration < 1 || duration > 8) {
-      const error = new Error('Duration must be a number between 1 and 8');
-      error.statusCode = 400;
-      return next(error);
-    }
-    if (!VALID_DESCRIPTIONS.includes(entry.description.toLowerCase())) {
-      const error = new Error(`Description must be one of: ${VALID_DESCRIPTIONS.join(', ')}`);
-      error.statusCode = 400;
-      return next(error);
-    }
+  // Timesheet entries are created by claiming events only — each entry carries
+  // just its eventId, and every other field (course, date, description,
+  // supervisor, round-up duration) is derived server-side so the client cannot
+  // drift them. Manually filled-in entries are rejected outright.
+  const now = new Date();
+  const claimMonths = await getTutorEventClaimMonths();
+  const cutoff = claimMonths !== null ? monthsBefore(now, claimMonths) : null;
+
+  if (entries.some((e) => e.eventId === undefined || e.eventId === null)) {
+    const error = new Error(
+      'Timesheet entries can only be added by claiming an event — remove the manually added entries'
+    );
+    error.statusCode = 400;
+    return next(error);
   }
 
-  // Replace strategy inside a transaction: delete old entries, create new ones
-  const totalHours = entries.reduce((sum, e) => sum + Number(e.duration), 0);
+  const claimedEventIds = entries.map((e) => Number(e.eventId));
+  if (claimedEventIds.some((id) => !Number.isInteger(id))) {
+    const error = new Error('eventId must be a number');
+    error.statusCode = 400;
+    return next(error);
+  }
+  // An event can only be claimed once — including twice within the same payload
+  if (new Set(claimedEventIds).size !== claimedEventIds.length) {
+    const error = new Error('Each event can only be claimed once per timesheet');
+    error.statusCode = 400;
+    return next(error);
+  }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.timesheetEntry.deleteMany({ where: { timesheetId } });
+  const events =
+    claimedEventIds.length > 0
+      ? await prisma.event.findMany({
+          where: { id: { in: claimedEventIds } },
+          include: EVENT_CLAIM_INCLUDE,
+        })
+      : [];
+  const eventsById = new Map(events.map((event) => [event.id, event]));
 
-    if (entries.length > 0) {
-      await tx.timesheetEntry.createMany({
-        data: entries.map((e) => ({
-          timesheetId,
-          courseId: Number(e.courseId),
-          supervisorId: Number(e.supervisorId),
-          workDate: new Date(e.workDate),
-          duration: Number(e.duration),
-          description: e.description.toLowerCase(),
-          status: 'PENDING',
-        })),
-      });
+  const resolvedEntries = entries.map((entry) => {
+    // Event claim — every field comes from the event itself
+    const event = eventsById.get(Number(entry.eventId));
+    if (!event) {
+      const error = new Error('Event not found');
+      error.statusCode = 404;
+      return { error };
     }
-
-    return tx.timesheet.update({
-      where: { id: timesheetId },
-      data: {
-        ...(name !== undefined ? { name: name.trim() } : {}),
-        totalHours,
-        status: timesheet.status === 'REJECTED' ? 'DRAFT' : timesheet.status,
-        rejectionReason: timesheet.status === 'REJECTED' ? null : timesheet.rejectionReason,
-      },
-    });
+    if (event.date.getTime() >= now.getTime()) {
+      const error = new Error('Only past events can be claimed');
+      error.statusCode = 400;
+      return { error };
+    }
+    if (cutoff && event.date.getTime() < cutoff.getTime()) {
+      const error = new Error(
+        `Events older than ${claimMonths} month${claimMonths === 1 ? '' : 's'} can no longer be claimed`
+      );
+      error.statusCode = 400;
+      return { error };
+    }
+    const derived = deriveEventEntry(event);
+    if (!derived) {
+      const error = new Error(
+        'This event can no longer be claimed — the course no longer has tutoring timeslots on that day'
+      );
+      error.statusCode = 400;
+      return { error };
+    }
+    return derived;
   });
+
+  const invalid = resolvedEntries.find((entry) => entry.error);
+  if (invalid) return next(invalid.error);
+
+  // Replace strategy inside a transaction: delete old entries, create new ones
+  const totalHours = resolvedEntries.reduce((sum, e) => sum + e.duration, 0);
+
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      await tx.timesheetEntry.deleteMany({ where: { timesheetId } });
+
+      if (resolvedEntries.length > 0) {
+        await tx.timesheetEntry.createMany({
+          data: resolvedEntries.map((e) => ({
+            timesheetId,
+            courseId: e.courseId,
+            supervisorId: e.supervisorId,
+            eventId: e.eventId,
+            workDate: e.workDate,
+            duration: e.duration,
+            description: e.description,
+            status: 'PENDING',
+          })),
+        });
+      }
+
+      return tx.timesheet.update({
+        where: { id: timesheetId },
+        data: {
+          ...(name !== undefined ? { name: name.trim() } : {}),
+          totalHours,
+          status: timesheet.status === 'REJECTED' ? 'DRAFT' : timesheet.status,
+          rejectionReason: timesheet.status === 'REJECTED' ? null : timesheet.rejectionReason,
+        },
+      });
+    });
+  } catch (error) {
+    // The unique eventId index is the claim-once guarantee across tutors and
+    // timesheets — surface the collision as a friendly conflict, not a 500
+    if (error && error.code === 'P2002') {
+      const conflict = new Error('An event in this timesheet has already been claimed by another tutor');
+      conflict.statusCode = 409;
+      return next(conflict);
+    }
+    throw error;
+  }
 
   // Re-fetch with relations for the response
   const full = await prisma.timesheet.findUnique({
@@ -374,6 +457,22 @@ exports.submitTimesheet = catchAsync(async (req, res, next) => {
     const error = new Error('Cannot submit a timesheet with no entries');
     error.statusCode = 400;
     return next(error);
+  }
+
+  // A month is 30-31 days: the timesheet may total more than the monthly cap as
+  // long as every 31-day window of entries stays within it. While the organiser
+  // has not set a cap, no limit applies.
+  const maxClaimableHours = await getTutorMonthlyClaimableHours();
+  if (maxClaimableHours !== null) {
+    const excessive = findExcessiveWindow(timesheet.entries, maxClaimableHours);
+    if (excessive) {
+      const day = (date) => date.toISOString().split('T')[0];
+      const error = new Error(
+        `This timesheet claims ${excessive.hours} hours between ${day(excessive.start)} and ${day(excessive.end)}, above the maximum of ${maxClaimableHours} claimable hours per 31 days. Remove some entries before submitting.`
+      );
+      error.statusCode = 400;
+      return next(error);
+    }
   }
 
   const updated = await prisma.timesheet.update({

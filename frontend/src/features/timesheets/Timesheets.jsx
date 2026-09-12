@@ -133,80 +133,46 @@ const Timesheets = () => {
         {/* Tutor view: My Timesheets */}
         {isTutor && (
           <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
-            <h3 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
-              My Timesheets
-            </h3>
-            {isLoading && !loaded ? (
-              <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading timesheets...</p>
-            ) : myTimesheets.length === 0 ? (
-              <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
-                No timesheets yet. Create one to start logging your tutoring hours.
-              </p>
-            ) : (
-              <div className="space-y-stack-sm">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
+                  <th className="py-stack-sm px-stack-md">Name</th>
+                  <th className="py-stack-sm px-stack-md">Created</th>
+                  <th className="py-stack-sm px-stack-md">Last Saved</th>
+                  <th className="py-stack-sm px-stack-md">Total Hours</th>
+                  <th className="py-stack-sm px-stack-md">Status</th>
+                  <th className="py-stack-sm px-stack-md"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-variant font-body-md">
                 {myTimesheets.map((timesheet) => (
-                  <div
-                    key={timesheet.id}
-                    className="p-stack-md border border-surface-variant rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors"
-                  >
-                    <div className="flex flex-wrap justify-between items-start gap-stack-sm">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-stack-sm mb-1">
-                          <span className={`px-2 py-1 rounded text-xs font-semibold font-data-mono ${STATUS_STYLES[timesheet.status] || ''}`}>
-                            {timesheet.status}
-                          </span>
-                          <span className="font-data-mono text-xs text-on-surface-variant">
-                            {formatHours(timesheet.totalHours)} total
-                          </span>
-                        </div>
-                        {timesheet.rejectionReason && (
-                          <p className="text-error text-sm mt-1">
-                            <span className="font-semibold">Rejection reason:</span> {timesheet.rejectionReason}
-                          </p>
-                        )}
-                        {timesheet.entries.length > 0 && (
-                          <p className="font-body-sm text-on-surface-variant mt-1">
-                            {timesheet.entries.length} {timesheet.entries.length === 1 ? 'entry' : 'entries'}
-                            {timesheet.submittedAt && ` \u00B7 Submitted ${formatDate(timesheet.submittedAt)}`}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-2 shrink-0">
-                        {(timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED') && (
-                          <>
-                            <Button className="min-w-24" onClick={() => navigate(`/timesheets/${timesheet.id}`)}>
-                              {timesheet.status === 'REJECTED' ? 'Edit & Resubmit' : 'Continue Editing'}
-                            </Button>
-                            {timesheet.status === 'DRAFT' && (
-                              <button
-                                onClick={() => handleDelete(timesheet.id)}
-                                className="text-error hover:underline text-sm px-2"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </>
-                        )}
-                        {(timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED') && timesheet.entries.length > 0 && (
-                          <Button
-                            className="min-w-24 !py-2 text-sm bg-trust-blue text-white"
-                            onClick={() => handleSubmit(timesheet.id)}
-                          >
-                            Submit
-                          </Button>
-                        )}
-                        {timesheet.status === 'SUBMITTED' && (
-                          <span className="text-trust-blue text-sm font-semibold px-2 py-2">Awaiting review</span>
-                        )}
-                        {timesheet.status === 'APPROVED' && (
-                          <span className="text-primary text-sm font-semibold px-2 py-2">Approved</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <tr key={timesheet.id}>
+                    <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      {timesheet.name}
+                    </td>
+                    <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      {formatDate(timesheet.createdAt)}
+                    </td>
+                    <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      {formatDate(timesheet.updatedAt)}
+                    </td>
+                    <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      {timesheet.totalHours}
+                    </td>
+                    <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold font-data-mono ${STATUS_STYLES[timesheet.status] || ''}`}>
+                        {timesheet.status}
+                      </span>
+                    </td>
+                    <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <Button className="min-w-32" onClick={() => navigate(`/timesheets/${timesheet.id}`)}>
+                        {timesheet.status !== 'DRAFT' ? 'View' : 'Continue Editing'}
+                      </Button>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
         )}
 

@@ -31,6 +31,7 @@ const serializeEntry = (entry) => ({
 
 const serializeTimesheet = (timesheet) => ({
   id: timesheet.id,
+  name: timesheet.name,
   payrollNumber: timesheet.payrollNumber,
   totalHours: timesheet.totalHours,
   status: timesheet.status,
@@ -38,6 +39,7 @@ const serializeTimesheet = (timesheet) => ({
   submittedAt: timesheet.submittedAt,
   approvedAt: timesheet.approvedAt,
   createdAt: timesheet.createdAt,
+  updatedAt: timesheet.updatedAt,
   entries: timesheet.entries ? timesheet.entries.map(serializeEntry) : [],
 });
 
@@ -124,9 +126,17 @@ exports.getSupervisors = catchAsync(async (req, res, next) => {
 exports.createTimesheet = catchAsync(async (req, res, next) => {
   const user = await getUser(req.user.user_id);
 
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    const error = new Error('A timesheet name is required');
+    error.statusCode = 400;
+    return next(error);
+  }
+
   const timesheet = await prisma.timesheet.create({
     data: {
       userId: user.id,
+      name: name.trim(),
       totalHours: 0,
       status: 'DRAFT',
     },
@@ -211,7 +221,15 @@ exports.updateTimesheet = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  const { entries } = req.body;
+  const { entries, name } = req.body;
+
+  // Name is optional on update — only change it when explicitly provided
+  if (name !== undefined && (!name || !String(name).trim())) {
+    const error = new Error('Timesheet name cannot be empty');
+    error.statusCode = 400;
+    return next(error);
+  }
+
   if (!Array.isArray(entries)) {
     const error = new Error('entries must be an array');
     error.statusCode = 400;
@@ -261,6 +279,7 @@ exports.updateTimesheet = catchAsync(async (req, res, next) => {
     return tx.timesheet.update({
       where: { id: timesheetId },
       data: {
+        ...(name !== undefined ? { name: name.trim() } : {}),
         totalHours,
         status: timesheet.status === 'REJECTED' ? 'DRAFT' : timesheet.status,
         rejectionReason: timesheet.status === 'REJECTED' ? null : timesheet.rejectionReason,

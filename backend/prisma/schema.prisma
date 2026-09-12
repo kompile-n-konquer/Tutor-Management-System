@@ -114,15 +114,18 @@ model BusyBlock {
 }
 
 model Timesheet {
-  id              Int              @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   userId          Int
+  name            String
   payrollNumber   String?
-  totalHours      Float
-  status          String           @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  totalHours      Int               @default(0)  
+  status          String            @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
   rejectionReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   submittedAt     DateTime?
   approvedAt      DateTime?
-  user            User             @relation(fields: [userId], references: [id])
+  user            User              @relation(fields: [userId], references: [id])
   entries         TimesheetEntry[]
 }
 

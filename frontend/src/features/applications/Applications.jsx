@@ -117,11 +117,7 @@ const Applications = () => {
                 </thead>
                 <tbody className="divide-y divide-surface-variant font-body-md">
                   {opportunities.map((opportunity) => (
-                    <tr
-                      key={opportunity.id}
-                      className="cursor-pointer hover:bg-surface-container-low transition-colors"
-                      onClick={() => navigate(`/applications/${opportunity.id}`)}
-                    >
+                    <tr key={opportunity.id}>
                       <td className="py-stack-sm px-stack-md">
                         <span className="font-bold text-primary">{opportunity.courseCode}</span>
                         <span className="text-on-surface-variant"> - {opportunity.courseName}</span>

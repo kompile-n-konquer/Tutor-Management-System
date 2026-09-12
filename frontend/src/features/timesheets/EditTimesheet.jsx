@@ -138,6 +138,9 @@ const EditTimesheet = () => {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const nameInputRef = useRef(null);
 
   const saveTimer = useRef(null);
   const entriesRef = useRef(entries);
@@ -145,6 +148,7 @@ const EditTimesheet = () => {
   const timesheetIdRef = useRef(null);
 
   const isEditable = !timesheet || timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED';
+  const displayName = timesheet?.name || 'New Timesheet';
 
   // ── Load reference data ──────────────────────────────────────────────────
 
@@ -220,6 +224,41 @@ const EditTimesheet = () => {
     }
   }, [courses, supervisors, loaded]);
 
+  // ── Inline name editing ──────────────────────────────────────────────────
+
+  const startEditName = () => {
+    if (!isEditable) return;
+    setNameValue(timesheet?.name || '');
+    setEditingName(true);
+  };
+
+  useEffect(() => {
+    if (editingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [editingName]);
+
+  const commitName = async () => {
+    setEditingName(false);
+    const trimmed = nameValue.trim();
+    if (!trimmed || !timesheetIdRef.current || trimmed === timesheet?.name) return;
+    try {
+      const res = await api.put(`/timesheets/${timesheetIdRef.current}`, {
+        entries: entriesRef.current.filter(
+          (e) => e.courseId && e.supervisorId && e.workDate && e.duration && e.description
+        ),
+        name: trimmed,
+      });
+      if (res.status === 200) {
+        setTimesheet(res.data);
+        setLastSaved(new Date());
+      }
+    } catch {
+      // silently revert — the heading still shows the old name
+    }
+  };
+
   // ── Auto-save (debounced, only for editable timesheets) ──────────────────
 
   const doSave = useCallback(async () => {
@@ -252,7 +291,7 @@ const EditTimesheet = () => {
 
   const ensureTimesheetId = useCallback(async () => {
     if (timesheetIdRef.current) return timesheetIdRef.current;
-    const res = await api.post('/timesheets');
+    const res = await api.post('/timesheets', { name: 'New Timesheet' });
     if (res.status === 201) {
       timesheetIdRef.current = res.data.id;
       setTimesheet(res.data);
@@ -346,7 +385,37 @@ const EditTimesheet = () => {
         {/* Header */}
         <div className="mb-stack-lg flex flex-wrap items-center justify-between gap-gutter">
           <div>
-            <h2 className="font-display text-display text-primary">Edit Timesheet</h2>
+            <h2
+              className={`font-display text-display text-primary group cursor-pointer inline-flex items-center gap-2 ${!isEditable ? 'cursor-default' : ''}`}
+              onClick={startEditName}
+              title={isEditable ? 'Click to rename' : ''}
+            >
+              {editingName ? (
+                <input
+                  ref={nameInputRef}
+                  type="text"
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onBlur={commitName}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitName();
+                    if (e.key === 'Escape') setEditingName(false);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="font-display text-display text-primary bg-transparent border-b-2 border-primary outline-none w-full min-w-[200px]"
+                  maxLength={100}
+                />
+              ) : (
+                <>
+                  {displayName}
+                  {isEditable && (
+                    <span className="material-symbols-outlined text-on-surface-variant text-base opacity-0 group-hover:opacity-100 transition-opacity">
+                      edit
+                    </span>
+                  )}
+                </>
+              )}
+            </h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
               Fill your timesheet below to log hours that you have worked
             </p>
@@ -454,7 +523,7 @@ const EditTimesheet = () => {
                 {entries.length > 1 && isEditable && (
                   <button
                     onClick={() => removeEntry(index)}
-                    className="text-error hover:text-error/80 transition-colors p-2 mb-0.5"
+                    className="cursor-pointer text-error hover:text-error/80 transition-colors p-2 mb-0.5"
                     title="Remove entry"
                   >
                     <span className="material-symbols-outlined text-lg">close</span>
@@ -467,11 +536,13 @@ const EditTimesheet = () => {
 
         {/* Actions */}
         {isEditable && (
-          <div className="flex gap-2 justify-end">
-            <Button
-              className="min-w-40 bg-trust-blue text-white"
-              onClick={handleSubmit}
+          <div className="mt-gutter flex gap-2">
+            <Button onClick={() => navigate('/timesheets')}>Cancel</Button>
+            <Button 
+              onClick={handleSubmit} 
               disabled={entries.filter((e) => e.courseId && e.supervisorId && e.workDate && e.duration && e.description).length === 0}
+              loading={isLoading}
+              className="min-w-40"
             >
               Submit for Approval
             </Button>

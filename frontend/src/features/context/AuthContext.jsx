@@ -14,7 +14,7 @@ const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       const response = await api.get(`/users/${user.uid}`);
       if(response && response.status === 200 && response.data) {
-        setCurrentUser({ ...user, role: response.data.role });
+        setCurrentUser({ ...user, role: response.data.role, id: response.data.id });
       }
       
       setLoading(false);

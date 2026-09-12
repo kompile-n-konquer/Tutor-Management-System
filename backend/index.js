@@ -9,6 +9,7 @@ const availabilityRouter = require('./routes/availability');
 const coursesRouter = require('./routes/courses');
 const applicationsRouter = require('./routes/applications');
 const settingsRouter = require('./routes/settings');
+const timesheetsRouter = require('./routes/timesheets');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/availability', availabilityRouter);
 app.use('/api/courses', coursesRouter);
 app.use('/api/applications', applicationsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/timesheets', timesheetsRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

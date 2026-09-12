@@ -19,6 +19,7 @@ import ViewAllCourses from "./features/courses/ViewAllCourses.jsx";
 import CourseDetails from "./features/courses/CourseDetails.jsx";
 import EditCourse from "./features/courses/EditCourse.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
+import EditTimesheet from "./features/timesheets/EditTimesheet.jsx";
 import Applications from "./features/applications/Applications.jsx";
 import OpportunityDetails from "./features/applications/OpportunityDetails.jsx";
 import Settings from "./features/settings/Settings.jsx";
@@ -43,7 +44,10 @@ const router = createBrowserRouter([
         { index: true, element: <Applications /> },
         { path: ":courseId", element: <OpportunityDetails /> },
       ] },
-      { path: "timesheets", element: <Timesheets /> },
+      { path: "timesheets", children: [
+        { index: true, element: <Timesheets /> },
+        { path: ":id", element: <EditTimesheet /> },
+      ] },
       { path: "settings", element: <Settings /> },
       { path: "courses", children: [
         { index: true, element: <ViewAllCourses /> },

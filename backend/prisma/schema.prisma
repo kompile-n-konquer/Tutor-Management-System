@@ -26,6 +26,7 @@ model User {
   assignments    TutorAssignment[]
   busyBlocks     BusyBlock[]
   timesheets     Timesheet[]
+  supervisedTimesheets TimesheetEntry[] @relation("TimesheetSupervisor")
   overflowClaims OverflowWork[]
 }
 
@@ -113,32 +114,30 @@ model BusyBlock {
 }
 
 model Timesheet {
-  id            Int              @id @default(autoincrement())
-  userId        Int
-  payrollNumber String?
-  totalHours    Float
-  totalAmount   Float?
-  status        String           @default("DRAFT")
-  submittedAt   DateTime?
-  approvedAt    DateTime?
-  user          User             @relation(fields: [userId], references: [id])
-  entries       TimesheetEntry[]
+  id              Int              @id @default(autoincrement())
+  userId          Int
+  payrollNumber   String?
+  totalHours      Float
+  status          String           @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  rejectionReason String?
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  user            User             @relation(fields: [userId], references: [id])
+  entries         TimesheetEntry[]
 }
 
 model TimesheetEntry {
-  id          Int       @id @default(autoincrement())
-  timesheetId Int
-  courseId    Int
-  workDate    DateTime
-  startTime   DateTime
-  endTime     DateTime
-  duration    Float
-  taskType    String
-  description String
-  supervisor  String
-  isApproved  Boolean   @default(false)
-  course      Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
+  id           Int       @id @default(autoincrement())
+  timesheetId  Int
+  courseId     Int
+  supervisorId Int
+  workDate     DateTime
+  duration     Float     // 1–8 hours
+  description  String    // tutoring | marking | invigilation | admin
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  course       Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  timesheet    Timesheet @relation(fields: [timesheetId], references: [id])
+  supervisor   User      @relation("TimesheetSupervisor", fields: [supervisorId], references: [id], onUpdate: NoAction)
 }
 
 model Session {

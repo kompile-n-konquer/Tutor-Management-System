@@ -9,7 +9,6 @@ import Signup from "./features/auth/signup/Signup.jsx";
 import ForgotPassword from "./features/auth/forgot-password/ForgotPassword.jsx";
 import ConfirmationMessage from "./features/auth/confirmation-message/ConfirmationMessage.jsx";
 
-import AllocationBoard from "./features/allocation-board/AllocationBoard.jsx";
 import TutorDashboard from "./features/tutor-dashboard/TutorDashboard.jsx";
 import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
@@ -18,6 +17,10 @@ import AddCourse from "./features/courses/AddCourse.jsx";
 import ViewAllCourses from "./features/courses/ViewAllCourses.jsx";
 import CourseDetails from "./features/courses/CourseDetails.jsx";
 import EditCourse from "./features/courses/EditCourse.jsx";
+import Events from "./features/events/Events.jsx";
+import AddEvent from "./features/events/AddEvent.jsx";
+import EventDetails from "./features/events/EventDetails.jsx";
+import EditEvent from "./features/events/EditEvent.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
 import EditTimesheet from "./features/timesheets/EditTimesheet.jsx";
 import Applications from "./features/applications/Applications.jsx";
@@ -35,7 +38,6 @@ const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "confirmation-message", element: <ConfirmationMessage /> },
-      { path: "allocation-board", element: <AllocationBoard /> },
       { path: "tutor-dashboard", element: <TutorDashboard /> },
       { path: "volunteer", element: <VolunteerView /> },
       { path: "profile", element: <Profile /> },
@@ -56,6 +58,12 @@ const router = createBrowserRouter([
         { path: ":courseId/edit", element: <EditCourse /> },
       ]  
       },
+      { path: "events", children: [
+        { index: true, element: <Events /> },
+        { path: "add", element: <AddEvent /> },
+        { path: ":id", element: <EventDetails /> },
+        { path: ":id/edit", element: <EditEvent /> },
+      ] },
     ],
   },
 ]);

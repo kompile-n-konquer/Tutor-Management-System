@@ -71,6 +71,7 @@ model Course {
   overflowWork     OverflowWork[]
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
+  events           Event[]
 }
 
 model SystemSetting {
@@ -166,6 +167,21 @@ model CourseSlot {
   sessions    Session[]
 
   @@index([courseId, dayOfWeek])
+}
+
+// Calendar event a lecturer schedules for one of their courses on a specific date.
+// The time is never stored — it is derived from the course's tutoring timeslots on
+// that date's weekday, so it stays correct when the lecturer edits the course slots.
+model Event {
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  date        DateTime // stored at UTC midnight; its weekday drives the timeslot lookup
+  description String   // tutoring | marking | invigilation | admin (same options as timesheet entries)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  course      Course   @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+
+  @@index([courseId, date])
 }
 
 model OverflowWork {

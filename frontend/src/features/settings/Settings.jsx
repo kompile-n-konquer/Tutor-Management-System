@@ -13,6 +13,14 @@ const MAX_MONTHLY_HOURS = 744;
 // The event claim window can span at most two years of past events
 const MAX_CLAIM_MONTHS = 24;
 
+const YEARS_OF_STUDY = ['3rd year', 'honours', 'masters', 'phd'];
+const RATE_LABELS = {
+  '3rd year': '3rd Year',
+  honours: 'Honours',
+  masters: 'Masters',
+  phd: 'PhD',
+};
+
 const Settings = () => {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
@@ -22,6 +30,11 @@ const Settings = () => {
   const [savedMonthlyHours, setSavedMonthlyHours] = useState(null);
   const [claimMonths, setClaimMonths] = useState("");
   const [savedClaimMonths, setSavedClaimMonths] = useState(null);
+  const [hourlyRates, setHourlyRates] = useState({ '3rd year': '', honours: '', masters: '', phd: '' });
+  const [savedRates, setSavedRates] = useState({ '3rd year': null, honours: null, masters: null, phd: null });
+  const [ratesSaved, setRatesSaved] = useState(false);
+  const [pdfTemplateName, setPdfTemplateName] = useState(null);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -46,6 +59,14 @@ const Settings = () => {
         const months = response.data.tutorEventClaimMonths;
         setClaimMonths(months === null ? "" : String(months));
         setSavedClaimMonths(months);
+        const rates = response.data.hourlyRates || {};
+        const nextRates = {};
+        for (const year of YEARS_OF_STUDY) {
+          nextRates[year] = rates[year] != null ? String(rates[year]) : '';
+        }
+        setHourlyRates(nextRates);
+        setSavedRates(rates);
+        setPdfTemplateName(response.data.pdfTemplateFilename || null);
       } else {
         setError("Could not load the settings. Please refresh the page.");
       }
@@ -77,6 +98,66 @@ const Settings = () => {
     parsedMonths <= MAX_CLAIM_MONTHS;
   const monthsChanged = monthsEntered && parsedMonths !== savedClaimMonths;
   const monthsHasChanges = (monthsEntered && savedClaimMonths === null) || monthsChanged;
+
+  // Hourly rates validation and dirty check
+  const ratesValid = YEARS_OF_STUDY.every((year) => {
+    const v = hourlyRates[year];
+    if (v === '' || v === null || v === undefined) return true; // empty = clear, valid
+    const n = Number(v);
+    return !Number.isNaN(n) && n >= 0 && n <= 5000;
+  });
+  const ratesDirty = YEARS_OF_STUDY.some((year) => {
+    const current = hourlyRates[year] === '' ? null : Number(hourlyRates[year]);
+    return current !== savedRates[year];
+  });
+
+  const handleSaveRates = async () => {
+    setRatesSaved(false);
+    setError('');
+    const payload = {};
+    for (const year of YEARS_OF_STUDY) {
+      payload[year] = hourlyRates[year] === '' ? null : Number(hourlyRates[year]);
+    }
+    const response = await execute(() =>
+      api.put('/settings/hourly-rates', { hourlyRates: payload })
+    );
+    if (response && response.status === 200) {
+      setSavedRates(response.data.hourlyRates);
+      setRatesSaved(true);
+    } else {
+      setError(response?.data?.message || 'Could not save hourly rates. Please try again.');
+    }
+  };
+
+  const handlePdfUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPdf(true);
+    setError('');
+    const formData = new FormData();
+    formData.append('template', file);
+    const response = await execute(() =>
+      api.put('/settings/pdf-template', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    );
+    setUploadingPdf(false);
+    if (response && response.status === 200) {
+      setPdfTemplateName(response.data.pdfTemplateFilename);
+    } else {
+      setError(response?.data?.message || 'Could not upload the PDF template. Please try again.');
+    }
+  };
+
+  const handleRemovePdf = async () => {
+    setError('');
+    const response = await execute(() => api.delete('/settings/pdf-template'));
+    if (response && response.status === 200) {
+      setPdfTemplateName(null);
+    } else {
+      setError(response?.data?.message || 'Could not remove the PDF template.');
+    }
+  };
 
   const handleSave = async () => {
     setSaved(false);
@@ -123,88 +204,197 @@ const Settings = () => {
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
         {isOrganiser ? (
-          <div className="flex flex-wrap items-stretch gap-gutter">
-            <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+          <div className="space-y-gutter">
+            <div className="flex flex-wrap items-stretch gap-gutter">
+              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+                <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                  <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                    Max Claimable Hours
+                  </h3>
+                  <p className="font-body-sm text-outline mt-1">
+                    The maximum number of hours a tutor can claim in a month. Tutors may claim more in total as long as 
+                    a month stays within this maximum.
+                  </p>
+                </div>
+
+                <Input
+                  labelText="Hours per 31 days"
+                  type="number"
+                  icon="schedule"
+                  placeholder="e.g. 60"
+                  value={monthlyHours}
+                  onChange={(event) => {
+                    setSaved(false);
+                    setMonthlyHours(event.target.value);
+                  }}
+                />
+
+                {saved && (
+                  <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                    Setting saved successfully.
+                  </p>
+                )}
+
+                <div className="mt-gutter flex items-center gap-4">
+                  <Button
+                    onClick={handleSave}
+                    disabled={!hoursValid || !hasChanges}
+                    loading={isLoading}
+                    className="min-w-40"
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+                <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                  <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                    Event Claim Window
+                  </h3>
+                  <p className="font-body-sm text-outline mt-1">
+                    How many months back a tutor can claim an event on a timesheet. Events older than
+                    this window can no longer be claimed.
+                  </p>
+                </div>
+
+                <Input
+                  labelText="Months"
+                  type="number"
+                  icon="calendar_month"
+                  placeholder="e.g. 3"
+                  value={claimMonths}
+                  onChange={(event) => {
+                    setSaved(false);
+                    setClaimMonths(event.target.value);
+                  }}
+                />
+
+                {saved && (
+                  <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                    Setting saved successfully.
+                  </p>
+                )}
+
+                <div className="mt-gutter flex items-center gap-4">
+                  <Button
+                    onClick={handleSaveMonths}
+                    disabled={!monthsValid || !monthsHasChanges}
+                    loading={isLoading}
+                    className="min-w-40"
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Hourly Rates Card — full width */}
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
               <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                  Max Claimable Hours
+                  Hourly Rates by Year of Study
                 </h3>
                 <p className="font-body-sm text-outline mt-1">
-                  The maximum number of hours a tutor can claim in a month. Tutors may claim more in total as long as 
-                  a month stays within this maximum.
+                  Set the amount (in ZAR) a tutor can claim per hour based on their year of study.
+                  Leave a field empty to clear a rate.
                 </p>
               </div>
 
-              <Input
-                labelText="Hours per 31 days"
-                type="number"
-                icon="schedule"
-                placeholder="e.g. 60"
-                value={monthlyHours}
-                onChange={(event) => {
-                  setSaved(false);
-                  setMonthlyHours(event.target.value);
-                }}
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-stack-md">
+                {YEARS_OF_STUDY.map((year) => (
+                  <Input
+                    key={year}
+                    labelText={`${RATE_LABELS[year]} (R/hr)`}
+                    type="number"
+                    icon="payments"
+                    placeholder="e.g. 150"
+                    value={hourlyRates[year]}
+                    onChange={(e) => {
+                      setRatesSaved(false);
+                      setHourlyRates((prev) => ({ ...prev, [year]: e.target.value }));
+                    }}
+                  />
+                ))}
+              </div>
 
-              {saved && (
+              {ratesSaved && (
                 <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
                   <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                  Setting saved successfully.
+                  Hourly rates saved successfully.
                 </p>
               )}
 
               <div className="mt-gutter flex items-center gap-4">
                 <Button
-                  onClick={handleSave}
-                  disabled={!hoursValid || !hasChanges}
+                  onClick={handleSaveRates}
+                  disabled={!ratesValid || !ratesDirty}
                   loading={isLoading}
                   className="min-w-40"
                 >
-                  Save Changes
+                  Save Rates
                 </Button>
               </div>
             </div>
 
-            <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+            {/* PDF Template Card — full width */}
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
               <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
-                  Event Claim Window
+                  Timesheet PDF Template
                 </h3>
                 <p className="font-body-sm text-outline mt-1">
-                  How many months back a tutor can claim an event on a timesheet. Events older than
-                  this window can no longer be claimed.
+                  Upload a fillable PDF template that will be populated with timesheet data when
+                  exporting. The template should contain form fields for tutor name, entries, hours,
+                  and totals.
                 </p>
               </div>
 
-              <Input
-                labelText="Months"
-                type="number"
-                icon="calendar_month"
-                placeholder="e.g. 3"
-                value={claimMonths}
-                onChange={(event) => {
-                  setSaved(false);
-                  setClaimMonths(event.target.value);
-                }}
-              />
-
-              {saved && (
-                <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                  Setting saved successfully.
+              {pdfTemplateName ? (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-on-surface">
+                    <span className="material-symbols-outlined text-primary text-[24px]">description</span>
+                    <span className="font-body-md">{pdfTemplateName}</span>
+                  </div>
+                  <a
+                    href="/api/settings/pdf-template"
+                    target="_blank"
+                    className="text-primary font-label-caps text-label-caps hover:underline"
+                  >
+                    Download
+                  </a>
+                  <button
+                    onClick={handleRemovePdf}
+                    className="text-error font-label-caps text-label-caps hover:underline cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <p className="font-body-md text-on-surface-variant">
+                  No template uploaded yet.
                 </p>
               )}
 
-              <div className="mt-gutter flex items-center gap-4">
-                <Button
-                  onClick={handleSaveMonths}
-                  disabled={!monthsValid || !monthsHasChanges}
-                  loading={isLoading}
-                  className="min-w-40"
-                >
-                  Save Changes
-                </Button>
+              <div className="mt-gutter">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <span className="inline-flex items-center gap-2 px-4 py-2 border border-outline rounded-lg font-label-caps text-label-caps text-on-surface hover:bg-surface-container transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                    {pdfTemplateName ? 'Replace Template' : 'Upload Template'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfUpload}
+                    disabled={uploadingPdf}
+                    className="hidden"
+                  />
+                </label>
+                {uploadingPdf && (
+                  <span className="ml-3 font-body-sm text-outline">Uploading...</span>
+                )}
               </div>
             </div>
           </div>

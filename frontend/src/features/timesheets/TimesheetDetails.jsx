@@ -51,6 +51,7 @@ const TimesheetDetails = () => {
   const [rejectionModal, setRejectionModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [localError, setLocalError] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const role = currentUser?.role?.toLowerCase();
   const isLecturer = role === 'lecturer' || role === 'organiser' || role === 'admin';
@@ -147,6 +148,36 @@ const TimesheetDetails = () => {
     }
   };
 
+  const handleExportPdf = async () => {
+    setExporting(true);
+    setLocalError('');
+    try {
+      const res = await api.get(`/timesheets/${id}/export`, { responseType: 'blob' });
+      if (res.status === 200) {
+        const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `timesheet-${id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        // Blob response — try to parse the error message
+        const text = await res.data.text();
+        try {
+          const json = JSON.parse(text);
+          setLocalError(json.message || 'Could not export PDF');
+        } catch {
+          setLocalError('Could not export PDF');
+        }
+      }
+    } catch {
+      setLocalError('Network error while exporting PDF');
+    }
+    setExporting(false);
+  };
+
   return (
     <AppLayout role={role} title="Timesheet">
       <div className="p-gutter md:p-margin-page space-y-gutter">
@@ -161,7 +192,13 @@ const TimesheetDetails = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            
+            <Button
+              className="min-w-36 max-h-8"
+              onClick={handleExportPdf}
+              disabled={exporting}
+            >
+              {exporting ? 'Exporting...' : 'Export PDF'}
+            </Button>
             <Button className="min-w-40" onClick={() => navigate('/timesheets')}>
               Back to Timesheets
             </Button>

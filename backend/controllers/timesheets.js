@@ -1,7 +1,12 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
-const { getTutorMonthlyClaimableHours, getTutorEventClaimMonths } = require('../utils/systemSettings');
+const path = require('path');
+const fs = require('fs');
+const { PDFDocument } = require('pdf-lib');
+const { getTutorMonthlyClaimableHours, getTutorEventClaimMonths, HOURLY_RATE_KEYS, PDF_TEMPLATE_KEY } = require('../utils/systemSettings');
 const { monthsBefore, findExcessiveWindow, deriveEventEntry } = require('../utils/claimRules');
+
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -616,4 +621,153 @@ exports.rejectTimesheet = catchAsync(async (req, res, next) => {
   ]);
 
   res.status(200).json({ message: 'Timesheet rejected', reason: reason.trim() });
+});
+
+// ── PDF Export ────────────────────────────────────────────────────────────────
+
+exports.exportTimesheetPdf = catchAsync(async (req, res, next) => {
+  const user = await getUser(req.user.user_id);
+  const timesheetId = Number(req.params.id);
+  if (!Number.isInteger(timesheetId)) {
+    const error = new Error('Timesheet ID must be a number');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // Load template setting
+  const templateSetting = await prisma.systemSetting.findUnique({ where: { key: PDF_TEMPLATE_KEY } });
+  if (!templateSetting) {
+    const error = new Error('No PDF template has been uploaded. Ask an organiser to upload one in Settings.');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  const templatePath = path.join(UPLOADS_DIR, templateSetting.value);
+  if (!fs.existsSync(templatePath)) {
+    const error = new Error('The PDF template file was not found on disk');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // Load timesheet with all related data
+  const timesheet = await prisma.timesheet.findUnique({
+    where: { id: timesheetId },
+    include: {
+      user: { select: { firstName: true, lastName: true, email: true, studentNumber: true, employeeNumber: true, yearOfStudy: true, phoneNumber: true } },
+      entries: {
+        include: {
+          course: { select: { courseCode: true, courseName: true } },
+          supervisor: { select: { firstName: true, lastName: true, email: true } },
+        },
+        orderBy: { workDate: 'asc' },
+      },
+    },
+  });
+
+  if (!timesheet) {
+    const error = new Error('Timesheet not found');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // Owner or supervisor (lecturer) or organiser/admin can export
+  const isOwner = timesheet.userId === user.id;
+  const isSupervisor = timesheet.entries.some((e) => e.supervisorId === user.id);
+  const isPrivileged = ['ORGANISER', 'ADMIN'].includes(user.role.toUpperCase());
+  if (!isOwner && !isSupervisor && !isPrivileged) {
+    const error = new Error('You do not have permission to export this timesheet');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  // Look up hourly rate for this tutor's year of study
+  let hourlyRate = null;
+  if (timesheet.user.yearOfStudy && HOURLY_RATE_KEYS[timesheet.user.yearOfStudy]) {
+    const rateSetting = await prisma.systemSetting.findUnique({
+      where: { key: HOURLY_RATE_KEYS[timesheet.user.yearOfStudy] },
+    });
+    if (rateSetting) hourlyRate = Number(rateSetting.value);
+  }
+
+  // Load and fill the PDF template
+  const templateBytes = fs.readFileSync(templatePath);
+  const pdfDoc = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
+  const form = pdfDoc.getForm();
+  const fields = form.getFields();
+  const fieldNames = new Set(fields.map((f) => f.getName()));
+
+  // Helper: safely set a text field if it exists in the template
+  const setText = (name, value) => {
+    if (!fieldNames.has(name)) return;
+    try {
+      const field = form.getTextField(name);
+      field.setText(value != null ? String(value) : '');
+    } catch (_) { /* field type mismatch — skip silently */ }
+  };
+
+  // Build a flat data map for template fields
+  const tutor = timesheet.user;
+  setText('tutorName', `${tutor.firstName} ${tutor.lastName}`);
+  setText('firstName', tutor.firstName);
+  setText('lastName', tutor.lastName);
+  setText('email', tutor.email);
+  setText('tutorEmail', tutor.email);
+  setText('studentNumber', tutor.studentNumber || '');
+  setText('employeeNumber', tutor.employeeNumber || '');
+  setText('phoneNumber', tutor.phoneNumber || '');
+  setText('yearOfStudy', tutor.yearOfStudy || '');
+  setText('department', 'School of Computer Science');
+  setText('timesheetName', timesheet.name);
+  setText('payrollNumber', timesheet.payrollNumber || '');
+  setText('totalHours', String(timesheet.totalHours));
+  setText('status', timesheet.status);
+  setText('dateExported', new Date().toLocaleDateString('en-ZA'));
+  setText('createdAt', timesheet.createdAt ? new Date(timesheet.createdAt).toLocaleDateString('en-ZA') : '');
+  setText('submittedAt', timesheet.submittedAt ? new Date(timesheet.submittedAt).toLocaleDateString('en-ZA') : '');
+  setText('approvedAt', timesheet.approvedAt ? new Date(timesheet.approvedAt).toLocaleDateString('en-ZA') : '');
+  setText('hourlyRate', hourlyRate != null ? String(hourlyRate) : '');
+  setText('totalAmount', hourlyRate != null ? String(timesheet.totalHours * hourlyRate) : '');
+  setText('numEntries', String(timesheet.entries.length));
+
+  // Fill individual entry rows (1-indexed: entry_1_*, entry_2_*, …)
+  timesheet.entries.forEach((entry, i) => {
+    const idx = i + 1;
+    setText(`entry_${idx}_date`, entry.workDate ? new Date(entry.workDate).toLocaleDateString('en-ZA') : '');
+    setText(`entry_${idx}_course`, entry.course ? `${entry.course.courseCode} - ${entry.course.courseName}` : '');
+    setText(`entry_${idx}_courseCode`, entry.course?.courseCode || '');
+    setText(`entry_${idx}_courseName`, entry.course?.courseName || '');
+    setText(`entry_${idx}_description`, entry.description || '');
+    setText(`entry_${idx}_hours`, String(entry.duration));
+    setText(`entry_${idx}_supervisor`, entry.supervisor ? `${entry.supervisor.firstName} ${entry.supervisor.lastName}` : '');
+    setText(`entry_${idx}_status`, entry.status || '');
+
+    // Per-entry amount
+    if (hourlyRate != null) {
+      setText(`entry_${idx}_amount`, String(entry.duration * hourlyRate));
+    }
+  });
+
+  // Also support 0-indexed naming (entry_0_*, entry_1_*, …) for flexibility
+  timesheet.entries.forEach((entry, i) => {
+    setText(`entry_${i}_date`, entry.workDate ? new Date(entry.workDate).toLocaleDateString('en-ZA') : '');
+    setText(`entry_${i}_course`, entry.course ? `${entry.course.courseCode} - ${entry.course.courseName}` : '');
+    setText(`entry_${i}_courseCode`, entry.course?.courseCode || '');
+    setText(`entry_${i}_courseName`, entry.course?.courseName || '');
+    setText(`entry_${i}_description`, entry.description || '');
+    setText(`entry_${i}_hours`, String(entry.duration));
+    setText(`entry_${i}_supervisor`, entry.supervisor ? `${entry.supervisor.firstName} ${entry.supervisor.lastName}` : '');
+    setText(`entry_${i}_status`, entry.status || '');
+    if (hourlyRate != null) {
+      setText(`entry_${i}_amount`, String(entry.duration * hourlyRate));
+    }
+  });
+
+  // Flatten the form so the filled values are visible in any PDF reader
+  form.flatten();
+
+  const pdfBytes = await pdfDoc.save();
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="timesheet-${timesheetId}.pdf"`);
+  res.send(Buffer.from(pdfBytes));
 });

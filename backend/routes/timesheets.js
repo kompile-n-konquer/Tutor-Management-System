@@ -12,6 +12,7 @@ const {
   submitTimesheet,
   approveEntry,
   rejectTimesheet,
+  exportTimesheetPdf,
 } = require('../controllers/timesheets');
 
 // Literal paths before parameterized ones
@@ -25,5 +26,6 @@ router.delete('/:id', authenticateFirebaseToken, deleteTimesheet);
 router.post('/:id/submit', authenticateFirebaseToken, submitTimesheet);
 router.put('/:id/entries/:entryId/approve', authenticateFirebaseToken, approveEntry);
 router.put('/:id/reject', authenticateFirebaseToken, rejectTimesheet);
+router.get('/:id/export', authenticateFirebaseToken, exportTimesheetPdf);
 
 module.exports = router;

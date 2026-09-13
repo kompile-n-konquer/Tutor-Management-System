@@ -24,9 +24,23 @@ const getTutorEventClaimMonths = async () => {
   return setting ? Number(setting.value) : null;
 };
 
+// Hourly-rate keys — one per year of study.
+// The value stored is a stringified number representing ZAR per hour.
+const HOURLY_RATE_KEYS = {
+  '3rd year': 'HOURLY_RATE_3RD_YEAR',
+  honours:   'HOURLY_RATE_HONOURS',
+  masters:   'HOURLY_RATE_MASTERS',
+  phd:       'HOURLY_RATE_PHD',
+};
+
+// Key for the uploaded PDF template filename (stored on disk in backend/uploads/)
+const PDF_TEMPLATE_KEY = 'PDF_TEMPLATE_FILENAME';
+
 module.exports = {
   TUTOR_MONTHLY_CLAIMABLE_HOURS,
   getTutorMonthlyClaimableHours,
   TUTOR_EVENT_CLAIM_MONTHS,
   getTutorEventClaimMonths,
+  HOURLY_RATE_KEYS,
+  PDF_TEMPLATE_KEY,
 };

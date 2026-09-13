@@ -1,5 +1,6 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { notifyAssignmentAdded, notifyAssignmentRemoved } = require('../email/notifier');
 
 const DEFAULT_ALLOCATED_HOURS = 5;
 
@@ -110,6 +111,27 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // ── Enforce the course's requiredTutors cap ───────────────────────
+  // The organiser may not assign more tutors than the course requires.
+  // The applicant stays in the Available pool (nothing is mutated) so
+  // they can still be assigned to another course.
+  const course = await prisma.course.findUnique({
+    where: { id: applicant.courseId },
+    select: { courseCode: true, courseName: true, requiredTutors: true },
+  });
+
+  const assignedCount = await prisma.tutorAssignment.count({
+    where: { courseId: applicant.courseId },
+  });
+
+  if (course && assignedCount >= course.requiredTutors) {
+    const error = new Error(
+      `Maximum number of required tutors (${course.requiredTutors}) has already been reached for ${course.courseCode} - ${course.courseName}`,
+    );
+    error.statusCode = 409;
+    return next(error);
+  }
+
   // ── Ensure a Tutor row exists for the user ─────────────────────────
   let tutor = await prisma.tutor.findUnique({
     where: { userId: applicant.userId },
@@ -125,8 +147,6 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
           userId: applicant.userId,
           hourlyRate: null,
           maxHoursPerWeek: 10,
-          availableHours: 10,
-          currentHours: 0,
           status: 'ACTIVE',
         },
       });
@@ -144,6 +164,11 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
       },
       include: {
         course: { select: { courseCode: true, courseName: true } },
+        tutor: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+        },
         applicant: {
           include: {
             user: { select: { firstName: true, lastName: true, email: true } },
@@ -160,6 +185,11 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
 
     return newAssignment;
   });
+
+  // Fire-and-forget: email the newly assigned tutor. sendNotification never
+  // throws (every failure is logged in EmailLog instead), so a Resend outage
+  // can never fail the assignment request itself.
+  notifyAssignmentAdded(assignment).catch(() => {});
 
   res.status(201).json({ assignment });
 });
@@ -236,6 +266,14 @@ exports.unassignTutor = catchAsync(async (req, res, next) => {
 
   const assignment = await prisma.tutorAssignment.findUnique({
     where: { applicantId },
+    include: {
+      course: { select: { courseCode: true, courseName: true } },
+      tutor: {
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
   });
 
   if (!assignment) {
@@ -252,6 +290,9 @@ exports.unassignTutor = catchAsync(async (req, res, next) => {
       data: { status: 'PENDING', reviewedAt: null },
     });
   });
+
+  // Fire-and-forget removal notification, loaded before the row was deleted.
+  notifyAssignmentRemoved(assignment).catch(() => {});
 
   res.status(204).end();
 });
@@ -274,6 +315,14 @@ exports.removeTutor = catchAsync(async (req, res, next) => {
 
   const assignment = await prisma.tutorAssignment.findUnique({
     where: { applicantId },
+    include: {
+      course: { select: { courseCode: true, courseName: true } },
+      tutor: {
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
   });
 
   if (!assignment) {
@@ -290,6 +339,9 @@ exports.removeTutor = catchAsync(async (req, res, next) => {
       data: { status: 'REJECTED', reviewedAt: new Date() },
     });
   });
+
+  // Fire-and-forget removal notification, loaded before the row was deleted.
+  notifyAssignmentRemoved(assignment).catch(() => {});
 
   res.status(204).end();
 });

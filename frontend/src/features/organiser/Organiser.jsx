@@ -21,7 +21,7 @@ function mapApiCourse(c) {
 
 /**
  * Maps a backend available-tutor record into the shape the board expects.
- * `courseCode` is set to null so the component treats them as "available".
+ * These are applicants who applied to tutor the currently selected course.
  */
 function mapApiTutor(t) {
   return {
@@ -29,17 +29,16 @@ function mapApiTutor(t) {
     applicantId: t.applicantId,
     name: t.name,
     email: t.email,
+    courseId: t.courseId,
     courseMark: t.courseMark,
     applicationStatus: t.applicationStatus,
     verified: t.applicationStatus === "ACCEPTED",
     clash: false,
-    courseCode: null,
   };
 }
 
 /**
  * Maps a backend assigned-tutor record into the board shape.
- * `courseCode` is set so the component treats them as "allocated".
  */
 function mapApiAssignedTutor(t) {
   return {
@@ -48,6 +47,7 @@ function mapApiAssignedTutor(t) {
     assignmentId: t.assignmentId,
     name: t.name,
     email: t.email,
+    courseId: t.courseId,
     courseMark: null,
     applicationStatus: t.status || "ASSIGNED",
     verified: t.status === "ACCEPTED",
@@ -152,89 +152,129 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
 export default function Organiser() {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
-  const [tutors, setTutors] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [availableTutors, setAvailableTutors] = useState([]);
+  const [allocatedTutors, setAllocatedTutors] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [poolsLoading, setPoolsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [dragOverPool, setDragOverPool] = useState(null);
   const [mutatingId, setMutatingId] = useState(null);
   const [focus, setFocus] = useState({ pool: "available", index: 0 });
+  const [notice, setNotice] = useState(null);
   const cardRefs = useRef({});
 
-  // Fetch courses, available tutors, and assigned tutors from the backend
+  const loading = coursesLoading || poolsLoading;
+  const course = courses.find((c) => c.id === selectedCourse);
+  const pools = { available: availableTutors, allocated: allocatedTutors };
+
+  // Fetch the course list once on mount
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchBoardData() {
-      setLoading(true);
+    async function fetchCourses() {
+      setCoursesLoading(true);
       setFetchError(null);
       try {
-        const [coursesRes, availableRes, assignedRes] = await Promise.all([
-          api.get("/courses"),
-          api.get("/allocation/available-tutors"),
-          api.get("/allocation/assignments"),
-        ]);
+        const coursesRes = await api.get("/courses");
         if (cancelled) return;
 
         if (coursesRes.status === 200 && coursesRes.data?.courses) {
           const mappedCourses = coursesRes.data.courses.map(mapApiCourse);
           setCourses(mappedCourses);
           // Auto-select the first course on initial load only
-          if (mappedCourses.length > 0 && !selectedCourse) {
-            setSelectedCourse(mappedCourses[0].code);
+          if (mappedCourses.length > 0 && selectedCourse == null) {
+            setSelectedCourse(mappedCourses[0].id);
           }
         }
-
-        const availableMapped =
-          availableRes.status === 200 && availableRes.data?.availableTutors
-            ? availableRes.data.availableTutors.slice(0, MAX_AVAILABLE_TUTORS).map(mapApiTutor)
-            : [];
-
-        const assignedMapped =
-          assignedRes.status === 200 && assignedRes.data?.assignedTutors
-            ? assignedRes.data.assignedTutors.map(mapApiAssignedTutor)
-            : [];
-
-        setTutors([...availableMapped, ...assignedMapped]);
       } catch (err) {
         if (!cancelled) setFetchError(err.message || "Network error");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setCoursesLoading(false);
       }
     }
 
-    fetchBoardData();
+    fetchCourses();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fetch the tutor pools for the selected course. Each course has its own
+  // available list (the applicants who applied to tutor that course) and its
+  // own assigned list, so both are filtered by courseId server-side.
+  useEffect(() => {
+    if (selectedCourse == null) return;
+    let cancelled = false;
+
+    async function fetchPools() {
+      setPoolsLoading(true);
+      setFetchError(null);
+      // Clear stale pools from the previously selected course
+      setAvailableTutors([]);
+      setAllocatedTutors([]);
+      try {
+        const [availableRes, assignedRes] = await Promise.all([
+          api.get("/allocation/available-tutors", { params: { courseId: selectedCourse } }),
+          api.get("/allocation/assignments", { params: { courseId: selectedCourse } }),
+        ]);
+        if (cancelled) return;
+
+        setAvailableTutors(
+          availableRes.status === 200 && availableRes.data?.availableTutors
+            ? availableRes.data.availableTutors.slice(0, MAX_AVAILABLE_TUTORS).map(mapApiTutor)
+            : [],
+        );
+
+        setAllocatedTutors(
+          assignedRes.status === 200 && assignedRes.data?.assignedTutors
+            ? assignedRes.data.assignedTutors.map(mapApiAssignedTutor)
+            : [],
+        );
+      } catch (err) {
+        if (!cancelled) setFetchError(err.message || "Network error");
+      } finally {
+        if (!cancelled) setPoolsLoading(false);
+      }
+    }
+
+    fetchPools();
+    return () => { cancelled = true; };
+  }, [selectedCourse]);
+
   // Refetch tutor pools after mutations (courses stay stable)
-  async function refetchTutors() {
+  async function refetchPools(courseId) {
     try {
       const [availableRes, assignedRes] = await Promise.all([
-        api.get("/allocation/available-tutors"),
-        api.get("/allocation/assignments"),
+        api.get("/allocation/available-tutors", { params: { courseId } }),
+        api.get("/allocation/assignments", { params: { courseId } }),
       ]);
 
-      const availableMapped =
+      setAvailableTutors(
         availableRes.status === 200 && availableRes.data?.availableTutors
           ? availableRes.data.availableTutors.slice(0, MAX_AVAILABLE_TUTORS).map(mapApiTutor)
-          : [];
+          : [],
+      );
 
-      const assignedMapped =
+      setAllocatedTutors(
         assignedRes.status === 200 && assignedRes.data?.assignedTutors
           ? assignedRes.data.assignedTutors.map(mapApiAssignedTutor)
-          : [];
-
-      setTutors([...availableMapped, ...assignedMapped]);
+          : [],
+      );
     } catch {
       // Silently fall back to the optimistic state
     }
   }
 
-  const course = courses.find((c) => c.code === selectedCourse);
-  const available = tutors.filter((t) => t.courseCode === null);
-  const allocated = tutors.filter((t) => t.courseCode === selectedCourse);
-  const pools = { available, allocated };
+  // Refresh course cards so allocated counts / progress bars stay accurate
+  async function refetchCourses() {
+    try {
+      const res = await api.get("/courses");
+      if (res.status === 200 && res.data?.courses) {
+        setCourses(res.data.courses.map(mapApiCourse));
+      }
+    } catch {
+      // Keep the current sidebar counts
+    }
+  }
 
   // Switching courses changes what "allocated" means, so reset focus to somewhere valid
   useEffect(() => {
@@ -249,45 +289,71 @@ export default function Organiser() {
       setFocus((f) => ({ ...f, index: Math.max(list.length - 1, 0) }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [available.length, allocated.length]);
+  }, [availableTutors.length, allocatedTutors.length]);
 
   // Move actual DOM focus to match `focus` state after every render
   useEffect(() => {
     const key = `${focus.pool}-${focus.index}`;
     cardRefs.current[key]?.focus();
-  }, [focus, available.length, allocated.length]);
+  }, [focus, availableTutors.length, allocatedTutors.length]);
 
   async function moveTutor(tutor, fromPool) {
     const { applicantId } = tutor;
     const toPool = fromPool === "available" ? "allocated" : "available";
 
-    // Optimistic update
-    setTutors((prev) => {
-      let next = prev.filter((t) => t.applicantId !== applicantId);
-      if (toPool === "allocated") {
-        next = [...next, { ...tutor, courseCode: selectedCourse, id: `temp-${applicantId}` }];
-      }
-      return next;
-    });
+    // Optimistic move between the two pools
+    if (toPool === "allocated") {
+      setAvailableTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
+      setAllocatedTutors((prev) => [...prev, { ...tutor, courseId: selectedCourse, id: `temp-${applicantId}` }]);
+    } else {
+      setAllocatedTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
+      setAvailableTutors((prev) => [...prev, tutor]);
+    }
 
+    // Puts the tutor back in their original pool when the server refuses
+    const rollback = () => {
+      if (toPool === "allocated") {
+        setAllocatedTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
+        setAvailableTutors((prev) => [...prev.filter((t) => t.applicantId !== applicantId), tutor]);
+      } else {
+        setAvailableTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
+        setAllocatedTutors((prev) => [...prev.filter((t) => t.applicantId !== applicantId), tutor]);
+      }
+    };
+
+    setMutatingId(applicantId);
     try {
       if (toPool === "allocated") {
         const res = await api.post("/allocation/assignments", { applicantId });
         if (res.status !== 201) {
-          setTutors((prev) => [...prev.filter((t) => t.applicantId !== applicantId), tutor]);
+          rollback();
+          // The axios instance resolves every HTTP status, so refusals such
+          // as the 409 requiredTutors cap arrive here rather than in catch.
+          const message = res?.data?.message;
+          if (res.status === 409 && message) {
+            setNotice({ title: "Maximum required tutors reached", message });
+          } else if (message) {
+            setNotice({ title: "Could not assign tutor", message });
+          }
           return;
         }
       } else {
         const res = await api.delete(`/allocation/assignments/${applicantId}`);
         if (res.status !== 204) {
-          setTutors((prev) => [...prev, tutor]);
+          rollback();
+          const message = res?.data?.message;
+          if (message) setNotice({ title: "Action failed", message });
           return;
         }
       }
-      await refetchTutors();
-    } catch {
-      // Rollback
-      setTutors((prev) => [...prev.filter((t) => t.applicantId !== applicantId), tutor]);
+      await Promise.all([refetchPools(selectedCourse), refetchCourses()]);
+    } catch (err) {
+      rollback();
+      // Network-level failures only (HTTP errors resolve; see above).
+      const message = err?.response?.data?.message;
+      setNotice({ title: "Action failed", message: message || "Network error. Please try again." });
+    } finally {
+      setMutatingId(null);
     }
   }
 
@@ -295,19 +361,23 @@ export default function Organiser() {
     const { applicantId } = tutor;
 
     // Optimistic removal
-    setTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
+    setAllocatedTutors((prev) => prev.filter((t) => t.applicantId !== applicantId));
     setMutatingId(applicantId);
 
     try {
       const res = await api.delete(`/allocation/assignments/${applicantId}/remove`);
       if (res.status !== 204) {
-        // Rollback on failure
-        setTutors((prev) => [...prev, tutor]);
+        // Rollback on failure (HTTP errors resolve rather than throw)
+        setAllocatedTutors((prev) => [...prev, tutor]);
+        const message = res?.data?.message;
+        if (message) setNotice({ title: "Action failed", message });
       } else {
-        await refetchTutors();
+        await Promise.all([refetchPools(selectedCourse), refetchCourses()]);
       }
-    } catch {
-      setTutors((prev) => [...prev, tutor]);
+    } catch (err) {
+      setAllocatedTutors((prev) => [...prev, tutor]);
+      const message = err?.response?.data?.message;
+      setNotice({ title: "Action failed", message: message || "Network error. Please try again." });
     } finally {
       setMutatingId(null);
     }
@@ -368,14 +438,16 @@ export default function Organiser() {
     e.preventDefault();
     setDragOverPool(null);
     const tutorId = e.dataTransfer.getData("text/plain");
-    const draggedTutor = tutors.find((t) => t.id === tutorId);
+    const draggedTutor =
+      availableTutors.find((t) => t.id === tutorId) ||
+      allocatedTutors.find((t) => t.id === tutorId);
     if (!draggedTutor) return;
-    const fromPool = draggedTutor.courseCode === null ? "available" : "allocated";
+    const fromPool = availableTutors.some((t) => t.id === tutorId) ? "available" : "allocated";
     if (fromPool !== poolId) moveTutor(draggedTutor, fromPool);
   }
 
   return (
-    <AppLayout role="tutor" title="Tutor Management System">
+    <AppLayout title="Tutor Management System">
       <div className="p-stack-md md:p-margin-page flex gap-gutter h-full">
         {/* Course list */}
         <div className="w-80 flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden shrink-0">
@@ -390,8 +462,8 @@ export default function Organiser() {
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm">
             {courses.map((c) => {
-              const isActive = c.code === selectedCourse;
-              const allocatedCount = c.assignedCount ?? tutors.filter((t) => t.courseCode === c.code).length;
+              const isActive = c.id === selectedCourse;
+              const allocatedCount = c.assignedCount ?? (isActive ? allocatedTutors.length : 0);
               const pct = c.req ? Math.round((allocatedCount / c.req) * 100) : 0;
               const isLow = pct < 50;
               const border = isActive
@@ -402,7 +474,7 @@ export default function Organiser() {
               return (
                 <button
                   key={c.code}
-                  onClick={() => setSelectedCourse(c.code)}
+                  onClick={() => setSelectedCourse(c.id)}
                   className={`w-full text-left p-stack-md rounded-lg border cursor-pointer transition-colors ${border}`}
                 >
                   <div className="flex justify-between items-start mb-stack-sm">
@@ -421,7 +493,7 @@ export default function Organiser() {
                       Allocated: {allocatedCount}
                     </span>
                     <div className="w-full bg-surface-variant rounded-full h-1.5 ml-2">
-                      <div className={`h-1.5 rounded-full ${isLow ? "bg-urgent-orange" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+                      <div className={`h-1.5 rounded-full ${isLow ? "bg-urgent-orange" : "bg-primary"}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                     </div>
                   </div>
                 </button>
@@ -472,9 +544,9 @@ export default function Organiser() {
             <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg">
               <Pool
                 id="available"
-                label="Available Tutors"
-                count={available.length}
-                tutors={available}
+                label={`Available for ${course.code}`}
+                count={availableTutors.length}
+                tutors={availableTutors}
                 cardRefs={cardRefs}
                 focus={focus}
                 onCardKeyDown={handleCardKeyDown}
@@ -487,9 +559,9 @@ export default function Organiser() {
               />
               <Pool
                 id="allocated"
-                label={`Assigned to ${course?.code ?? "…"}`}
-                count={`${allocated.length}/${course?.req ?? 0}`}
-                tutors={allocated}
+                label={`Assigned to ${course.code}`}
+                count={`${allocatedTutors.length}/${course?.req ?? 0}`}
+                tutors={allocatedTutors}
                 cardRefs={cardRefs}
                 focus={focus}
                 onCardKeyDown={handleCardKeyDown}
@@ -505,6 +577,45 @@ export default function Organiser() {
           )}
         </div>
       </div>
+
+      {/* Max-reached / failure dialog: shown when the server refuses an
+          assignment (e.g. requiredTutors cap reached). The affected tutor
+          stays in the available pool — the rollback already restored them. */}
+      {notice && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="organiser-notice-title"
+          onClick={() => setNotice(null)}
+        >
+          <div
+            className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-lg p-stack-lg max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-stack-md mb-stack-md">
+              <span className="material-symbols-outlined text-urgent-orange text-3xl shrink-0">error</span>
+              <div>
+                <h3 id="organiser-notice-title" className="font-headline-md text-headline-md text-on-surface mb-unit">
+                  {notice.title}
+                </h3>
+                <p className="font-body-md text-on-surface-variant">{notice.message}</p>
+              </div>
+            </div>
+            <p className="font-body-sm text-outline mb-stack-md">
+              The tutor remains in the available tutors list for this course.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setNotice(null)}
+                className="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

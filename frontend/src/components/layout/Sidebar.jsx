@@ -1,14 +1,18 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { getNavLinksForRole, FOOTER_LINKS } from "../../config/navConfig";
+import useAuth from "../../hooks/useAuth";
 
-/**
- * Sidebar
- * Renders only the links relevant to `role` (organiser | tutor | student | lecturer).
- * Active state is handled by react-router's NavLink instead of a hardcoded class,
- * so it works correctly no matter which page is currently mounted.
- */
 export default function Sidebar({ role = "tutor" }) {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const links = getNavLinksForRole(role);
+
+  const handleNavigate = async (label, url) => {
+    if (label === "Logout") {
+      await signOut();
+    }
+    navigate(url);
+  };
 
   return (
     <nav className="hidden md:flex flex-col h-full py-margin-page bg-surface-container-low border-r border-outline-variant fixed left-0 top-0 w-sidebar-width z-50">
@@ -66,16 +70,16 @@ export default function Sidebar({ role = "tutor" }) {
         )}
 
         <div className="pt-stack-md border-t border-outline-variant space-y-unit">
-          {FOOTER_LINKS.map((link) => (
-            <NavLink
+          {FOOTER_LINKS.map((link) => {
+            return <div
               key={link.to}
-              to={link.to}
-              className="flex items-center gap-stack-md text-on-surface-variant px-gutter py-stack-sm hover:bg-surface-variant transition-colors rounded-lg group"
+              onClick={() => handleNavigate(link.label, link.to)}
+              className="flex items-center gap-stack-md text-on-surface-variant px-gutter py-stack-sm hover:bg-surface-variant transition-colors rounded-lg group cursor-pointer"
             >
               <span className="material-symbols-outlined shrink-0">{link.icon}</span>
               <span className="font-body-md font-medium truncate">{link.label}</span>
-            </NavLink>
-          ))}
+            </div>
+          })}
         </div>
       </div>
     </nav>

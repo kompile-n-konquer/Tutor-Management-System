@@ -39,6 +39,6 @@ jobs:
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: TutorAppService
+          app-name: tutor-api
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: backend

@@ -17,7 +17,6 @@ export const NAV_LINKS = [
   { to: "/organiser", icon: "dashboard", label: "Organiser Board", roles: ["organiser"] },
   { to: "/application-review", icon: "fact_check", label: "Applications", roles: ["organiser"] },
   { to: "/organiser-analytics", icon: "analytics", label: "Analytics", roles: ["organiser"] },
-  { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor", "student"] },
   { to: "/onboarding", icon: "upgrade", label: "Become a Tutor/Lecturer", roles: ["student"] },
   { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"] },
   { to: "/admin-view", icon: "admin_panel_settings", label: "Admin View", roles: ["admin"] },
@@ -29,10 +28,6 @@ export const FOOTER_LINKS = [
 ];
 
 export function getNavLinksForRole(role) {
-<<<<<<< HEAD
+  if (!role) return [];
   return NAV_LINKS.filter((link) => link.roles.includes(role.toLowerCase()));
 }
-=======
-  return NAV_LINKS.filter((link) => link.roles.includes(role));
-}
->>>>>>> b8bad57b63025edf14c5b7adaf50e8e7f71e25b6

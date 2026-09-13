@@ -3,10 +3,9 @@ import { getNavLinksForRole, FOOTER_LINKS } from "../../config/navConfig";
 import useAuth from "../../hooks/useAuth";
 
 export default function Sidebar() {
-  const { signOut, currentUser } = useAuth();
+  const { signOut, role } = useAuth();
   const navigate = useNavigate();
 
-  const role = currentUser.role;
   const links = getNavLinksForRole(role);
 
   const handleNavigate = async (label, url) => {

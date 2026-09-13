@@ -105,12 +105,21 @@ exports.getPendingReview = catchAsync(async (req, res, next) => {
     orderBy: { submittedAt: 'desc' },
   });
 
+  // Each lecturer only sees the entries they supervise — a timesheet may span
+  // multiple courses with different lecturers, and approval/rejection is per-
+  // lecturer (approve = all my entries approved; reject = the whole timesheet)
   res.status(200).json(
-    timesheets.map((timesheet) => ({
-      ...serializeTimesheet(timesheet),
-      tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
-      tutorEmail: timesheet.user.email,
-    }))
+    timesheets.map((timesheet) => {
+      const filtered = {
+        ...timesheet,
+        entries: timesheet.entries.filter((e) => e.supervisorId === user.id),
+      };
+      return {
+        ...serializeTimesheet(filtered),
+        tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
+        tutorEmail: timesheet.user.email,
+      };
+    })
   );
 });
 

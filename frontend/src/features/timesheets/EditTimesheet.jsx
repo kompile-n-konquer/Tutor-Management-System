@@ -331,6 +331,13 @@ const EditTimesheet = () => {
   if (authLoading) return null;
   if (!currentUser) return null;
 
+  // Non-editable timesheets are displayed on the read-only details page — redirect
+  // before rendering so the edit UI is never shown for submitted/approved timesheets
+  if (timesheet && !isEditable) {
+    navigate(`/timesheets/${id}/details`, { replace: true });
+    return null;
+  }
+
   // Every duration is a whole number of hours under the round-up rule, so the
   // running total is a whole number too
   const totalHours = entries.reduce((sum, e) => sum + Number(e.duration || 0), 0);
@@ -453,10 +460,7 @@ const EditTimesheet = () => {
                     {pickerEvents.map((event) => {
                       const claimed = claimedEventIds.has(event.id);
                       return (
-                        <tr
-                          key={event.id}
-                          className="hover:bg-surface-container-low transition-colors"
-                        >
+                        <tr key={event.id}>
                           <td className="py-stack-sm px-stack-md">
                             <span className="font-bold text-primary">{event.courseCode}</span>
                             <span className="text-on-surface-variant"> - {event.courseName}</span>
@@ -492,7 +496,7 @@ const EditTimesheet = () => {
                                 Added
                               </span>
                             ) : (
-                              <Button className="min-w-24" onClick={() => addEventEntry(event)}>
+                              <Button className="min-w-24 max-h-8" onClick={() => addEventEntry(event)}>
                                 Add
                               </Button>
                             )}
@@ -560,10 +564,7 @@ const EditTimesheet = () => {
                 </thead>
                 <tbody className="divide-y divide-surface-variant font-body-md">
                   {entries.map((entry, index) => (
-                    <tr
-                      key={entry.eventId ?? `entry-${index}`}
-                      className="hover:bg-surface-container-low transition-colors"
-                    >
+                    <tr key={entry.eventId ?? `entry-${index}`}>
                       <td className="py-stack-sm px-stack-md">
                         <span className="font-bold text-primary">{entry.courseCode}</span>
                         <span className="text-on-surface-variant"> - {entry.courseName}</span>
@@ -612,13 +613,6 @@ const EditTimesheet = () => {
           </div>
         )}
 
-        {!isEditable && (
-          <div className="text-center py-stack-md">
-            <p className="font-body-md text-on-surface-variant font-semibold">
-              This timesheet has been submitted and is awaiting supervisor review.
-            </p>
-          </div>
-        )}
       </div>
     </AppLayout>
   );

@@ -162,9 +162,6 @@ const EventDetails = () => {
                         ) : (
                           <p className="font-body-md text-outline">No timeslot on this weekday</p>
                         )}
-                        <p className="font-body-sm text-outline mt-1">
-                          Derived from the course's tutoring slots on this weekday.
-                        </p>
                       </div>
                     </div>
                     <div>

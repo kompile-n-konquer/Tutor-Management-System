@@ -9,6 +9,7 @@ const sessionsRouter = require('./routes/sessions');
 const availabilityRouter = require('./routes/availability');
 const allocationRouter = require('./routes/allocation');
 const coursesRouter = require('./routes/courses');
+const onboardingRouter = require('./routes/onboarding');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/availability', availabilityRouter);
 app.use('/api/allocation', allocationRouter);
 app.use('/api/courses', coursesRouter);
+app.use('/api/onboarding', onboardingRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

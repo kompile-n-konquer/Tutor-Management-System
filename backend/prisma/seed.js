@@ -8,10 +8,16 @@ const getFirebaseAdmin = require("../firebase/admin");
 // ────────────────────────────────────────────────────────────────────────
 const PASSWORD = "Test@1234";
 
+// The real inbox used to verify notification emails: this account is seeded
+// as a loggable student with applicants in two courses so the organiser can
+// test both the assignment email and the max-reached guard.
+const TEST_EMAIL = process.env.TEST_EMAIL || "2898909@students.wits.ac.za";
+
 const ACCOUNTS = [
   { email: "organiser@tutorflow.test", first: "Kgaogelo", last: "Molefe",  role: "ORGANISER", empNo: "ORG-001" },
   { email: "lecturer@tutorflow.test",  first: "Sarah",    last: "Van Wyk", role: "LECTURER",  empNo: "EMP-L001" },
   { email: "alex@tutorflow.test",      first: "Alex",     last: "Mercer",  role: "STUDENT",   stuNo: "STU-001" },
+  { email: TEST_EMAIL,                  first: "Test",     last: "Student", role: "STUDENT",   stuNo: "STU-TEST" },
   // Excuse / volunteer feature accounts (issue #37):
   //   tutor.demo   → signs in, sees the Tutor Dashboard, can excuse a session
   //   student.demo → signs in, sees the Volunteer View, can apply to volunteer
@@ -139,6 +145,9 @@ async function cleanup() {
       },
     },
   });
+  await prisma.roleApplication.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
   await prisma.tutorAssignment.deleteMany({
     where: {
       OR: [
@@ -150,6 +159,9 @@ async function cleanup() {
   await prisma.applicant.deleteMany({
     where: { user: { email: { in: testEmails } } },
   });
+  await prisma.availability.deleteMany({
+    where: { user: { email: { in: testEmails } } },
+  });
   await prisma.tutor.deleteMany({
     where: { user: { email: { in: testEmails } } },
   });
@@ -159,6 +171,7 @@ async function cleanup() {
   await prisma.course.deleteMany({
     where: { courseCode: { in: COURSES.map((c) => c.courseCode) } },
   });
+  await prisma.timeSlot.deleteMany();
   await prisma.lecturer.deleteMany({
     where: { user: { email: { in: testEmails } } },
   });
@@ -255,8 +268,8 @@ async function main() {
     console.log(`  ✓ ${c.courseCode} – ${c.courseName}`);
   }
 
-  // ── 5. Create TimeSlots + CourseSlots (timetable) ───────────────────
-  console.log("\n📅 Creating TimeSlots and CourseSlots...\n");
+  // ── 5. Create TimeSlots (availability grid + course blocks) ───────
+  console.log("\n📅 Creating TimeSlots...\n");
 
   const timeSlots = {};
   for (const slot of [...AVAILABILITY_TIME_SLOTS, ...COURSE_TIME_SLOTS]) {
@@ -266,6 +279,10 @@ async function main() {
       create: slot,
     });
   }
+  console.log(`  ✓ ${AVAILABILITY_TIME_SLOTS.length + COURSE_TIME_SLOTS.length} time slots ensured`);
+
+  // ── 6. Create CourseSlots (timetable) ───────────────────────────────
+  console.log("\n📅 Creating CourseSlots...\n");
 
   const courseSlots = {};
   for (const s of COURSE_SLOT_DEFS) {
@@ -287,7 +304,25 @@ async function main() {
   }
   console.log(`  ✓ ${COURSE_SLOT_DEFS.length} course slots created`);
 
-  // ── 6. Create Applicants (Available Tutors pool) ────────────────────
+  // ── 7. Availability for the TEST_EMAIL user ─────────────────────
+  // Covers every seeded course slot, so all courses show up as eligible
+  // (non-clashing) if the user applies through the tutor application form.
+  // Built from COURSE_SLOT_DEFS so the availability rows reference the exact
+  // same TimeSlot rows the course slots use — the clash check compares IDs.
+  console.log(`\n📅 Creating availability for ${TEST_EMAIL}...\n`);
+
+  for (const s of COURSE_SLOT_DEFS) {
+    await prisma.availability.create({
+      data: {
+        userId: users[TEST_EMAIL].id,
+        dayOfWeek: s.day,
+        timeSlotId: timeSlots[`${s.start}-${s.end}`].id,
+      },
+    });
+  }
+  console.log(`  ✓ ${COURSE_SLOT_DEFS.length} availability slots for the test email user`);
+
+  // ── 8. Create Applicants (Available Tutors pool) ────────────────────
   console.log("\n📋 Creating Applicants (available tutors)...\n");
 
   const applicantData = [
@@ -306,6 +341,11 @@ async function main() {
     { email: "marcus.w@wits.ac.za",    code: "COMS3055", mark: 81 },
     { email: "thabo.m@wits.ac.za",     code: "COMS3055", mark: 77 },
     { email: "lerato.k@wits.ac.za",    code: "COMS3055", mark: 70 },
+    // TEST_EMAIL user — applicant in two courses so both new features can
+    // be exercised: assign them on COMS1015 (below cap → email fires) and
+    // try to add them on MATH2002 (at cap → max-reached popup).
+    { email: TEST_EMAIL, code: "COMS1015", mark: 90 },
+    { email: TEST_EMAIL, code: "MATH2002", mark: 80 },
   ];
 
   for (const a of applicantData) {
@@ -321,72 +361,64 @@ async function main() {
     console.log(`  ✓ ${a.email.padEnd(28)} → ${a.code}  (mark: ${a.mark}%)`);
   }
 
-  // ── 7. Pre-assign 2 tutors (Assigned Tutors pool) ───────────────────
+  // ── 9. Pre-assign tutors (Assigned Tutors pool) ───────────────────
   console.log("\n📌 Pre-assigning tutors (TutorAssignments)...\n");
 
   // Create Tutor rows for the pre-assigned students first
-  const assignedUsers = ["alex@tutorflow.test", "david.k@wits.ac.za"];
+  const preassignedEmails = [
+    "alex@tutorflow.test",
+    "sarah.j@wits.ac.za",
+    "priya.n@wits.ac.za",
+    "marcus.w@wits.ac.za",
+  ];
   const tutorRows = {};
 
-  for (const email of assignedUsers) {
+  for (const email of preassignedEmails) {
     tutorRows[email] = await prisma.tutor.create({
       data: {
         userId: users[email].id,
         hourlyRate: null,
         maxHoursPerWeek: 10,
-        availableHours: 10,
-        currentHours: 0,
         status: "ACTIVE",
       },
     });
   }
 
-  // COMS1015 — Alex assigned (mark 92, ACCEPTED)
-  const alexApplicant = await prisma.applicant.findFirst({
-    where: {
-      userId: users["alex@tutorflow.test"].id,
-      courseId: courses["COMS1015"].id,
-    },
-  });
+  // Helper — assign one seeded applicant to a course and mark them ASSIGNED
+  async function preassign(email, code) {
+    const applicant = await prisma.applicant.findFirst({
+      where: {
+        userId: users[email].id,
+        courseId: courses[code].id,
+      },
+    });
 
-  await prisma.tutorAssignment.create({
-    data: {
-      tutorId: tutorRows["alex@tutorflow.test"].id,
-      courseId: courses["COMS1015"].id,
-      applicantId: alexApplicant.id,
-      allocatedHours: 5,
-      semester: "2026-S2",
-      status: "ACTIVE",
-    },
-  });
-  await prisma.applicant.update({
-    where: { id: alexApplicant.id },
-    data: { status: "ASSIGNED", reviewedAt: new Date() },
-  });
-  console.log("  ✓ Alex Mercer → COMS1015 (ACCEPTED & assigned)");
+    await prisma.tutorAssignment.create({
+      data: {
+        tutorId: tutorRows[email].id,
+        courseId: courses[code].id,
+        applicantId: applicant.id,
+        allocatedHours: 5,
+        semester: "2026-S2",
+        status: "ACTIVE",
+      },
+    });
+    await prisma.applicant.update({
+      where: { id: applicant.id },
+      data: { status: "ASSIGNED", reviewedAt: new Date() },
+    });
+    console.log(`  ✓ ${email.padEnd(28)} → ${code}`);
+  }
 
-  // COMS3055 — Priya assigned (mark 95, ASSIGNED)
-  const priyaApplicant = await prisma.applicant.findFirst({
-    where: {
-      userId: users["priya.n@wits.ac.za"].id,
-      courseId: courses["COMS3055"].id,
-    },
-  });
+  // COMS1015 — Alex assigned (mark 92) → 1/5 filled
+  await preassign("alex@tutorflow.test", "COMS1015");
 
-  await prisma.tutorAssignment.create({
-    data: {
-      courseId: courses["COMS3055"].id,
-      applicantId: priyaApplicant.id,
-      allocatedHours: 5,
-      semester: "2026-S2",
-      status: "ACTIVE",
-    },
-  });
-  await prisma.applicant.update({
-    where: { id: priyaApplicant.id },
-    data: { status: "ASSIGNED", reviewedAt: new Date() },
-  });
-  console.log("  ✓ Priya Nair  → COMS3055 (assigned, no Tutor row yet)");
+  // MATH2002 — all three applicants assigned → 3/3 filled (AT CAPACITY).
+  // The TEST_EMAIL applicant stays in this course's available pool, so
+  // trying to assign them triggers the max-reached guard + popup.
+  await preassign("sarah.j@wits.ac.za", "MATH2002");
+  await preassign("priya.n@wits.ac.za", "MATH2002");
+  await preassign("marcus.w@wits.ac.za", "MATH2002");
 
   // ── 8. Excuse / volunteer feature data (issue #37) ──────────────────
   console.log("\n🎯 Creating excuse / volunteer feature data...\n");
@@ -401,12 +433,28 @@ async function main() {
     },
   });
 
+  // Assignments go through the same applicant → assignment flow the
+  // organiser board uses. `applicantId` is unique and SQL Server unique
+  // indexes only tolerate a single NULL, so two applicant-less assignments
+  // would collide — one Applicant row per course keeps both valid and the
+  // board counts the feature tutor as assigned.
   const featureAssignments = {};
   for (const code of ["COMS1015", "COMS3055"]) {
+    const applicant = await prisma.applicant.create({
+      data: {
+        userId: users[FEATURE_TUTOR_EMAIL].id,
+        courseId: courses[code].id,
+        courseMark: code === "COMS1015" ? 86 : 82,
+        status: "ASSIGNED",
+        reviewedAt: new Date(),
+        availability: "Mon/Wed/Fri mornings",
+      },
+    });
     featureAssignments[code] = await prisma.tutorAssignment.create({
       data: {
         tutorId: featureTutor.id,
         courseId: courses[code].id,
+        applicantId: applicant.id,
         allocatedHours: code === "COMS1015" ? 6 : 4,
         semester: "2026-S2",
         status: "ACTIVE",
@@ -415,20 +463,26 @@ async function main() {
   }
 
   // COMS1015 — two SCHEDULED sessions plus one already excused (UNASSIGNED).
+  // The excused occurrence sits a week after the scheduled Monday so the
+  // rows describe different sessions, not the same Monday twice.
+  const nextMonday = nextWeekdayAt(1, 0, 0);
+  const weekLater = (date) => new Date(date.getTime() + 7 * 24 * 60 * 60 * 1000);
   await prisma.session.createMany({
     data: [
-      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-1"].id, date: nextWeekdayAt(1, 0, 0), status: "SCHEDULED" },
+      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-1"].id, date: nextMonday, status: "SCHEDULED" },
       { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-3"].id, date: nextWeekdayAt(3, 0, 0), status: "SCHEDULED" },
-      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-1"].id, date: nextWeekdayAt(1, 0, 0), status: "UNASSIGNED", excuseReason: "Medical appointment I could not move" },
+      { assignmentId: featureAssignments["COMS1015"].id, courseSlotId: courseSlots["COMS1015-1"].id, date: weekLater(nextMonday), status: "UNASSIGNED", excuseReason: "Medical appointment I could not move" },
     ],
   });
 
-  // COMS3055 — one SCHEDULED session plus one with a PENDING volunteer.
+  // COMS3055 — one SCHEDULED session plus one with a PENDING volunteer
+  // (the volunteered occurrence is a week after the scheduled one).
+  const nextFriday = nextWeekdayAt(5, 0, 0);
   const pendingSession = await prisma.session.create({
     data: {
       assignmentId: featureAssignments["COMS3055"].id,
       courseSlotId: courseSlots["COMS3055-5"].id,
-      date: nextWeekdayAt(5, 0, 0),
+      date: weekLater(nextFriday),
       status: "UNASSIGNED",
       excuseReason: "Conference travel",
     },
@@ -437,7 +491,7 @@ async function main() {
     data: {
       assignmentId: featureAssignments["COMS3055"].id,
       courseSlotId: courseSlots["COMS3055-5"].id,
-      date: nextWeekdayAt(5, 0, 0),
+      date: nextFriday,
       status: "SCHEDULED",
     },
   });
@@ -453,7 +507,15 @@ async function main() {
   console.log("  ✓ 5 sessions across SCHEDULED / UNASSIGNED / PENDING states");
   console.log("  ✓ Nduvho Demovolunteer holds the pending volunteer request");
 
-  // ── Done! ───────────────────────────────────────────────────────────
+  // COMS3055 — Priya assigned (mark 95) → 1/4 filled
+  await preassign("priya.n@wits.ac.za", "COMS3055");
+
+  // ── 10. Alex's verified badge ──────────────────────────────────────
+  // Alex's applicant status is ASSIGNED from the preassign helper above,
+  // which the board renders as the verified badge.
+  console.log("  \u2713 Alex's application status set to ASSIGNED (verified badge)");
+
+  // ── Done! ───────────────────────────────────────────────────────
   console.log("\n" + "═".repeat(60));
   console.log("✅  Seed complete!\n");
   console.log("  Loggable accounts (password: " + PASSWORD + "):\n");
@@ -465,17 +527,29 @@ async function main() {
   console.log("    🧑 Student   → nduvo.demo@wits.ac.za        (pending volunteer)");
   console.log("");
   console.log("  Board state after seed:\n");
-  console.log("    COMS1015 (Introduction to Programming):");
-  console.log("      Assigned:  Alex Mercer (verified/ASSIGNED)");
-  console.log("      Available: Sarah Jenkins, David Kim, Thabo Mokoena, Lerato Khumalo");
+  console.log(`    🧪 Test email →  ${TEST_EMAIL} (receives assignment notifications)`);
   console.log("");
-  console.log("    MATH2002 (Discrete Mathematics):");
-  console.log("      Assigned:  (none)");
-  console.log("      Available: Sarah Jenkins, Priya Nair, Marcus Webb");
+  console.log("  Board state after seed:\n");
+  console.log("    COMS1015 (Intro to Programming) — 2/5 filled:");
+  console.log("      Assigned:  Alex Mercer (verified/ASSIGNED), Thabo Demotutor");
+  console.log("      Available: Sarah Jenkins, David Kim, Thabo Mokoena, Lerato Khumalo, Test Student");
   console.log("");
-  console.log("    COMS3055 (Database Systems):");
-  console.log("      Assigned:  Priya Nair");
+  console.log("    MATH2002 (Discrete Mathematics) — 3/3 filled (AT CAPACITY):");
+  console.log("      Assigned:  Sarah Jenkins, Priya Nair, Marcus Webb");
+  console.log("      Available: Test Student (assigning them shows the max-reached popup)");
+  console.log("");
+  console.log("    COMS3055 (Database Systems) — 2/4 filled:");
+  console.log("      Assigned:  Priya Nair, Thabo Demotutor");
   console.log("      Available: Marcus Webb, Thabo Mokoena, Lerato Khumalo");
+  console.log("");
+  console.log("  How to test the new features:");
+  console.log("    1. Assignment email: as organiser, open COMS1015 and assign");
+  console.log(`       'Test Student' (${TEST_EMAIL}) — they receive an email.`);
+  console.log("    2. Max-reached popup: as organiser, open MATH2002 (3/3 full)");
+  console.log("       and try to assign 'Test Student' — a dialog explains the");
+  console.log("       course is fully staffed and they stay in the pool.");
+  console.log("    3. Course-specific pool: each course now only lists the");
+  console.log("       applicants who applied to tutor THAT course.");
   console.log("");
   console.log("  Excuse / volunteer flow (issue #37):\n");
   console.log("    1. Log in as tutor.demo@wits.ac.za → Tutor Dashboard → 'Excuse Myself' on an Active session.");

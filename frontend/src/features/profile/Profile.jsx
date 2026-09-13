@@ -19,7 +19,7 @@ const minutesToLabel = (minutes) => {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, loading } = useAuth();
+  const { currentUser, userProfile, role, loading } = useAuth();
   const { execute, isLoading } = useAsync();
   const { execute: executeTimetable } = useAsync();
 
@@ -88,29 +88,32 @@ export default function Profile() {
       const headers = { Authorization: `Bearer ${token}` };
       const response = await execute(() => api.delete('/users', { headers }));
 
-      if (response.status === 204) {
+      if (response?.status === 204) {
         await signOut(auth);
         navigate('/');
       }
     }
   };
 
+  const displayName = userProfile
+    ? `${userProfile.firstName} ${userProfile.lastName}`
+    : 'Loading...';
+  const displayId = userProfile?.studentNumber || userProfile?.employeeNumber || '';
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+
   return (
     <AppLayout title="Settings" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-display text-primary">Alex Mercer</h2>
+            <h2 className="font-display text-display text-primary">{displayName}</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              Computer Science M.Sc. Student · ID: 1045920
+              {displayId ? `${roleLabel} · ID: ${displayId}` : roleLabel}
             </p>
           </div>
           <div className="flex gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1E90FF]/10 text-[#1E90FF] font-label-caps text-label-caps border border-[#1E90FF]/20">
-              <span className="material-symbols-outlined text-[16px]">verified</span> Active Tutor
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-caps text-label-caps border border-outline-variant/50">
-              <span className="material-symbols-outlined text-[16px]">schedule</span> 120h Logged
+              <span className="material-symbols-outlined text-[16px]">verified</span> {roleLabel}
             </span>
           </div>
         </div>
@@ -126,60 +129,13 @@ export default function Profile() {
               </div>
               <div className="space-y-4">
                 {[
-                  ['EMAIL', 'a.mercer@university.edu'],
-                  ['PHONE', '+1 (555) 019-2837'],
-                  ['DEPARTMENT', 'School of Computer Science'],
-                ].map(([label, value]) => (
+                  ['EMAIL', userProfile?.email || ''],
+                  ['PHONE', userProfile?.phoneNumber || 'Not provided'],
+                  ['DEPARTMENT', userProfile?.studentNumber ? 'Student' : userProfile?.employeeNumber ? 'Staff' : ''],
+                ].filter(([, value]) => value).map(([label, value]) => (
                   <div key={label}>
                     <p className="font-label-caps text-[10px] text-outline mb-1">{label}</p>
                     <p className="font-body-md text-body-md text-on-surface">{value}</p>
-                  </div>
-                ))}
-                <div>
-                  <p className="font-label-caps text-[10px] text-outline mb-1">LANGUAGES</p>
-                  <div className="flex gap-2 mt-1">
-                    <span className="px-2 py-0.5 bg-surface-container rounded text-body-sm">English</span>
-                    <span className="px-2 py-0.5 bg-surface-container rounded text-body-sm">Spanish</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
-              <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
-                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">Academic History</h3>
-                <span className="material-symbols-outlined text-outline text-[20px]">school</span>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { code: 'CS301: Data Structures', term: 'Fall 2023', grade: 'A+', status: 'Eligible', active: false },
-                  {
-                    code: 'CS450: Machine Learning',
-                    term: 'Spring 2024',
-                    grade: 'A',
-                    status: 'Eligible',
-                    active: false,
-                  },
-                  { code: 'CS502: Operating Systems', term: 'Current', grade: 'IP', status: 'Pending', active: true },
-                ].map((c) => (
-                  <div
-                    key={c.code}
-                    className={`flex justify-between items-center p-2 hover:bg-surface-container-low rounded-lg transition-colors ${
-                      c.active ? 'border-l-4 border-[#FF8C00] bg-[#FF8C00]/5' : ''
-                    }`}
-                  >
-                    <div>
-                      <p className="font-body-md font-semibold text-on-surface">{c.code}</p>
-                      <p className="font-body-sm text-on-surface-variant">{c.term}</p>
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={`font-data-mono text-data-mono font-bold ${c.active ? 'text-[#FF8C00]' : 'text-primary'}`}
-                      >
-                        {c.grade}
-                      </p>
-                      <p className="font-body-sm text-outline">{c.status}</p>
-                    </div>
                   </div>
                 ))}
               </div>

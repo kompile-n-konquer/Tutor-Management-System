@@ -8,14 +8,23 @@ jest.mock('../prisma/client', () => {
 
   return {
     applicant: { findMany: jest.fn(), findUnique: jest.fn() },
-    tutorAssignment: { findUnique: jest.fn(), findMany: jest.fn(), delete: jest.fn() },
+    tutorAssignment: { findUnique: jest.fn(), findMany: jest.fn(), delete: jest.fn(), count: jest.fn() },
     tutor: { findUnique: jest.fn(), create: jest.fn() },
+    course: { findUnique: jest.fn() },
     $transaction: jest.fn((fn) => fn(mockTx)),
     __tx: mockTx, // expose for test assertions
   };
 });
 
+// Email notifications are fire-and-forget: mock the notifier so tests assert
+// it was invoked without hitting Resend or the EmailLog table.
+jest.mock('../email/notifier', () => ({
+  notifyAssignmentAdded: jest.fn().mockResolvedValue({ sent: true, skipped: false }),
+  notifyAssignmentRemoved: jest.fn().mockResolvedValue({ sent: true, skipped: false }),
+}));
+
 const prisma = require('../prisma/client');
+const { notifyAssignmentAdded, notifyAssignmentRemoved } = require('../email/notifier');
 const {
   getAvailableTutors,
   assignTutor,
@@ -212,6 +221,12 @@ describe('assignTutor', () => {
       user: { firstName: 'Alice', lastName: 'Smith', email: 'alice@wits.ac.za' },
     });
     prisma.tutorAssignment.findUnique.mockResolvedValue(null);
+    prisma.course.findUnique.mockResolvedValue({
+      courseCode: 'COMS3000',
+      courseName: 'Algorithms',
+      requiredTutors: 2,
+    });
+    prisma.tutorAssignment.count.mockResolvedValue(1); // below the cap
     prisma.tutor.findUnique.mockResolvedValue({ id: 5, userId: 10 });
     prisma.__tx.tutor.findUnique.mockResolvedValue({ id: 5, userId: 10 });
 
@@ -224,6 +239,7 @@ describe('assignTutor', () => {
       semester: '',
       status: 'ACTIVE',
       course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
+      tutor: { user: { id: 10, firstName: 'Alice', lastName: 'Smith', email: 'alice@wits.ac.za' } },
       applicant: { user: { firstName: 'Alice', lastName: 'Smith', email: 'alice@wits.ac.za' } },
     };
 
@@ -261,9 +277,49 @@ describe('assignTutor', () => {
       }),
     );
 
+    // The newly assigned tutor is notified by email
+    expect(notifyAssignmentAdded).toHaveBeenCalledWith(createdAssignment);
+
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ assignment: createdAssignment });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the course has already reached its requiredTutors cap', async () => {
+    prisma.applicant.findUnique.mockResolvedValue({
+      id: 3,
+      userId: 30,
+      courseId: 100,
+      courseMark: 85,
+      user: { firstName: 'Cara', lastName: 'Liu' },
+    });
+    prisma.tutorAssignment.findUnique.mockResolvedValue(null);
+    prisma.course.findUnique.mockResolvedValue({
+      courseCode: 'COMS3000',
+      courseName: 'Algorithms',
+      requiredTutors: 2,
+    });
+    prisma.tutorAssignment.count.mockResolvedValue(2); // cap already reached
+
+    const req = mockReq({ body: { applicantId: 3 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await assignTutor(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 409,
+        message: expect.stringContaining('Maximum number of required tutors'),
+      }),
+    );
+
+    // Nothing is mutated: the applicant stays in the available pool
+    expect(prisma.__tx.tutorAssignment.create).not.toHaveBeenCalled();
+    expect(prisma.__tx.applicant.update).not.toHaveBeenCalled();
+    expect(notifyAssignmentAdded).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalledWith(201);
   });
 
   test('creates Tutor row when one does not exist for the user', async () => {
@@ -275,6 +331,12 @@ describe('assignTutor', () => {
       user: { firstName: 'Bob', lastName: 'Jones', email: 'bob@wits.ac.za' },
     });
     prisma.tutorAssignment.findUnique.mockResolvedValue(null);
+    prisma.course.findUnique.mockResolvedValue({
+      courseCode: 'COMS3000',
+      courseName: 'Algorithms',
+      requiredTutors: 3,
+    });
+    prisma.tutorAssignment.count.mockResolvedValue(0);
     prisma.tutor.findUnique.mockResolvedValue(null); // no Tutor yet
     prisma.__tx.tutor.findUnique.mockResolvedValue(null); // none inside tx either
 
@@ -290,6 +352,7 @@ describe('assignTutor', () => {
       semester: '2026-S2',
       status: 'ACTIVE',
       course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
+      tutor: { user: { id: 20, firstName: 'Bob', lastName: 'Jones', email: 'bob@wits.ac.za' } },
       applicant: { user: { firstName: 'Bob', lastName: 'Jones', email: 'bob@wits.ac.za' } },
     };
     prisma.__tx.tutorAssignment.create.mockResolvedValue(createdAssignment);
@@ -407,7 +470,12 @@ describe('unassignTutor', () => {
   });
 
   test('deletes assignment and resets applicant status to PENDING', async () => {
-    prisma.tutorAssignment.findUnique.mockResolvedValue({ id: 10, applicantId: 7 });
+    prisma.tutorAssignment.findUnique.mockResolvedValue({
+      id: 10,
+      applicantId: 7,
+      course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
+      tutor: { user: { id: 70, firstName: 'Dave', lastName: 'Root', email: 'dave@wits.ac.za' } },
+    });
     prisma.__tx.tutorAssignment.delete.mockResolvedValue({});
     prisma.__tx.applicant.update.mockResolvedValue({});
 
@@ -425,6 +493,12 @@ describe('unassignTutor', () => {
         data: expect.objectContaining({ status: 'PENDING' }),
       }),
     );
+
+    // The removed tutor is notified by email (loaded before deletion)
+    expect(notifyAssignmentRemoved).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 10, applicantId: 7 }),
+    );
+
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.end).toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();

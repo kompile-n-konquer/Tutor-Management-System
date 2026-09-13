@@ -17,6 +17,12 @@ import Profile from "./features/profile/Profile.jsx";
 import EditTimetable from "./features/timetable/EditTimetable.jsx";
 import Timesheets from "./features/timesheets/Timesheets.jsx";
 import Settings from "./features/settings/Placeholder.jsx";
+import LecturerView from "./features/lecturer-view/LecturerView.jsx";
+import AdminView from "./features/admin-view/AdminView.jsx";
+import OnboardingHub from "./features/onboarding/OnboardingHub.jsx";
+import TutorApplication from "./features/onboarding/TutorApplication.jsx";
+import LecturerApplication from "./features/onboarding/LecturerApplication.jsx";
+import ApplicationReview from "./features/onboarding/ApplicationReview.jsx";
 
 const router = createBrowserRouter([
   {
@@ -37,6 +43,12 @@ const router = createBrowserRouter([
       { path: "timetable/edit", element: <EditTimetable /> },
       { path: "timesheets", element: <Timesheets /> },
       { path: "settings", element: <Settings /> },
+      { path: "lecturer-view", element: <LecturerView /> },
+      { path: "admin-view", element: <AdminView /> },
+      { path: "onboarding", element: <OnboardingHub /> },
+      { path: "onboarding/tutor-application", element: <TutorApplication /> },
+      { path: "onboarding/lecturer-application", element: <LecturerApplication /> },
+      { path: "application-review", element: <ApplicationReview /> },
     ],
   },
 ]);

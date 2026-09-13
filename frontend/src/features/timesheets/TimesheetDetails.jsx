@@ -56,6 +56,7 @@ const TimesheetDetails = () => {
   const role = currentUser?.role?.toLowerCase();
   const isLecturer = role === 'lecturer' || role === 'organiser' || role === 'admin';
   const isSubmitted = timesheet?.status === 'SUBMITTED';
+  const isApproved = timesheet?.status === 'APPROVED';
   const displayName = timesheet?.name || 'Untitled';
 
   // ── Load timesheet ───────────────────────────────────────────────────────
@@ -157,7 +158,9 @@ const TimesheetDetails = () => {
         const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `timesheet-${id}.pdf`);
+        // Use the timesheet name for the downloaded file
+        const safeName = (timesheet?.name || 'timesheet').replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_');
+        link.setAttribute('download', `${safeName}.pdf`);
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -192,13 +195,15 @@ const TimesheetDetails = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              className="min-w-36 max-h-8"
-              onClick={handleExportPdf}
-              disabled={exporting}
-            >
-              {exporting ? 'Exporting...' : 'Export PDF'}
-            </Button>
+            {isApproved && (
+              <Button
+                className="min-w-36 max-h-8"
+                onClick={handleExportPdf}
+                disabled={exporting}
+              >
+                {exporting ? 'Exporting...' : 'Export PDF'}
+              </Button>
+            )}
             <Button className="min-w-40" onClick={() => navigate('/timesheets')}>
               Back to Timesheets
             </Button>

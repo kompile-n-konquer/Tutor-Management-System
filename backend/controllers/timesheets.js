@@ -2,9 +2,9 @@ const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const path = require('path');
 const fs = require('fs');
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { getTutorMonthlyClaimableHours, getTutorEventClaimMonths, HOURLY_RATE_KEYS, PDF_TEMPLATE_KEY } = require('../utils/systemSettings');
-const { monthsBefore, findExcessiveWindow, deriveEventEntry } = require('../utils/claimRules');
+const { monthsBefore, findExcessiveWindow, deriveEventEntry, deriveTimes, dayOfWeekFor } = require('../utils/claimRules');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
@@ -625,6 +625,13 @@ exports.rejectTimesheet = catchAsync(async (req, res, next) => {
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
 
+// Converts minutes since midnight into "HH:MM"
+const minutesToLabel = (m) => {
+  const h = Math.floor(m / 60);
+  const mins = m % 60;
+  return `${String(h).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+};
+
 exports.exportTimesheetPdf = catchAsync(async (req, res, next) => {
   const user = await getUser(req.user.user_id);
   const timesheetId = Number(req.params.id);
@@ -649,15 +656,24 @@ exports.exportTimesheetPdf = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  // Load timesheet with all related data
+  // Load timesheet with all related data including event slots for time derivation
   const timesheet = await prisma.timesheet.findUnique({
     where: { id: timesheetId },
     include: {
-      user: { select: { firstName: true, lastName: true, email: true, studentNumber: true, employeeNumber: true, yearOfStudy: true, phoneNumber: true } },
+      user: { select: { firstName: true, lastName: true, email: true, yearOfStudy: true, phoneNumber: true } },
       entries: {
         include: {
           course: { select: { courseCode: true, courseName: true } },
-          supervisor: { select: { firstName: true, lastName: true, email: true } },
+          supervisor: { select: { firstName: true, lastName: true } },
+          event: {
+            include: {
+              course: {
+                include: {
+                  slots: { include: { timeSlot: true } },
+                },
+              },
+            },
+          },
         },
         orderBy: { workDate: 'asc' },
       },
@@ -670,12 +686,9 @@ exports.exportTimesheetPdf = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  // Owner or supervisor (lecturer) or organiser/admin can export
-  const isOwner = timesheet.userId === user.id;
-  const isSupervisor = timesheet.entries.some((e) => e.supervisorId === user.id);
-  const isPrivileged = ['ORGANISER', 'ADMIN'].includes(user.role.toUpperCase());
-  if (!isOwner && !isSupervisor && !isPrivileged) {
-    const error = new Error('You do not have permission to export this timesheet');
+  // Only APPROVED timesheets can be exported
+  if (timesheet.status !== 'APPROVED') {
+    const error = new Error('Only approved timesheets can be exported as PDF');
     error.statusCode = 403;
     return next(error);
   }
@@ -689,85 +702,101 @@ exports.exportTimesheetPdf = catchAsync(async (req, res, next) => {
     if (rateSetting) hourlyRate = Number(rateSetting.value);
   }
 
-  // Load and fill the PDF template
+  // Load the PDF template and draw text directly at the measured positions
   const templateBytes = fs.readFileSync(templatePath);
   const pdfDoc = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
-  const form = pdfDoc.getForm();
-  const fields = form.getFields();
-  const fieldNames = new Set(fields.map((f) => f.getName()));
+  const page = pdfDoc.getPages()[0];
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontSize = 10; // matches the template body text
 
-  // Helper: safely set a text field if it exists in the template
-  const setText = (name, value) => {
-    if (!fieldNames.has(name)) return;
-    try {
-      const field = form.getTextField(name);
-      field.setText(value != null ? String(value) : '');
-    } catch (_) { /* field type mismatch — skip silently */ }
-  };
-
-  // Build a flat data map for template fields
+  // ── Tutor Details ─────────────────────────────────────────────────────────
   const tutor = timesheet.user;
-  setText('tutorName', `${tutor.firstName} ${tutor.lastName}`);
-  setText('firstName', tutor.firstName);
-  setText('lastName', tutor.lastName);
-  setText('email', tutor.email);
-  setText('tutorEmail', tutor.email);
-  setText('studentNumber', tutor.studentNumber || '');
-  setText('employeeNumber', tutor.employeeNumber || '');
-  setText('phoneNumber', tutor.phoneNumber || '');
-  setText('yearOfStudy', tutor.yearOfStudy || '');
-  setText('department', 'School of Computer Science');
-  setText('timesheetName', timesheet.name);
-  setText('payrollNumber', timesheet.payrollNumber || '');
-  setText('totalHours', String(timesheet.totalHours));
-  setText('status', timesheet.status);
-  setText('dateExported', new Date().toLocaleDateString('en-ZA'));
-  setText('createdAt', timesheet.createdAt ? new Date(timesheet.createdAt).toLocaleDateString('en-ZA') : '');
-  setText('submittedAt', timesheet.submittedAt ? new Date(timesheet.submittedAt).toLocaleDateString('en-ZA') : '');
-  setText('approvedAt', timesheet.approvedAt ? new Date(timesheet.approvedAt).toLocaleDateString('en-ZA') : '');
-  setText('hourlyRate', hourlyRate != null ? String(hourlyRate) : '');
-  setText('totalAmount', hourlyRate != null ? String(timesheet.totalHours * hourlyRate) : '');
-  setText('numEntries', String(timesheet.entries.length));
+  page.drawText(`${tutor.firstName} ${tutor.lastName}`, { x: 135, y: 712, size: fontSize, font, color: rgb(0, 0, 0) });
+  page.drawText(tutor.email, { x: 135, y: 665, size: fontSize, font, color: rgb(0, 0, 0) });
+  page.drawText(tutor.phoneNumber || '', { x: 416, y: 642, size: fontSize, font, color: rgb(0, 0, 0) });
 
-  // Fill individual entry rows (1-indexed: entry_1_*, entry_2_*, …)
+  // Year of study — draw a bold "X" next to the matching option
+  const yearXPositions = {
+    '3rd year': 142,
+    honours:   188,
+    masters:   236,
+    phd:       291,
+  };
+  if (tutor.yearOfStudy && yearXPositions[tutor.yearOfStudy] != null) {
+    page.drawText('X', {
+      x: yearXPositions[tutor.yearOfStudy],
+      y: 642,
+      size: 14,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+  }
+
+  // ── Timesheet Entry Rows ──────────────────────────────────────────────────
+  // The table has 14 row positions; fill them top-to-bottom
+  const entryRowYs = [
+    584, 563, 543, 521, 500, 480, 459,
+    439, 419, 397, 376, 356, 335, 314,
+  ];
+
   timesheet.entries.forEach((entry, i) => {
-    const idx = i + 1;
-    setText(`entry_${idx}_date`, entry.workDate ? new Date(entry.workDate).toLocaleDateString('en-ZA') : '');
-    setText(`entry_${idx}_course`, entry.course ? `${entry.course.courseCode} - ${entry.course.courseName}` : '');
-    setText(`entry_${idx}_courseCode`, entry.course?.courseCode || '');
-    setText(`entry_${idx}_courseName`, entry.course?.courseName || '');
-    setText(`entry_${idx}_description`, entry.description || '');
-    setText(`entry_${idx}_hours`, String(entry.duration));
-    setText(`entry_${idx}_supervisor`, entry.supervisor ? `${entry.supervisor.firstName} ${entry.supervisor.lastName}` : '');
-    setText(`entry_${idx}_status`, entry.status || '');
+    if (i >= entryRowYs.length) return; // table is full
+    const y = entryRowYs[i];
 
-    // Per-entry amount
-    if (hourlyRate != null) {
-      setText(`entry_${idx}_amount`, String(entry.duration * hourlyRate));
+    // Derive "Start-End" from event slots
+    let taskTimes = '';
+    if (entry.event?.course?.slots) {
+      const eventDate = new Date(entry.event.date);
+      const dow = dayOfWeekFor(eventDate);
+      const slots = deriveTimes(entry.event.course.slots, dow);
+      if (slots.length > 0) {
+        const first = slots[0];
+        const last = slots[slots.length - 1];
+        taskTimes = `${minutesToLabel(first.startMinute)}-${minutesToLabel(last.endMinute)}`;
+      }
     }
+
+    // Date of Task
+    const dateFontSize = 8;
+    const dateStr = entry.workDate ? new Date(entry.workDate).toLocaleDateString('en-ZA') : '';
+    page.drawText(dateStr, { x: 39, y, size: dateFontSize, font, color: rgb(0, 0, 0) });
+
+    // Times of Task
+    page.drawText(taskTimes, { x: 84, y, size: dateFontSize, font, color: rgb(0, 0, 0) });
+
+    // Duration of Task
+    page.drawText(String(entry.duration), { x: 151, y, size: fontSize, font, color: rgb(0, 0, 0) });
+
+    // Description
+    page.drawText(`${entry.description || ''} - ${entry.course.courseCode || ''}`, { x: 210, y, size: fontSize, font, color: rgb(0, 0, 0) });
+
+    // Name of Supervisor
+    const supName = entry.supervisor ? `${entry.supervisor.firstName} ${entry.supervisor.lastName}` : '';
+    page.drawText(supName, { x: 385, y, size: fontSize, font, color: rgb(0, 0, 0) });
   });
 
-  // Also support 0-indexed naming (entry_0_*, entry_1_*, …) for flexibility
-  timesheet.entries.forEach((entry, i) => {
-    setText(`entry_${i}_date`, entry.workDate ? new Date(entry.workDate).toLocaleDateString('en-ZA') : '');
-    setText(`entry_${i}_course`, entry.course ? `${entry.course.courseCode} - ${entry.course.courseName}` : '');
-    setText(`entry_${i}_courseCode`, entry.course?.courseCode || '');
-    setText(`entry_${i}_courseName`, entry.course?.courseName || '');
-    setText(`entry_${i}_description`, entry.description || '');
-    setText(`entry_${i}_hours`, String(entry.duration));
-    setText(`entry_${i}_supervisor`, entry.supervisor ? `${entry.supervisor.firstName} ${entry.supervisor.lastName}` : '');
-    setText(`entry_${i}_status`, entry.status || '');
-    if (hourlyRate != null) {
-      setText(`entry_${i}_amount`, String(entry.duration * hourlyRate));
-    }
-  });
+  // ── Claim Information (Signature + Totals) ────────────────────────────────
+  // Date (approval date) next to Student Signature
+  const footerFontSize = 13;
+  const approvalDate = timesheet.approvedAt
+    ? new Date(timesheet.approvedAt).toLocaleDateString('en-ZA')
+    : '';
+  page.drawText(approvalDate, { x: 423, y: 244, size: footerFontSize, font, color: rgb(0, 0, 0) });
 
-  // Flatten the form so the filled values are visible in any PDF reader
-  form.flatten();
+  // Total Number of Hours
+  page.drawText(String(timesheet.totalHours), { x: 189, y: 191, size: footerFontSize, font, color: rgb(0, 0, 0) });
+
+  // Total Amount (total hours x hourly rate)
+  const totalAmount = hourlyRate != null ? String(timesheet.totalHours * hourlyRate) : '';
+  page.drawText(totalAmount, { x: 443, y: 191, size: footerFontSize, font, color: rgb(0, 0, 0) });
 
   const pdfBytes = await pdfDoc.save();
 
+  // Use the timesheet name as the filename
+  const safeName = (timesheet.name || 'timesheet').replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_');
+
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="timesheet-${timesheetId}.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
   res.send(Buffer.from(pdfBytes));
 });

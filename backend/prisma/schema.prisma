@@ -51,10 +51,11 @@ model Application {
   courseMark     Float
   transcriptPath String?
   status         String    @default("PENDING")
-  appliedAt      DateTime  @default(now())
-  reviewedAt     DateTime?
-  course         Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  user           User      @relation(fields: [userId], references: [id])
+  appliedAt        DateTime  @default(now())
+  reviewedAt       DateTime?
+  course           Course             @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  user             User               @relation(fields: [userId], references: [id])
+  tutorAssignment  TutorAssignment?
 }
 
 model Course {
@@ -198,4 +199,52 @@ model OverflowWork {
   status      String
   user        User?  @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course      Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+}
+
+/// Tracks a student's application to become a Tutor or Lecturer.
+/// The organiser reviews each application and either approves (changing the
+/// user's role and creating the Tutor/Lecturer record) or rejects it.
+model RoleApplication {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  requestedRole   String    // TUTOR or LECTURER
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  submittedAt     DateTime  @default(now())
+  reviewedAt      DateTime?
+  reviewedById    Int?      // organiser's User.id; no FK to avoid cascade paths
+
+  // ── Tutor-specific fields (populated when requestedRole = TUTOR) ──
+  hourlyRate      Float?
+  maxHoursPerWeek Int?
+
+  // ── Lecturer-specific fields (populated when requestedRole = LECTURER) ──
+  department      String?
+  officeLocation  String?
+  officeHours     String?
+
+  rejectionReason String?
+
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, requestedRole, status])
+}
+
+/// Audit log for outgoing notification emails (assignment added/removed,
+/// timesheet approved/rejected). One row per send attempt; the dedupeKey
+/// makes duplicate sends of the same event impossible.
+model EmailLog {
+  id              Int       @id @default(autoincrement())
+  eventType       String // ASSIGNMENT_ADDED | ASSIGNMENT_REMOVED | TIMESHEET_APPROVED | TIMESHEET_REJECTED | TIMESHEET_STUCK_REMINDER
+  entityType      String // Prisma model name of the affected entity, e.g. TutorAssignment / Timesheet
+  entityId        Int
+  dedupeKey       String
+  recipientEmail  String
+  recipientUserId Int? // User.id of the recipient when known
+  status          String    @default("PENDING") // PENDING while in flight, then SENT or FAILED
+  subject         String?
+  attemptedAt     DateTime  @default(now())
+  sentAt          DateTime?
+  errorMessage    String? // failure details when status = FAILED
+
+  @@index([dedupeKey, status])
 }

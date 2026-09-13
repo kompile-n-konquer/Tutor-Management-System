@@ -1,6 +1,7 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const getFirebaseAdmin = require('../firebase/admin');
+const { normaliseRole } = require('../utils/roles');
 
 exports.getAllUsers = catchAsync(async (req, res, next) => {
   const users = await prisma.user.findMany();
@@ -18,6 +19,18 @@ exports.getUser = catchAsync(async (req, res, next) => {
   }
 
   res.status(200).json(user);
+});
+
+exports.getUserMe = catchAsync(async (req, res, next) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+  if (!user) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  res.json(user);
 });
 
 exports.createUser = catchAsync(async (req, res, next) => {
@@ -75,6 +88,24 @@ exports.updateUser = catchAsync(async (req, res, next) => {
 
   const updated = await prisma.user.update({ where: { firebaseUid }, data });
   res.status(200).json(updated);
+});
+
+exports.verifyRole = catchAsync(async (req, res, next) => {
+  const userRole = req.user.role;
+  const requestedRoles = String(req.query.roles || '')
+    .split(',')
+    .map((role) => role.trim())
+    .filter(Boolean);
+
+  const allowedRoles = requestedRoles.map(normaliseRole).filter(Boolean);
+
+  if (allowedRoles.includes(userRole)) {
+    return res.json({ role: userRole, allowed: true });
+  }
+
+  const error = new Error('You do not have permission to access this resource');
+  error.statusCode = 403;
+  return next(error);
 });
 
 exports.deleteUser = catchAsync(async (req, res, next) => {

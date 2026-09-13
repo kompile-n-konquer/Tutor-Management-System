@@ -4,7 +4,7 @@ import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
 import api from '../../utils/axiosInstance';
 import useAsync from '../../hooks/useAsync';
-import { useAuth } from '../context/AuthContext';
+import useAuth from '../../hooks/useAuth';
 import ErrorMessage from '../../components/error-message/ErrorMessage';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -150,7 +150,7 @@ const EditTimetable = () => {
   };
 
   return (
-    <AppLayout role="tutor" title="Edit Timetable" showSearch={false}>
+    <AppLayout title="Edit Timetable" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>

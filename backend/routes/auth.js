@@ -7,6 +7,8 @@ router.get('/', getAllUsers);
 router.get('/:firebaseUid', authenticateFirebaseToken, getUser);
 router.post('/', createUser);
 router.put('/', authenticateFirebaseToken, updateUser);
+router.get('/me', authenticateFirebaseToken, getUserMe);
+router.get('/verify-role', authenticateFirebaseToken, verifyRole);
 router.delete('/', authenticateFirebaseToken, deleteUser);
 
 module.exports = router;

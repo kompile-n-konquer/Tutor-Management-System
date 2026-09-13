@@ -7,10 +7,10 @@ import useAsync from '../../hooks/useAsync';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_STYLES = {
-  DRAFT:     'bg-surface-variant text-on-surface-variant',
+  DRAFT: 'bg-surface-variant text-on-surface-variant',
   SUBMITTED: 'bg-trust-blue/10 text-trust-blue',
-  APPROVED:  'bg-green-600/10 text-green-700',
-  REJECTED:  'bg-error/10 text-error',
+  APPROVED: 'bg-green-600/10 text-green-700',
+  REJECTED: 'bg-error/10 text-error',
 };
 
 const Timesheets = () => {
@@ -27,9 +27,7 @@ const Timesheets = () => {
 
   const loadTimesheets = useCallback(async () => {
     if (!currentUser) return;
-    const res = await execute(() =>
-      isTutor ? api.get('/timesheets') : api.get('/timesheets/pending-review')
-    );
+    const res = await execute(() => (isTutor ? api.get('/timesheets') : api.get('/timesheets/pending-review')));
     if (res && res.status === 200) setTimesheets(res.data);
     setLoaded(true);
   }, [currentUser, execute, isTutor]);
@@ -56,7 +54,7 @@ const Timesheets = () => {
 
   const formatDate = (iso) => new Date(iso).toLocaleDateString();
 
-  console.log(timesheets)
+  console.log(timesheets);
   return (
     <AppLayout role={role} title="Timesheets">
       <div className="p-gutter md:p-margin-page space-y-gutter">
@@ -64,7 +62,9 @@ const Timesheets = () => {
           <div>
             <h2 className="font-display text-display text-primary">Timesheets</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              {isTutor ? 'Track your tutoring hours and submit them for approval.' : 'Review and sign off submitted timesheets.'}
+              {isTutor
+                ? 'Track your tutoring hours and submit them for approval.'
+                : 'Review and sign off submitted timesheets.'}
             </p>
           </div>
           <div>
@@ -72,7 +72,7 @@ const Timesheets = () => {
               <Button className="min-w-40" onClick={handleCreate}>
                 Create Timesheet
               </Button>
-          )}
+            )}
           </div>
         </div>
 
@@ -81,7 +81,9 @@ const Timesheets = () => {
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading timesheets...</p>
           ) : timesheets.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
-              {isTutor ? 'No timesheets yet. Click "Create Timesheet" to start one.' : 'No timesheets are awaiting your review.'}
+              {isTutor
+                ? 'No timesheets yet. Click "Create Timesheet" to start one.'
+                : 'No timesheets are awaiting your review.'}
             </p>
           ) : (
             <table className="w-full text-left border-collapse">
@@ -101,33 +103,39 @@ const Timesheets = () => {
                   const editable = timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED';
                   return (
                     <tr key={timesheet.id}>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
-                        {timesheet.name}
-                      </td>
+                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">{timesheet.name}</td>
                       {isLecturer && (
                         <td className="py-stack-sm px-stack-md">
                           <span className="font-semibold text-on-surface">{timesheet.tutorName}</span>
                           <span className="text-on-surface-variant text-xs ml-1">{timesheet.tutorEmail}</span>
                         </td>
                       )}
-                      {!isLecturer && <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
-                        {formatDate(timesheet.createdAt)}
-                      </td> }
-                      {!isLecturer && <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
-                        {formatDate(timesheet.updatedAt)}
-                      </td> }
+                      {!isLecturer && (
+                        <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          {formatDate(timesheet.createdAt)}
+                        </td>
+                      )}
+                      {!isLecturer && (
+                        <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          {formatDate(timesheet.updatedAt)}
+                        </td>
+                      )}
                       <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {(timesheet.entries || []).reduce((sum, e) => sum + Number(e.duration || 0), 0)}
                       </td>
                       <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold font-data-mono ${STATUS_STYLES[timesheet.status] || ''}`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-semibold font-data-mono ${STATUS_STYLES[timesheet.status] || ''}`}
+                        >
                           {timesheet.status}
                         </span>
                       </td>
                       <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         <Button
                           className="min-w-24 max-h-8 text-[11px]"
-                          onClick={() => navigate(editable ? `/timesheets/${timesheet.id}` : `/timesheets/${timesheet.id}/details`)}
+                          onClick={() =>
+                            navigate(editable ? `/timesheets/${timesheet.id}` : `/timesheets/${timesheet.id}/details`)
+                          }
                         >
                           {editable ? 'Continue Editing' : 'View'}
                         </Button>

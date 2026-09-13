@@ -1,6 +1,40 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 
+/**
+ * GET /api/courses
+ *
+ * Returns all courses with the count of currently assigned tutors so the
+ * Organiser Board can display allocation progress without extra round-trips.
+ */
+exports.getAllCourses = catchAsync(async (req, res, next) => {
+  const courses = await prisma.course.findMany({
+    include: {
+      _count: { select: { assignments: true } },
+      lecturer: {
+        include: {
+          user: { select: { firstName: true, lastName: true } },
+        },
+      },
+    },
+    orderBy: { courseCode: 'asc' },
+  });
+
+  const mapped = courses.map((c) => ({
+    id: c.id,
+    courseCode: c.courseCode,
+    courseName: c.courseName,
+    minimumMark: c.minimumMark,
+    requiredTutors: c.requiredTutors,
+    budgetHours: c.budgetHours,
+    hourlyRate: c.hourlyRate,
+    assignedCount: c._count.assignments,
+    lecturer: c.lecturer ? `${c.lecturer.user.firstName} ${c.lecturer.user.lastName}` : null,
+  }));
+
+  res.json({ courses: mapped });
+});
+
 exports.getTimeSlots = catchAsync(async (req, res, next) => {
   const timeSlots = await prisma.timeSlot.findMany({
     orderBy: { startMinute: 'asc' },
@@ -28,8 +62,17 @@ exports.createCourse = catchAsync(async (req, res, next) => {
 
   const { courseCode, courseName, minimumMark, tutorsRequired, slots } = req.body;
 
-  if (!courseCode || !courseName || minimumMark === undefined || tutorsRequired === undefined || !Array.isArray(slots) || slots.length === 0) {
-    const error = new Error('courseCode, courseName, minimumMark, tutorsRequired and at least one tutoring slot are required');
+  if (
+    !courseCode ||
+    !courseName ||
+    minimumMark === undefined ||
+    tutorsRequired === undefined ||
+    !Array.isArray(slots) ||
+    slots.length === 0
+  ) {
+    const error = new Error(
+      'courseCode, courseName, minimumMark, tutorsRequired and at least one tutoring slot are required',
+    );
     error.statusCode = 400;
     return next(error);
   }
@@ -217,8 +260,17 @@ exports.updateCourse = catchAsync(async (req, res, next) => {
 
   const { courseCode, courseName, minimumMark, tutorsRequired, slots } = req.body;
 
-  if (!courseCode || !courseName || minimumMark === undefined || tutorsRequired === undefined || !Array.isArray(slots) || slots.length === 0) {
-    const error = new Error('courseCode, courseName, minimumMark, tutorsRequired and at least one tutoring slot are required');
+  if (
+    !courseCode ||
+    !courseName ||
+    minimumMark === undefined ||
+    tutorsRequired === undefined ||
+    !Array.isArray(slots) ||
+    slots.length === 0
+  ) {
+    const error = new Error(
+      'courseCode, courseName, minimumMark, tutorsRequired and at least one tutoring slot are required',
+    );
     error.statusCode = 400;
     return next(error);
   }
@@ -282,7 +334,9 @@ exports.updateCourse = catchAsync(async (req, res, next) => {
 
   const updatedCourse = await prisma.course.findUnique({
     where: { id: courseId },
-    include: { slots: { include: { timeSlot: true }, orderBy: [{ dayOfWeek: 'asc' }, { timeSlot: { startMinute: 'asc' } }] } },
+    include: {
+      slots: { include: { timeSlot: true }, orderBy: [{ dayOfWeek: 'asc' }, { timeSlot: { startMinute: 'asc' } }] },
+    },
   });
 
   res.status(200).json(updatedCourse);
@@ -352,7 +406,9 @@ exports.updateCourseSlots = catchAsync(async (req, res, next) => {
 
   const updatedCourse = await prisma.course.findUnique({
     where: { id: courseId },
-    include: { slots: { include: { timeSlot: true }, orderBy: [{ dayOfWeek: 'asc' }, { timeSlot: { startMinute: 'asc' } }] } },
+    include: {
+      slots: { include: { timeSlot: true }, orderBy: [{ dayOfWeek: 'asc' }, { timeSlot: { startMinute: 'asc' } }] },
+    },
   });
 
   res.status(200).json(updatedCourse);

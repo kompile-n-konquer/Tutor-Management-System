@@ -6,7 +6,7 @@ import useAsync from '../../hooks/useAsync';
 import api from '../../utils/axiosInstance';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { useAuth } from '../context/AuthContext';
+import useAuth from '../../hooks/useAuth';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -19,14 +19,21 @@ const minutesToLabel = (minutes) => {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, loading } = useAuth();
+  const { currentUser, userProfile, role, loading } = useAuth();
   const { execute, isLoading } = useAsync();
-  const { execute: executeTimetable, isLoading: isLoadingTimetable } = useAsync();
+  const { execute: executeTimetable } = useAsync();
 
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [availability, setAvailability] = useState([]); // [{ dayOfWeek, timeSlotId }]
   const [lockedSlots, setLockedSlots] = useState([]); // [{ dayOfWeek, timeSlotId }] held by submitted applications
-  const [profileData, setProfileData] = useState({ firstName: '', lastName: '', phoneNumber: '', yearOfStudy: '', email: '', createdAt: null });
+  const [profileData, setProfileData] = useState({
+    firstName: '',
+    lastName: '',
+    phoneNumber: '',
+    yearOfStudy: '',
+    email: '',
+    createdAt: null,
+  });
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -68,7 +75,7 @@ export default function Profile() {
     loadProfile();
   }, [currentUser, loading, execute]);
 
-  if (loading) return null; // TODO: Create a professional loading state 
+  if (loading) return null; // TODO: Create a professional loading state
   if (!currentUser) return null;
 
   const availableKeys = new Set(availability.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
@@ -81,15 +88,19 @@ export default function Profile() {
       const headers = { Authorization: `Bearer ${token}` };
       const response = await execute(() => api.delete('/users', { headers }));
 
-      if (response.status === 204) {
+      if (response?.status === 204) {
         await signOut(auth);
         navigate('/');
       }
     }
   };
 
+  const displayName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 'Loading...';
+  const displayId = userProfile?.studentNumber || userProfile?.employeeNumber || '';
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+
   return (
-    <AppLayout role="tutor" title="Settings" showSearch={false}>
+    <AppLayout title="Settings" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -98,16 +109,16 @@ export default function Profile() {
             </h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
               {profileData.yearOfStudy
-                ? `${profileData.yearOfStudy.charAt(0).toUpperCase() + profileData.yearOfStudy.slice(1)} Student` : 'Student'}
-              {profileData.createdAt ? ` \u00B7 Joined: ${new Date(profileData.createdAt).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long' })}` : ''}
+                ? `${profileData.yearOfStudy.charAt(0).toUpperCase() + profileData.yearOfStudy.slice(1)} Student`
+                : 'Student'}
+              {profileData.createdAt
+                ? ` \u00B7 Joined: ${new Date(profileData.createdAt).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long' })}`
+                : ''}
             </p>
           </div>
           <div className="flex gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1E90FF]/10 text-[#1E90FF] font-label-caps text-label-caps border border-[#1E90FF]/20">
-              <span className="material-symbols-outlined text-[16px]">verified</span> Active Tutor
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-caps text-label-caps border border-outline-variant/50">
-              <span className="material-symbols-outlined text-[16px]">schedule</span> 120h Logged
+              <span className="material-symbols-outlined text-[16px]">verified</span> {roleLabel}
             </span>
           </div>
         </div>
@@ -205,7 +216,10 @@ export default function Profile() {
                     Set your preferred tutoring hours for the current semester.
                   </p>
                 </div>
-                <button onClick={() => navigate('/timetable/edit')} className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors cursor-pointer">
+                <button
+                  onClick={() => navigate('/timetable/edit')}
+                  className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors cursor-pointer"
+                >
                   Edit Timetable
                 </button>
               </div>
@@ -236,8 +250,8 @@ export default function Profile() {
                               isLocked
                                 ? 'bg-urgent-orange/5'
                                 : isAvailable
-                                ? 'bg-primary/5'
-                                : 'bg-surface-container-lowest'
+                                  ? 'bg-primary/5'
+                                  : 'bg-surface-container-lowest'
                             }`}
                           >
                             {isLocked ? (

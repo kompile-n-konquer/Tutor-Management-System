@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { getNavLinksForRole, FOOTER_LINKS } from "../../config/navConfig";
-import { useAuth } from "../../features/context/AuthContext";
+import useAuth from "../../hooks/useAuth";
 
 export default function Sidebar() {
   const { signOut, currentUser } = useAuth();

@@ -1,4 +1,6 @@
 const getFirebaseAdmin = require('../firebase/admin');
+const prisma = require('../prisma/client');
+const { normaliseRole } = require('../utils/roles');
 
 async function authenticateFirebaseToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -14,7 +16,24 @@ async function authenticateFirebaseToken(req, res, next) {
   try {
     const { getAuth } = getFirebaseAdmin();
     const decodedToken = await getAuth().verifyIdToken(idToken);
-    req.user = decodedToken;
+    const firebaseUid = decodedToken.uid;
+
+    const user = await prisma.user.findUnique({ where: { firebaseUid } });
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const role = normaliseRole(user.role);
+    if (!role) {
+      return res.status(403).json({ error: 'User role is not recognised' });
+    }
+
+    req.user = {
+      ...decodedToken,
+      id: user.id,
+      email: user.email,
+      role,
+    };
     next();
   } catch (error) {
     console.error('Firebase token verification failed:', error.message);
@@ -24,4 +43,5 @@ async function authenticateFirebaseToken(req, res, next) {
     return res.status(401).json({ error: 'Invalid Firebase ID token' });
   }
 }
+
 module.exports = authenticateFirebaseToken;

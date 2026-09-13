@@ -27,6 +27,7 @@ model User {
   assignments    TutorAssignment[]
   busyBlocks     BusyBlock[]
   timesheets     Timesheet[]
+  roleApplications RoleApplication[]
   supervisedTimesheets TimesheetEntry[] @relation("TimesheetSupervisor")
   overflowClaims OverflowWork[]
 }
@@ -55,7 +56,6 @@ model Application {
   reviewedAt       DateTime?
   course           Course             @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   user             User               @relation(fields: [userId], references: [id])
-  tutorAssignment  TutorAssignment?
 }
 
 model Course {

@@ -1,5 +1,5 @@
 import { FirebaseError } from 'firebase/app';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import firebaseErrorMessages from '../firebase/getFirebaseErrorMessage.js';
 
 // This is a generic custom hook that reduces common concerns that often come with async operations that make api calls
@@ -7,7 +7,10 @@ const useAsync = () => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const execute = async (operation) => {
+    // useCallback keeps the same function reference across renders.
+    // Without it, useEffects that depend on execute re-run on every render and loop infinitely.
+    // The deps array is empty because the function only uses state setters, which never change.
+    const execute = useCallback(async (operation) => {
         setIsLoading(true);
         setError('');
 
@@ -23,7 +26,7 @@ const useAsync = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     return { setError, execute, error, isLoading };
 };

@@ -11,6 +11,8 @@ import { auth } from '../../../firebase/firebase.js';
 import provider from '../../../firebase/googleProvider.js';
 import AuthLayout from "../../../components/auth-layout/AuthLayout.jsx";
 import GoogleIcon from "../../../components/google-icon/GoogleIcon.jsx";
+import api from '../../../utils/axiosInstance.js';
+import { ROLE_HOME_ROUTE } from '../../../constants/roles.js';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -29,13 +31,25 @@ export default function Login() {
 
     setError("");
     const response = await execute(() => signInWithEmailAndPassword(auth, email, password));
-    if (response) navigate("/tutor-dashboard");
+    if (response?.user) {
+      await redirectToRoleHome();
+    }
   }
 
   async function handleGoogleLogin() {
     setError("");
     const response = await execute(() => signInWithPopup(auth, provider));
-    if (response) navigate("/tutor-dashboard");
+    if (response?.user) {
+      await redirectToRoleHome();
+    }
+  }
+
+  async function redirectToRoleHome() {
+    const meResponse = await execute(() => api.get('/users/me'));
+    if (meResponse?.status === 200 && meResponse.data.role) {
+      const role = meResponse.data.role.toLowerCase();
+      navigate(ROLE_HOME_ROUTE[role] || '/tutor-dashboard');
+    }
   }
 
   return (

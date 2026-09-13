@@ -15,6 +15,7 @@ model User {
   lastName       String
   email          String      @unique
   phoneNumber    String?
+  yearOfStudy    String?     // one of: 3rd year, honours, masters, phd
   role           String      @default("STUDENT") // intentionally String: SQL Server doesn't support Prisma enums; one of STUDENT/TUTOR/LECTURER/ORGANISER/ADMIN, validated in application code
   isActive       Boolean     @default(true)
   createdAt      DateTime    @default(now())

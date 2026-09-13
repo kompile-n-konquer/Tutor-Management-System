@@ -26,6 +26,7 @@ export default function Profile() {
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [availability, setAvailability] = useState([]); // [{ dayOfWeek, timeSlotId }]
   const [lockedSlots, setLockedSlots] = useState([]); // [{ dayOfWeek, timeSlotId }] held by submitted applications
+  const [profileData, setProfileData] = useState({ firstName: '', lastName: '', phoneNumber: '', yearOfStudy: '', email: '', createdAt: null });
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -47,6 +48,25 @@ export default function Profile() {
 
     loadTimetable();
   }, [currentUser, loading, executeTimetable]);
+
+  // Fetch full user profile (phoneNumber, yearOfStudy) from the backend
+  useEffect(() => {
+    if (loading || !currentUser) return;
+    const loadProfile = async () => {
+      const res = await execute(() => api.get(`/users/${currentUser.uid}`));
+      if (res?.status === 200 && res.data) {
+        setProfileData({
+          firstName: res.data.firstName || '',
+          lastName: res.data.lastName || '',
+          phoneNumber: res.data.phoneNumber || '',
+          yearOfStudy: res.data.yearOfStudy || '',
+          email: res.data.email || '',
+          createdAt: res.data.createdAt || null,
+        });
+      }
+    };
+    loadProfile();
+  }, [currentUser, loading, execute]);
 
   if (loading) return null; // TODO: Create a professional loading state 
   if (!currentUser) return null;
@@ -73,9 +93,13 @@ export default function Profile() {
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-display text-primary">Alex Mercer</h2>
+            <h2 className="font-display text-display text-primary">
+              {profileData.firstName} {profileData.lastName}
+            </h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              Computer Science M.Sc. Student · ID: 1045920
+              {profileData.yearOfStudy
+                ? `${profileData.yearOfStudy.charAt(0).toUpperCase() + profileData.yearOfStudy.slice(1)} Student` : 'Student'}
+              {profileData.createdAt ? ` \u00B7 Joined: ${new Date(profileData.createdAt).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long' })}` : ''}
             </p>
           </div>
           <div className="flex gap-2">
@@ -93,14 +117,18 @@ export default function Profile() {
             <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
               <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">Personal Info</h3>
-                <button className="text-primary hover:text-primary-container">
+                <button
+                  onClick={() => navigate('/profile/edit')}
+                  className="text-primary hover:text-primary-container cursor-pointer"
+                  title="Edit personal info"
+                >
                   <span className="material-symbols-outlined text-[20px]">edit</span>
                 </button>
               </div>
               <div className="space-y-4">
                 {[
-                  ['EMAIL', 'a.mercer@university.edu'],
-                  ['PHONE', '+1 (555) 019-2837'],
+                  ['EMAIL', profileData.email],
+                  ['PHONE', profileData.phoneNumber || '—'],
                   ['DEPARTMENT', 'School of Computer Science'],
                 ].map(([label, value]) => (
                   <div key={label}>
@@ -109,11 +137,12 @@ export default function Profile() {
                   </div>
                 ))}
                 <div>
-                  <p className="font-label-caps text-[10px] text-outline mb-1">LANGUAGES</p>
-                  <div className="flex gap-2 mt-1">
-                    <span className="px-2 py-0.5 bg-surface-container rounded text-body-sm">English</span>
-                    <span className="px-2 py-0.5 bg-surface-container rounded text-body-sm">Spanish</span>
-                  </div>
+                  <p className="font-label-caps text-[10px] text-outline mb-1">YEAR OF STUDY</p>
+                  <p className="font-body-md text-body-md text-on-surface">
+                    {profileData.yearOfStudy
+                      ? profileData.yearOfStudy.charAt(0).toUpperCase() + profileData.yearOfStudy.slice(1)
+                      : '—'}
+                  </p>
                 </div>
               </div>
             </div>

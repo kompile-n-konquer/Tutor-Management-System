@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 
+import AuthProvider from "./features/context/AuthContext.jsx";
 import RootLayout from "./RootLayout.jsx";
 import ErrorPage from "./components/error-page/ErrorPage.jsx";
 
@@ -12,6 +13,7 @@ import ConfirmationMessage from "./features/auth/confirmation-message/Confirmati
 import TutorDashboard from "./features/tutor-dashboard/TutorDashboard.jsx";
 import VolunteerView from "./features/volunteering/VolunteerView.jsx";
 import Profile from "./features/profile/Profile.jsx";
+import EditProfile from "./features/profile/EditProfile.jsx";
 import EditTimetable from "./features/timetable/EditTimetable.jsx";
 import AddCourse from "./features/courses/AddCourse.jsx";
 import ViewAllCourses from "./features/courses/ViewAllCourses.jsx";
@@ -42,6 +44,7 @@ const router = createBrowserRouter([
       { path: "tutor-dashboard", element: <TutorDashboard /> },
       { path: "volunteer", element: <VolunteerView /> },
       { path: "profile", element: <Profile /> },
+      { path: "profile/edit", element: <EditProfile /> },
       { path: "timetable/edit", element: <EditTimetable /> },
       { path: "applications", children: [
         { index: true, element: <Applications /> },

@@ -23,6 +23,11 @@ Three rules govern every endpoint here:
 
 All examples below use the local development URL.
 
+:::note URL placeholders
+Segments like `:courseCode` in an endpoint definition are placeholders — replace the whole segment including the colon. For example, `GET /public/courses/:courseCode/schedule` becomes
+`http://localhost:3000/api/public/courses/COMS1017A/schedule`. Look up codes (and their names, like IDSA for COMS1017A) via [Discover courses](#discover-courses).
+:::
+
 ---
 
 ## Discover courses

@@ -8,63 +8,54 @@ datasource db {
 }
 
 model User {
-  id               Int              @id @default(autoincrement())
-  studentNumber    String?
-  employeeNumber   String?
-  firstName        String
-  lastName         String
-  email            String           @unique
-  phoneNumber      String?
-  role             String           @default("STUDENT") // intentionally String: SQL Server doesn't support Prisma enums; one of STUDENT/TUTOR/LECTURER/ORGANISER/ADMIN, validated in application code
-  isActive         Boolean          @default(true)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  firebaseUid      String           @unique
-  applications     Applicant[]
-  roleApplications RoleApplication[]
-  lecturer         Lecturer?
-  tutor            Tutor?
-  availability     Availability[]
-}
-
-model Tutor {
-  id               Int               @id @default(autoincrement())
-  userId           Int               @unique
-  hourlyRate       Float?
-  maxHoursPerWeek  Int // weekly hour cap; hours remaining is derived as cap - sum of assigned session durations for the week (Issue 32)
-  status           String
-  approvedAt       DateTime?
-  busyBlocks       BusyBlock[]
-  overflowClaims   OverflowWork[]
-  timesheets       Timesheet[]
-  user             User              @relation(fields: [userId], references: [id])
-  assignments      TutorAssignment[]
-  courseTutorMarks CourseTutorMark[]
-}
-
-model Lecturer {
-  id             Int      @id @default(autoincrement())
-  userId         Int      @unique
-  department     String
-  officeLocation String?
-  officeHours    String?
+  id             Int         @id @default(autoincrement())
+  studentNumber  String?
+  employeeNumber String?
+  firstName      String
+  lastName       String
+  email          String      @unique
+  phoneNumber    String?
+  yearOfStudy    String?     // one of: 3rd year, honours, masters, phd
+  role           String      @default("STUDENT") // intentionally String: SQL Server doesn't support Prisma enums; one of STUDENT/TUTOR/LECTURER/ORGANISER/ADMIN, validated in application code
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  firebaseUid    String      @unique
+  applications   Application[]
   courses        Course[]
-  user           User     @relation(fields: [userId], references: [id])
+  availability   Availability[]
+  assignments    TutorAssignment[]
+  busyBlocks     BusyBlock[]
+  timesheets     Timesheet[]
+  roleApplications RoleApplication[]
+  supervisedTimesheets TimesheetEntry[] @relation("TimesheetSupervisor")
+  overflowClaims OverflowWork[]
 }
 
-model Applicant {
+// Join table between User (role TUTOR) and Course — one row records that a user
+// with the tutor role tutors a course in a given semester. Hours are derived from
+// the course's slots, so only the semester is stored here.
+model TutorAssignment {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  courseId  Int
+  semester  String
+  sessions  Session[]
+  user      User      @relation(fields: [userId], references: [id])
+  course    Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+}
+
+model Application {
   id             Int       @id @default(autoincrement())
   userId         Int
   courseId       Int
   courseMark     Float
   transcriptPath String?
-  availability   String?
   status         String    @default("PENDING")
   appliedAt        DateTime  @default(now())
   reviewedAt       DateTime?
   course           Course             @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   user             User               @relation(fields: [userId], references: [id])
-  tutorAssignment  TutorAssignment?
 }
 
 model Course {
@@ -72,42 +63,23 @@ model Course {
   courseCode       String            @unique
   courseName       String
   minimumMark      Float
-  requiredTutors   Int               @default(1)
-  budgetHours      Float             @default(0)
-  hourlyRate       Float             @default(0)
-  lecturerId       Int
-  applications     Applicant[]
-  lecturer         Lecturer          @relation(fields: [lecturerId], references: [id])
+  tutorsRequired   Int               @default(1) // number of tutors needed for this course
+  acceptingApplications Boolean     @default(false) // opened for tutor applications; managed via the bulk start-application-process action
+  createdAt        DateTime          @default(now())
+  userId           Int
+  applications     Application[]
+  user             User              @relation(fields: [userId], references: [id])
   slots            CourseSlot[]
   overflowWork     OverflowWork[]
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
-  courseTutorMarks CourseTutorMark[]
+  events           Event[]
 }
 
-model CourseTutorMark {
-  id       Int    @id @default(autoincrement())
-  tutorId  Int
-  courseId Int
-  mark     Float
-  tutor    Tutor  @relation(fields: [tutorId], references: [id])
-  course   Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-
-  @@unique([tutorId, courseId])
-}
-
-model TutorAssignment {
-  id             Int        @id @default(autoincrement())
-  tutorId        Int?
-  courseId       Int
-  applicantId    Int?       @unique
-  allocatedHours Int
-  semester       String
-  status         String
-  sessions       Session[]
-  course         Course     @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  tutor          Tutor?     @relation(fields: [tutorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  applicant      Applicant? @relation(fields: [applicantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model TimeSlot {
@@ -131,46 +103,49 @@ model Availability {
   @@unique([userId, dayOfWeek, timeSlotId])
 }
 
-// Per-tutor busy time ranges (Issue 32). Free-form minute-of-day values rather than a
-// TimeSlot FK so tutors can block arbitrary unavailable ranges; a tutor may have many blocks.
+// Per-user busy time ranges (Issue 32) for users with the tutor role. Free-form minute-of-day
+// values rather than a TimeSlot FK so tutors can block arbitrary unavailable ranges.
 model BusyBlock {
   id          Int   @id @default(autoincrement())
-  tutorId     Int
+  userId      Int
   dayOfWeek   Int
   startMinute Int
   endMinute   Int
-  tutor       Tutor @relation(fields: [tutorId], references: [id])
+  user        User  @relation(fields: [userId], references: [id])
 
-  @@unique([tutorId, dayOfWeek, startMinute, endMinute])
+  @@unique([userId, dayOfWeek, startMinute, endMinute])
 }
 
 model Timesheet {
-  id            Int              @id @default(autoincrement())
-  tutorId       Int
-  payrollNumber String?
-  totalHours    Float
-  totalAmount   Float?
-  status        String           @default("DRAFT")
-  submittedAt   DateTime?
-  approvedAt    DateTime?
-  tutor         Tutor            @relation(fields: [tutorId], references: [id])
-  entries       TimesheetEntry[]
+  id              Int               @id @default(autoincrement())
+  userId          Int
+  name            String
+  payrollNumber   String?
+  totalHours      Int               @default(0)  
+  status          String            @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  rejectionReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  user            User              @relation(fields: [userId], references: [id])
+  entries         TimesheetEntry[]
 }
 
 model TimesheetEntry {
-  id          Int       @id @default(autoincrement())
-  timesheetId Int
-  courseId    Int
-  workDate    DateTime
-  startTime   DateTime
-  endTime     DateTime
-  duration    Float
-  taskType    String
-  description String
-  supervisor  String
-  isApproved  Boolean   @default(false)
-  course      Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
-  timesheet   Timesheet @relation(fields: [timesheetId], references: [id])
+  id           Int       @id @default(autoincrement())
+  timesheetId  Int
+  courseId     Int
+  supervisorId Int
+  eventId      Int?      @unique // the claimed event this entry was auto-created from; unique = an event can only be claimed once
+  workDate     DateTime
+  duration     Float     // 1–8 hours, whole numbers via the round-up rule (each timeslot counts as at least one full hour)
+  description  String    // tutoring | marking | invigilation | admin
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  course       Course    @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  timesheet    Timesheet @relation(fields: [timesheetId], references: [id])
+  supervisor   User      @relation("TimesheetSupervisor", fields: [supervisorId], references: [id], onUpdate: NoAction)
+  event        Event?    @relation(fields: [eventId], references: [id], onUpdate: NoAction)
 }
 
 model Session {
@@ -198,6 +173,22 @@ model CourseSlot {
   @@index([courseId, dayOfWeek])
 }
 
+// Calendar event a lecturer schedules for one of their courses on a specific date.
+// The time is never stored — it is derived from the course's tutoring timeslots on
+// that date's weekday, so it stays correct when the lecturer edits the course slots.
+model Event {
+  id          Int      @id @default(autoincrement())
+  courseId    Int
+  date        DateTime // stored at UTC midnight; its weekday drives the timeslot lookup
+  description String   // tutoring | marking | invigilation | admin (same options as timesheet entries)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  course      Course   @relation(fields: [courseId], references: [id], onUpdate: NoAction)
+  claims      TimesheetEntry[]
+
+  @@index([courseId, date])
+}
+
 model OverflowWork {
   id          Int    @id @default(autoincrement())
   courseId    Int
@@ -206,7 +197,7 @@ model OverflowWork {
   postedBy    Int
   claimedBy   Int?
   status      String
-  tutor       Tutor? @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user        User?  @relation(fields: [claimedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course      Course @relation(fields: [courseId], references: [id], onUpdate: NoAction)
 }
 

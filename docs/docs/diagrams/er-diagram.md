@@ -4,95 +4,99 @@ sidebar_position: 3
 
 # System Design — Data Model (ER Diagram)
 
-This reflects the current `schema.prisma`. It covers three user roles (student, tutor, lecturer via `User.role`), the application/waitlist flow, course assignment, timesheets, and overflow work.
+This reflects the current `schema.prisma`. All user roles (student, tutor, lecturer, organiser, admin) live on `User.role` — there are no separate role tables. It covers the application/waitlist flow, course assignment, timesheets, and overflow work.
 
 ```mermaid
 erDiagram
-  USER ||--o| TUTOR : "becomes"
-  USER ||--o| LECTURER : "is"
-  USER ||--o{ APPLICANT : "applies as"
+  USER ||--o{ APPLICATION : "submits"
+  USER ||--o{ COURSE : "teaches"
+  USER ||--o{ TUTOR_ASSIGNMENT : "tutors"
+  USER ||--o{ AVAILABILITY : "sets"
+  USER ||--o{ BUSY_BLOCK : "blocks"
+  USER ||--o{ TIMESHEET : "submits"
+  USER ||--o{ OVERFLOW_WORK : "claims"
 
-  LECTURER ||--o{ COURSE : "teaches"
-  COURSE ||--o{ APPLICANT : "receives"
+  COURSE ||--o{ APPLICATION : "receives"
   COURSE ||--o{ TUTOR_ASSIGNMENT : "has"
   COURSE ||--o{ COURSE_SLOT : "scheduled at"
   COURSE ||--o{ OVERFLOW_WORK : "posts"
   COURSE ||--o{ TIMESHEET_ENTRY : "logged against"
 
-  TUTOR ||--o{ TUTOR_ASSIGNMENT : "assigned to"
-  TUTOR ||--o{ AVAILABILITY : "sets"
-  TUTOR ||--o{ TIMESHEET : "submits"
-  TUTOR ||--o{ OVERFLOW_WORK : "claims"
-
   TUTOR_ASSIGNMENT ||--o{ SESSION : "generates"
+  COURSE_SLOT ||--o{ SESSION : "schedules"
   TIMESHEET ||--o{ TIMESHEET_ENTRY : "contains"
+  TIME_SLOT ||--o{ AVAILABILITY : "used by"
+  TIME_SLOT ||--o{ COURSE_SLOT : "used by"
 
   USER {
     int id PK
     string firebaseUid UK
     string studentNumber
     string employeeNumber
+    string firstName
+    string lastName
     string email UK
-    string role
+    string role "STUDENT, TUTOR, LECTURER, ORGANISER, ADMIN"
     boolean isActive
   }
-  APPLICANT {
+  APPLICATION {
     int id PK
     int userId FK
     int courseId FK
     float courseMark
-    string status "PENDING, WAITLISTED, ACCEPTED, REJECTED"
+    string status "PENDING, WAITLISTED, APPROVED, REJECTED"
     datetime appliedAt
-  }
-  LECTURER {
-    int id PK
-    int userId FK
-    string department
+    datetime reviewedAt
   }
   COURSE {
     int id PK
     string courseCode UK
+    string courseName
     float minimumMark
-    int lecturerId FK
-  }
-  TUTOR {
-    int id PK
-    int userId FK
-    int maxHoursPerWeek
-    int currentHours
-    string status
+    int tutorsRequired
+    boolean acceptingApplications
+    datetime createdAt
+    int userId FK "owning lecturer or organiser"
   }
   TUTOR_ASSIGNMENT {
     int id PK
-    int tutorId FK
+    int userId FK
     int courseId FK
-    int allocatedHours
-    string status
+    string semester
   }
   AVAILABILITY {
     int id PK
-    int tutorId FK
-    string dayOfWeek
-    datetime startTime
-    datetime endTime
+    int userId FK
+    int dayOfWeek
+    int timeSlotId FK
+  }
+  BUSY_BLOCK {
+    int id PK
+    int userId FK
+    int dayOfWeek
+    int startMinute
+    int endMinute
   }
   COURSE_SLOT {
     int id PK
     int courseId FK
     int dayOfWeek
-    int startMinute
-    int endMinute
+    int timeSlotId FK
+    string venue
+    string sessionType
   }
   SESSION {
     int id PK
     int assignmentId FK
+    int courseSlotId FK
     datetime date
     string status
     string excuseReason
   }
   TIMESHEET {
     int id PK
-    int tutorId FK
+    int userId FK
+    string payrollNumber
     float totalHours
     string status "DRAFT, SUBMITTED, APPROVED"
   }
@@ -102,20 +106,28 @@ erDiagram
     int courseId FK
     datetime workDate
     float duration
+    string taskType
     boolean isApproved
   }
   OVERFLOW_WORK {
     int id PK
     int courseId FK
+    string description
+    int hours
     int postedBy
     int claimedBy FK
     string status
+  }
+  SYSTEM_SETTING {
+    string key PK
+    string value
+    datetime updatedAt
   }
 ```
 
 ## Notes on modeling decisions
 
-- **Three roles, one `User` table**: `User.role` distinguishes student / tutor / lecturer, with `Tutor` and `Lecturer` as optional 1-to-1 extension tables holding role-specific fields (hours, department). A student who hasn't applied yet has neither.
-- **Waitlist is a status, not a new entity**: `Applicant.status` moves through `PENDING → WAITLISTED / ACCEPTED / REJECTED`. When an accepted applicant declines or a `TutorAssignment` frees up, the next-ranked `WAITLISTED` applicant (ordered by `courseMark`) can be promoted to `ACCEPTED` without any schema change.
-- **`TutorAssignment` is the join entity** between `Tutor` and `Course`, carrying `allocatedHours` and `status` — this is where the three live-validation checks (marks, clash, hours) get enforced before a row is created.
-- **Availability vs `CourseSlot`**: a tutor's own weekly availability (`Availability`) is checked against each course's fixed teaching times (`CourseSlot`) to detect scheduling clashes — these are separate tables because tutors set availability once per term, while course slots are fixed by the timetable.
+- **One `User` table, roles as a string**: `User.role` distinguishes student / tutor / lecturer / organiser / admin. There are no separate role tables — every tutor-role construct (availability, busy blocks, assignments, timesheets, overflow claims) references `User` directly, so a user's data survives role changes.
+- **Waitlist is a status, not a new entity**: `Application.status` moves through `PENDING → WAITLISTED / APPROVED / REJECTED`. When an approved applicant declines or a `TutorAssignment` frees up, the next-ranked `WAITLISTED` application (ordered by `courseMark`) can be promoted to `APPROVED` without any schema change.
+- **`TutorAssignment` is the join entity** between `User` (tutor role) and `Course`, carrying only the `semester` — the many-to-many relationship of which users tutor which courses. Hours are not stored: they are derived from the course's slots (each slot rounds up to at least one whole hour), and the overall cap lives in `SystemSetting` (`TUTOR_MONTHLY_CLAIMABLE_HOURS`, set by an organiser).
+- **Availability vs `CourseSlot`**: a tutor's own weekly availability (`Availability`) is checked against each course's fixed teaching times (`CourseSlot`) to detect scheduling clashes — these are separate tables because tutors set availability once per term, while course slots are fixed by the timetable. Both reference the shared `TimeSlot` catalogue.

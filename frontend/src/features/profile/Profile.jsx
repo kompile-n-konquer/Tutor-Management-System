@@ -25,6 +25,15 @@ export default function Profile() {
 
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [availability, setAvailability] = useState([]); // [{ dayOfWeek, timeSlotId }]
+  const [lockedSlots, setLockedSlots] = useState([]); // [{ dayOfWeek, timeSlotId }] held by submitted applications
+  const [profileData, setProfileData] = useState({
+    firstName: '',
+    lastName: '',
+    phoneNumber: '',
+    yearOfStudy: '',
+    email: '',
+    createdAt: null,
+  });
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -40,46 +49,37 @@ export default function Profile() {
       if (response && response.status === 200) {
         setTimeSlots(response.data.timeSlots);
         setAvailability(response.data.availability);
+        setLockedSlots(response.data.lockedSlots || []);
       }
     };
 
     loadTimetable();
   }, [currentUser, loading, executeTimetable]);
 
-  if (loading) return null; // TODO: Create a professional loading state 
+  // Fetch full user profile (phoneNumber, yearOfStudy) from the backend
+  useEffect(() => {
+    if (loading || !currentUser) return;
+    const loadProfile = async () => {
+      const res = await execute(() => api.get(`/users/${currentUser.uid}`));
+      if (res?.status === 200 && res.data) {
+        setProfileData({
+          firstName: res.data.firstName || '',
+          lastName: res.data.lastName || '',
+          phoneNumber: res.data.phoneNumber || '',
+          yearOfStudy: res.data.yearOfStudy || '',
+          email: res.data.email || '',
+          createdAt: res.data.createdAt || null,
+        });
+      }
+    };
+    loadProfile();
+  }, [currentUser, loading, execute]);
+
+  if (loading) return null; // TODO: Create a professional loading state
   if (!currentUser) return null;
 
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-
-  // Only show the slots around the current hour: 1 hour before, the current hour, and 1 hour after.
-  // If the current time is outside every slot (early morning / evening), fall back to the
-  // 3 slots nearest to now so the grid is never empty.
-  const currentHourStart = Math.floor(nowMinutes / 60) * 60;
-  let visibleSlots = timeSlots.filter(
-    (slot) => slot.endMinute > currentHourStart - 60 && slot.startMinute < currentHourStart + 120
-  );
-
-  if (visibleSlots.length === 0 && timeSlots.length > 0) {
-    if (nowMinutes < timeSlots[0].startMinute) {
-      visibleSlots = timeSlots.slice(0, 3);
-    } else {
-      visibleSlots = timeSlots.slice(-3);
-    }
-  }
-
   const availableKeys = new Set(availability.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
-
-  // Position of the thin grey current-time line as a percentage of the grid height.
-  // The first grid row is the day header, so the line is offset by one row.
-  let currentTimeTop = null;
-  if (visibleSlots.length > 0) {
-    const firstStart = visibleSlots[0].startMinute;
-    const lastEnd = visibleSlots[visibleSlots.length - 1].endMinute;
-    if (nowMinutes >= firstStart && nowMinutes <= lastEnd) {
-      const fraction = (nowMinutes - firstStart) / (lastEnd - firstStart);
-      currentTimeTop = ((1 + fraction * visibleSlots.length) / (visibleSlots.length + 1)) * 100;
-    }
-  }
+  const lockedKeys = new Set(lockedSlots.map((entry) => `${entry.dayOfWeek}-${entry.timeSlotId}`));
 
   const handleDeleteAccount = async () => {
     if (auth.currentUser) {
@@ -95,9 +95,7 @@ export default function Profile() {
     }
   };
 
-  const displayName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`
-    : 'Loading...';
+  const displayName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 'Loading...';
   const displayId = userProfile?.studentNumber || userProfile?.employeeNumber || '';
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
 
@@ -106,9 +104,16 @@ export default function Profile() {
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-display text-primary">{displayName}</h2>
+            <h2 className="font-display text-display text-primary">
+              {profileData.firstName} {profileData.lastName}
+            </h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              {displayId ? `${roleLabel} · ID: ${displayId}` : roleLabel}
+              {profileData.yearOfStudy
+                ? `${profileData.yearOfStudy.charAt(0).toUpperCase() + profileData.yearOfStudy.slice(1)} Student`
+                : 'Student'}
+              {profileData.createdAt
+                ? ` \u00B7 Joined: ${new Date(profileData.createdAt).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long' })}`
+                : ''}
             </p>
           </div>
           <div className="flex gap-2">
@@ -123,19 +128,71 @@ export default function Profile() {
             <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
               <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">Personal Info</h3>
-                <button className="text-primary hover:text-primary-container">
+                <button
+                  onClick={() => navigate('/profile/edit')}
+                  className="text-primary hover:text-primary-container cursor-pointer"
+                  title="Edit personal info"
+                >
                   <span className="material-symbols-outlined text-[20px]">edit</span>
                 </button>
               </div>
               <div className="space-y-4">
                 {[
-                  ['EMAIL', userProfile?.email || ''],
-                  ['PHONE', userProfile?.phoneNumber || 'Not provided'],
-                  ['DEPARTMENT', userProfile?.studentNumber ? 'Student' : userProfile?.employeeNumber ? 'Staff' : ''],
-                ].filter(([, value]) => value).map(([label, value]) => (
+                  ['EMAIL', profileData.email],
+                  ['PHONE', profileData.phoneNumber || '—'],
+                  ['DEPARTMENT', 'School of Computer Science'],
+                ].map(([label, value]) => (
                   <div key={label}>
                     <p className="font-label-caps text-[10px] text-outline mb-1">{label}</p>
                     <p className="font-body-md text-body-md text-on-surface">{value}</p>
+                  </div>
+                ))}
+                <div>
+                  <p className="font-label-caps text-[10px] text-outline mb-1">YEAR OF STUDY</p>
+                  <p className="font-body-md text-body-md text-on-surface">
+                    {profileData.yearOfStudy
+                      ? profileData.yearOfStudy.charAt(0).toUpperCase() + profileData.yearOfStudy.slice(1)
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">Academic History</h3>
+                <span className="material-symbols-outlined text-outline text-[20px]">school</span>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { code: 'CS301: Data Structures', term: 'Fall 2023', grade: 'A+', status: 'Eligible', active: false },
+                  {
+                    code: 'CS450: Machine Learning',
+                    term: 'Spring 2024',
+                    grade: 'A',
+                    status: 'Eligible',
+                    active: false,
+                  },
+                  { code: 'CS502: Operating Systems', term: 'Current', grade: 'IP', status: 'Pending', active: true },
+                ].map((c) => (
+                  <div
+                    key={c.code}
+                    className={`flex justify-between items-center p-2 hover:bg-surface-container-low rounded-lg transition-colors ${
+                      c.active ? 'border-l-4 border-[#FF8C00] bg-[#FF8C00]/5' : ''
+                    }`}
+                  >
+                    <div>
+                      <p className="font-body-md font-semibold text-on-surface">{c.code}</p>
+                      <p className="font-body-sm text-on-surface-variant">{c.term}</p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`font-data-mono text-data-mono font-bold ${c.active ? 'text-[#FF8C00]' : 'text-primary'}`}
+                      >
+                        {c.grade}
+                      </p>
+                      <p className="font-body-sm text-outline">{c.status}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -159,17 +216,14 @@ export default function Profile() {
                     Set your preferred tutoring hours for the current semester.
                   </p>
                 </div>
-                <button onClick={() => navigate('/timetable/edit')} className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors cursor-pointer">
+                <button
+                  onClick={() => navigate('/timetable/edit')}
+                  className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors cursor-pointer"
+                >
                   Edit Timetable
                 </button>
               </div>
               <div className="flex-1 overflow-x-auto calendar-scroll relative">
-                {currentTimeTop !== null && (
-                  <div
-                    className="absolute left-0 right-0 z-10 border-t border-outline-variant pointer-events-none"
-                    style={{ top: `${currentTimeTop}%` }}
-                  />
-                )}
                 <div className="min-w-[600px] h-full grid grid-cols-6 gap-px bg-outline-variant/30">
                   <div className="bg-surface-container-lowest p-2" />
                   {DAYS.map((d) => (
@@ -181,25 +235,35 @@ export default function Profile() {
                     </div>
                   ))}
 
-                  {visibleSlots.map((slot) => (
+                  {timeSlots.map((slot) => (
                     <div key={slot.id} className="contents">
                       <div className="bg-surface-container-lowest p-2 text-right font-data-mono text-body-sm text-outline border-b border-outline-variant/20">
                         {minutesToLabel(slot.startMinute)}
                       </div>
                       {DAYS.map((day, dayIndex) => {
                         const isAvailable = availableKeys.has(`${dayIndex}-${slot.id}`);
+                        const isLocked = lockedKeys.has(`${dayIndex}-${slot.id}`);
                         return (
                           <div
                             key={`${slot.id}-${day}`}
                             className={`p-2 border-b border-outline-variant/20 relative ${
-                              isAvailable ? 'bg-primary/5' : 'bg-surface-container-lowest'
+                              isLocked
+                                ? 'bg-urgent-orange/5'
+                                : isAvailable
+                                  ? 'bg-primary/5'
+                                  : 'bg-surface-container-lowest'
                             }`}
                           >
-                            {isAvailable && (
+                            {isLocked ? (
+                              <div className="absolute inset-1 bg-urgent-orange/20 border border-urgent-orange/30 rounded flex items-center justify-center gap-1 font-label-caps text-[10px] text-urgent-orange">
+                                <span className="material-symbols-outlined text-[12px]">lock</span>
+                                Locked
+                              </div>
+                            ) : isAvailable ? (
                               <div className="absolute inset-1 bg-primary/20 border border-primary/30 rounded flex items-center justify-center font-label-caps text-[10px] text-primary">
                                 Available
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         );
                       })}

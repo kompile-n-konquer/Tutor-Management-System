@@ -2,9 +2,10 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { getNavLinksForRole, FOOTER_LINKS } from "../../config/navConfig";
 import useAuth from "../../hooks/useAuth";
 
-export default function Sidebar({ role = "tutor" }) {
-  const { signOut } = useAuth();
+export default function Sidebar() {
+  const { signOut, role } = useAuth();
   const navigate = useNavigate();
+
   const links = getNavLinksForRole(role);
 
   const handleNavigate = async (label, url) => {
@@ -41,7 +42,7 @@ export default function Sidebar({ role = "tutor" }) {
               [
                 "flex items-center gap-stack-md px-gutter py-stack-sm rounded-lg transition-colors group",
                 isActive
-                  ? "bg-primary-container text-on-primary-container font-semibold scale-[0.98] transition-transform duration-150"
+                  ? "bg-primary-container text-on-primary font-semibold scale-[0.98] transition-transform duration-150"
                   : "text-on-surface-variant hover:bg-surface-variant font-medium",
               ].join(" ")
             }

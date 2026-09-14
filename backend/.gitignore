@@ -8,3 +8,7 @@ node_modules/
 .agents/
 .claude/
 .windsurf/
+
+# Uploaded files — keep only the placeholder
+uploads/*
+!uploads/.gitkeep

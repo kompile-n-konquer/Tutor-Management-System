@@ -8,6 +8,10 @@ const usersRouter = require('./routes/auth');
 const allocationRouter = require('./routes/allocation');
 const coursesRouter = require('./routes/courses');
 const availabilityRouter = require('./routes/availability');
+const applicationsRouter = require('./routes/applications');
+const settingsRouter = require('./routes/settings');
+const timesheetsRouter = require('./routes/timesheets');
+const eventsRouter = require('./routes/events');
 const onboardingRouter = require('./routes/onboarding');
 
 const app = express();
@@ -45,6 +49,10 @@ app.use('/api/users', usersRouter);
 app.use('/api/allocation', allocationRouter);
 app.use('/api/courses', coursesRouter);
 app.use('/api/availability', availabilityRouter);
+app.use('/api/applications', applicationsRouter);
+app.use('/api/settings', settingsRouter);
+app.use('/api/timesheets', timesheetsRouter);
+app.use('/api/events', eventsRouter);
 app.use('/api/onboarding', onboardingRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes

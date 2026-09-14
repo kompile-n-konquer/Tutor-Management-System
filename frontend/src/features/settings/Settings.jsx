@@ -150,12 +150,33 @@ const Settings = () => {
   };
 
   const handleRemovePdf = async () => {
-    setError('');
+    setError("");
     const response = await execute(() => api.delete('/settings/pdf-template'));
     if (response && response.status === 200) {
       setPdfTemplateName(null);
     } else {
       setError(response?.data?.message || 'Could not remove the PDF template.');
+    }
+  };
+
+  // The endpoint requires the Firebase ID token, so the file is fetched through
+  // the authenticated axios instance and handed to the browser as a blob
+  const handleDownloadPdf = async () => {
+    setError('');
+    const response = await execute(() =>
+      api.get('/settings/pdf-template', { responseType: 'blob' })
+    );
+    if (response && response.status === 200) {
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = pdfTemplateName || 'timesheet-template.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } else {
+      setError('Could not download the template. Please try again.');
     }
   };
 
@@ -358,13 +379,12 @@ const Settings = () => {
                     <span className="material-symbols-outlined text-primary text-[24px]">description</span>
                     <span className="font-body-md">{pdfTemplateName}</span>
                   </div>
-                  <a
-                    href="/api/settings/pdf-template"
-                    target="_blank"
-                    className="text-primary font-label-caps text-label-caps hover:underline"
+                  <button
+                    onClick={handleDownloadPdf}
+                    className="text-primary font-label-caps text-label-caps hover:underline cursor-pointer"
                   >
                     Download
-                  </a>
+                  </button>
                   <button
                     onClick={handleRemovePdf}
                     className="text-error font-label-caps text-label-caps hover:underline cursor-pointer"

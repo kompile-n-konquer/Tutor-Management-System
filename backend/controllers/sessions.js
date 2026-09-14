@@ -5,6 +5,10 @@ const catchAsync = require('../utils/catchAsync');
 //   SCHEDULED  — assigned to a tutor through their TutorAssignment
 //   UNASSIGNED — the tutor excused themselves, the session is open for volunteers
 //   PENDING    — a student volunteered and is awaiting approval (see SessionVolunteer)
+//
+// A session's course is derivable without any extra join table: every Session
+// belongs to a TutorAssignment (tutor ↔ course) and a CourseSlot (course's
+// weekly time/venue), so course-level visibility reuses these relations.
 
 // The global error handler renders any error that carries a statusCode + message.
 const createHttpError = (statusCode, message) => {
@@ -51,12 +55,41 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
     return next(createHttpError(403, 'Only tutors can view their assigned sessions'));
   }
 
+  const tutorId = requestingUser.tutor.id;
+
+  // The tutor's ACTIVE assignments — the courses they were approved to tutor.
+  const assignments = await prisma.tutorAssignment.findMany({
+    where: { tutorId, status: 'ACTIVE' },
+    include: {
+      course: {
+        select: {
+          id: true,
+          courseCode: true,
+          courseName: true,
+          lecturer: { select: { user: { select: { firstName: true, lastName: true } } } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  // Every session the lecturer scheduled for those courses — not just the ones
+  // attached to this tutor's own assignments. A session belongs to the tutor's
+  // dashboard when its assignment's course has an ACTIVE assignment for them,
+  // which is exactly how the organiser links tutors to courses.
   const sessions = await prisma.session.findMany({
-    where: { assignment: { tutorId: requestingUser.tutor.id } },
+    where: {
+      assignment: {
+        course: { assignments: { some: { tutorId, status: 'ACTIVE' } } },
+      },
+    },
     include: {
       assignment: {
-        include: {
+        select: {
+          tutorId: true,
+          courseId: true,
           course: { select: { courseCode: true, courseName: true } },
+          tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
         },
       },
       courseSlot: {
@@ -65,10 +98,220 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
         },
       },
     },
-    orderBy: [{ date: 'asc' }],
+    orderBy: [{ date: 'asc' }, { id: 'asc' }],
   });
 
-  res.json(sessions);
+  res.json({
+    maxHoursPerWeek: requestingUser.tutor.maxHoursPerWeek,
+    courses: assignments.map((assignment) => ({
+      assignmentId: assignment.id,
+      courseId: assignment.course.id,
+      courseCode: assignment.course.courseCode,
+      courseName: assignment.course.courseName,
+      allocatedHours: assignment.allocatedHours,
+      semester: assignment.semester,
+      lecturerName: assignment.course.lecturer?.user
+        ? `${assignment.course.lecturer.user.firstName} ${assignment.course.lecturer.user.lastName}`
+        : null,
+    })),
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      date: session.date,
+      status: session.status,
+      excuseReason: session.excuseReason,
+      // isMine — the session is attached to this tutor's own assignment, so
+      // they are the tutor expected to run it (and the one who can excuse it).
+      isMine: session.assignment.tutorId === tutorId,
+      ledBy: session.assignment.tutor?.user
+        ? `${session.assignment.tutor.user.firstName} ${session.assignment.tutor.user.lastName}`
+        : null,
+      course: session.assignment.course,
+      courseSlot: {
+        id: session.courseSlot.id,
+        dayOfWeek: session.courseSlot.dayOfWeek,
+        venue: session.courseSlot.venue,
+        sessionType: session.courseSlot.sessionType,
+        timeSlot: session.courseSlot.timeSlot,
+      },
+    })),
+  });
+});
+
+// Loads the requesting user with their Lecturer profile, or errors out.
+// Shared by the lecturer-only session endpoints.
+const requireLecturerProfile = async (req, next) => {
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+    include: { lecturer: true },
+  });
+  if (!requestingUser) {
+    next(createHttpError(404, 'User not found. Please check if the user exists'));
+    return null;
+  }
+  if (!requestingUser.lecturer) {
+    next(createHttpError(403, 'Only lecturers can schedule and view course sessions'));
+    return null;
+  }
+  return requestingUser;
+};
+
+exports.getLecturerSessions = catchAsync(async (req, res, next) => {
+  const requestingUser = await requireLecturerProfile(req, next);
+  if (!requestingUser) return;
+
+  // Everything the lecturer needs to schedule sessions for THEIR courses only:
+  // the course's weekly slots, its assigned tutors, and the sessions already
+  // scheduled (flattened across the course's tutor assignments).
+  const courses = await prisma.course.findMany({
+    where: { lecturerId: requestingUser.lecturer.id },
+    include: {
+      slots: {
+        include: { timeSlot: true },
+        orderBy: [{ dayOfWeek: 'asc' }, { id: 'asc' }],
+      },
+      assignments: {
+        where: { status: 'ACTIVE' },
+        include: {
+          tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+          sessions: {
+            include: { courseSlot: { include: { timeSlot: true } } },
+            orderBy: [{ date: 'asc' }, { id: 'asc' }],
+          },
+        },
+        orderBy: { id: 'asc' },
+      },
+    },
+    orderBy: { courseCode: 'asc' },
+  });
+
+  res.json({
+    courses: courses.map((course) => {
+      const scheduledSessions = course.assignments.flatMap((assignment) =>
+        assignment.sessions.map((session) => ({
+          id: session.id,
+          date: session.date,
+          status: session.status,
+          excuseReason: session.excuseReason,
+          assignmentId: assignment.id,
+          tutorName: assignment.tutor?.user
+            ? `${assignment.tutor.user.firstName} ${assignment.tutor.user.lastName}`
+            : null,
+          courseSlot: {
+            id: session.courseSlot.id,
+            dayOfWeek: session.courseSlot.dayOfWeek,
+            venue: session.courseSlot.venue,
+            sessionType: session.courseSlot.sessionType,
+            timeSlot: session.courseSlot.timeSlot,
+          },
+        })),
+      );
+
+      return {
+        id: course.id,
+        courseCode: course.courseCode,
+        courseName: course.courseName,
+        slots: course.slots.map((slot) => ({
+          id: slot.id,
+          dayOfWeek: slot.dayOfWeek,
+          venue: slot.venue,
+          sessionType: slot.sessionType,
+          timeSlot: slot.timeSlot,
+        })),
+        tutors: course.assignments
+          .filter((assignment) => assignment.tutorId != null)
+          .map((assignment) => ({
+            assignmentId: assignment.id,
+            tutorId: assignment.tutorId,
+            name: assignment.tutor?.user
+              ? `${assignment.tutor.user.firstName} ${assignment.tutor.user.lastName}`
+              : null,
+            allocatedHours: assignment.allocatedHours,
+          })),
+        sessions: scheduledSessions,
+      };
+    }),
+  });
+});
+
+exports.scheduleSession = catchAsync(async (req, res, next) => {
+  const { assignmentId, courseSlotId, date } = req.body || {};
+
+  const parsedAssignmentId = Number(assignmentId);
+  const parsedCourseSlotId = Number(courseSlotId);
+  if (!Number.isInteger(parsedAssignmentId) || !Number.isInteger(parsedCourseSlotId)) {
+    return next(createHttpError(400, 'assignmentId and courseSlotId must be valid integers'));
+  }
+
+  // The date input sends yyyy-mm-dd; new Date() then yields a deterministic
+  // UTC-midnight timestamp that the duplicate check below can rely on.
+  const sessionDate = date ? new Date(date) : null;
+  if (!sessionDate || Number.isNaN(sessionDate.getTime())) {
+    return next(createHttpError(400, 'A valid session date is required'));
+  }
+
+  const requestingUser = await requireLecturerProfile(req, next);
+  if (!requestingUser) return;
+
+  // The assignment decides both the tutor who runs the session and the course
+  // it belongs to, so validating it covers the whole ownership chain.
+  const assignment = await prisma.tutorAssignment.findUnique({
+    where: { id: parsedAssignmentId },
+    include: {
+      course: {
+        select: { id: true, courseCode: true, courseName: true, lecturerId: true },
+      },
+    },
+  });
+  if (!assignment) {
+    return next(createHttpError(404, 'Tutor assignment not found. Please check if it exists'));
+  }
+  if (assignment.course.lecturerId !== requestingUser.lecturer.id) {
+    return next(createHttpError(403, 'You can only schedule sessions for your own courses'));
+  }
+  if (assignment.status !== 'ACTIVE' || assignment.tutorId == null) {
+    return next(createHttpError(409, 'This tutor is not actively assigned to the course'));
+  }
+
+  const courseSlot = await prisma.courseSlot.findUnique({
+    where: { id: parsedCourseSlotId },
+  });
+  if (!courseSlot) {
+    return next(createHttpError(404, 'Course slot not found. Please check if it exists'));
+  }
+  if (courseSlot.courseId !== assignment.courseId) {
+    return next(createHttpError(400, 'The selected time slot does not belong to this course'));
+  }
+
+  const duplicate = await prisma.session.findFirst({
+    where: {
+      assignmentId: parsedAssignmentId,
+      courseSlotId: parsedCourseSlotId,
+      date: sessionDate,
+    },
+  });
+  if (duplicate) {
+    return next(createHttpError(409, 'A session is already scheduled for this tutor, time slot and date'));
+  }
+
+  const session = await prisma.session.create({
+    data: {
+      assignmentId: parsedAssignmentId,
+      courseSlotId: parsedCourseSlotId,
+      date: sessionDate,
+      status: 'SCHEDULED',
+    },
+    include: {
+      assignment: {
+        select: {
+          course: { select: { courseCode: true, courseName: true } },
+          tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+        },
+      },
+      courseSlot: { include: { timeSlot: true } },
+    },
+  });
+
+  res.status(201).json(session);
 });
 
 exports.excuseSession = catchAsync(async (req, res, next) => {

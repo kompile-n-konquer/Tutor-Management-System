@@ -1,34 +1,183 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout.jsx";
 import Button from "../../components/button/Button.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import OnboardingWalkthrough from "../../components/onboarding/OnboardingWalkthrough.jsx";
+import useAuth from "../../hooks/useAuth.js";
 import { useFirstVisit } from "../../hooks/useFirstVisit.js";
 import api from "../../utils/axiosInstance.js";
-import { formatSessionDate, formatSessionTimeRange } from "../../utils/formatSession.js";
+import { formatSessionTimeRange, sessionDurationHours } from "../../utils/formatSession.js";
 
 const TUTOR_ONBOARDING_STEPS = [
-  { title: "Welcome to your Tutor Dashboard", body: "This is where you'll see upcoming sessions, hours logged, and quick actions every time you log in." },
-  { title: "Your Weekly Schedule", body: "The sessions table shows every session you're assigned to this week, with its time and current status." },
-  { title: "Quick Actions", body: "Need to skip a session or pick up more hours? Excuse yourself from a session here, or use Quick Actions instead of emailing your organiser directly." },
-  { title: "Submitting Timesheets", body: "At the end of each pay period, review your logged hours here and submit with one click." },
+  {
+    title: "Your courses, front and centre",
+    body: "The courses you were assigned to tutor are listed at the top — every session on this page belongs to one of them.",
+  },
+  {
+    title: "Your session ledger",
+    body: "Sessions your lecturer scheduled for your courses, grouped by day. Rows edged in purple are the ones you lead.",
+  },
+  {
+    title: "Can't make a session?",
+    body: "Use “Excuse myself” on a session you lead. Give a reason and the session opens for student volunteers to cover.",
+  },
+  {
+    title: "Pick up more hours",
+    body: "When a tutor excuses themselves, the session needs cover. Find those sessions in the Volunteer View.",
+  },
 ];
 
-const sessionStatusBadge = (status) => {
-  switch (status) {
-    case "UNASSIGNED":
-      return { className: "bg-urgent-orange/10 text-urgent-orange", label: "Excused — awaiting volunteer" };
-    case "PENDING":
-      return { className: "bg-primary/10 text-primary", label: "Volunteer pending" };
-    default:
-      return { className: "bg-trust-blue/10 text-trust-blue", label: "Active" };
-  }
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const startOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
+// "Today" / "Tomorrow" / "Monday 21 Sep" — used for both day headings and the
+// next-session block, so the whole page speaks one date language.
+const dayHeading = (value) => {
+  const diff = Math.round(
+    (startOfDay(value).getTime() - startOfDay(new Date()).getTime()) / MILLISECONDS_PER_DAY
+  );
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  return new Date(value).toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  });
+};
+
+const sessionSlotMeta = (session) =>
+  [session.courseSlot?.venue, session.courseSlot?.sessionType].filter(Boolean).join(" · ");
+
+// SCHEDULED sessions carry no state chip — ownership (You lead / Led by X) is
+// their status. Only excused and volunteered sessions get a chip.
+const stateChipFor = (session) => {
+  if (session.status === "UNASSIGNED") {
+    return session.isMine
+      ? { className: "bg-urgent-orange/10 text-urgent-orange", label: "Excused — awaiting volunteer" }
+      : { className: "bg-urgent-orange/10 text-urgent-orange", label: "Cover needed" };
+  }
+  if (session.status === "PENDING") {
+    return { className: "bg-trust-blue/10 text-trust-blue", label: "Volunteer pending" };
+  }
+  return null;
+};
+
+function SessionRow({ session, isExcusing, onExcuse, onCancel, onSubmit, isSubmitting }) {
+  const chip = stateChipFor(session);
+  const slotMeta = sessionSlotMeta(session);
+
+  return (
+    <li
+      className={`border-l-[3px] ${
+        session.isMine ? "border-primary bg-surface-container-lowest" : "border-transparent bg-surface-container-lowest"
+      }`}
+    >
+      <div className="flex flex-wrap items-start gap-x-stack-md gap-y-unit px-stack-md py-stack-md">
+        <div className="w-28 shrink-0">
+          <p className="font-data-mono text-data-mono text-on-surface">
+            {formatSessionTimeRange(session)}
+          </p>
+          {slotMeta && (
+            <p className="font-body-sm text-body-sm text-outline mt-unit">{slotMeta}</p>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="font-body-md text-body-md text-on-surface">
+            <span className="font-data-mono font-semibold text-primary">
+              {session.course?.courseCode ?? "Session"}
+            </span>
+            <span className="text-on-surface-variant"> — {session.course?.courseName}</span>
+          </p>
+
+          <div className="mt-unit flex flex-wrap items-center gap-x-stack-sm gap-y-unit">
+            {session.status === "SCHEDULED" &&
+              (session.isMine ? (
+                <span className="bg-primary/10 text-primary px-2 py-0.5 rounded font-label-caps text-label-caps">
+                  You lead
+                </span>
+              ) : (
+                <span className="font-body-sm text-body-sm text-on-surface-variant">
+                  Led by {session.ledBy ?? "another tutor"}
+                </span>
+              ))}
+
+            {chip && (
+              <span className={`${chip.className} px-2 py-0.5 rounded font-label-caps text-label-caps`}>
+                {chip.label}
+              </span>
+            )}
+
+            {session.excuseReason && (
+              <span className="font-body-sm text-body-sm text-on-surface-variant italic">
+                “{session.excuseReason}”
+              </span>
+            )}
+          </div>
+        </div>
+
+        {session.isMine && session.status === "SCHEDULED" && !isExcusing && (
+          <button
+            type="button"
+            onClick={() => onExcuse(session.id)}
+            className="ml-auto shrink-0 font-label-caps text-label-caps text-urgent-orange underline-offset-2 hover:underline"
+          >
+            Excuse myself
+          </button>
+        )}
+      </div>
+
+      {isExcusing && (
+        <div className="border-t border-outline-variant/60 bg-surface-container-low px-stack-md py-stack-md">
+          <form onSubmit={(event) => onSubmit(event, session.id)} className="max-w-xl space-y-stack-sm">
+            <label
+              htmlFor={`excuse-reason-${session.id}`}
+              className="font-label-caps text-label-caps text-on-surface-variant block"
+            >
+              Reason for excusing yourself from this session
+            </label>
+            <textarea
+              id={`excuse-reason-${session.id}`}
+              value={session.draftReason ?? ""}
+              onChange={(event) => onExcuse(session.id, event.target.value)}
+              rows={2}
+              required
+              autoFocus
+              placeholder="e.g. Medical appointment I could not move"
+              className="w-full border border-surface-variant rounded-DEFAULT p-stack-sm font-body-sm text-body-sm text-on-surface bg-surface-container-lowest focus:outline-none focus:border-primary"
+            />
+            <div className="flex gap-stack-sm max-w-sm">
+              <Button type="submit" loading={isSubmitting}>
+                Confirm excuse
+              </Button>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-4 py-3 rounded-DEFAULT font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-variant transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </li>
+  );
+}
+
 export default function TutorDashboard() {
+  const { userProfile } = useAuth();
   const { isFirstVisit, markSeen } = useFirstVisit("tutor-dashboard");
 
+  const [courses, setCourses] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [maxHoursPerWeek, setMaxHoursPerWeek] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [excusingSessionId, setExcusingSessionId] = useState(null);
@@ -42,7 +191,10 @@ export default function TutorDashboard() {
         setError(response.data?.message || "Could not load your sessions. Please try again later.");
         return;
       }
-      setSessions(response.data);
+      setCourses(response.data?.courses ?? []);
+      setSessions(response.data?.sessions ?? []);
+      setMaxHoursPerWeek(response.data?.maxHoursPerWeek ?? null);
+      setError("");
     } catch {
       setError("Could not load your sessions. Please try again later.");
     } finally {
@@ -51,12 +203,15 @@ export default function TutorDashboard() {
   }, []);
 
   useEffect(() => {
-    fetchMySessions();
+    // Wrapped so no state updates run synchronously inside the effect.
+    (async () => {
+      await fetchMySessions();
+    })();
   }, [fetchMySessions]);
 
-  const startExcuse = (sessionId) => {
+  const startExcuse = (sessionId, reason = "") => {
     setExcusingSessionId(sessionId);
-    setExcuseReason("");
+    setExcuseReason(reason);
     setError("");
   };
 
@@ -84,7 +239,7 @@ export default function TutorDashboard() {
         setError(response.data?.message || "Could not submit your excuse. Please try again later.");
         return;
       }
-      // The session is back to UNASSIGNED — reload the list to show its new status.
+      // The session is now UNASSIGNED — reload so its excuse status is reflected.
       cancelExcuse();
       await fetchMySessions();
     } catch {
@@ -94,191 +249,294 @@ export default function TutorDashboard() {
     }
   };
 
+  // ── Derived schedule data ──────────────────────────────────────────
+  // Sessions the API returns are already scoped to the tutor's assigned
+  // courses and sorted by date; everything below is presentation.
+  const todayStart = startOfDay(new Date()).getTime();
+
+  const upcomingGroups = useMemo(() => {
+    const groups = [];
+    for (const session of sessions) {
+      const day = startOfDay(session.date).getTime();
+      if (day < todayStart) continue; // the ledger is about what's ahead
+      const lastGroup = groups[groups.length - 1];
+      if (lastGroup && lastGroup.day === day) {
+        lastGroup.sessions.push(session);
+      } else {
+        groups.push({ day, date: new Date(session.date), sessions: [session] });
+      }
+    }
+    return groups;
+  }, [sessions, todayStart]);
+
+  const upcomingCount = upcomingGroups.reduce((sum, group) => sum + group.sessions.length, 0);
+  const sessionsToLead = upcomingGroups.reduce(
+    (sum, group) => sum + group.sessions.filter((s) => s.isMine && s.status === "SCHEDULED").length,
+    0
+  );
+  const nextSessionToLead = upcomingGroups
+    .flatMap((group) => group.sessions)
+    .find((session) => session.isMine && session.status === "SCHEDULED");
+  const nextSessionMeta = nextSessionToLead ? sessionSlotMeta(nextSessionToLead) : null;
+  const coverNeededCount = upcomingGroups
+    .flatMap((group) => group.sessions)
+    .filter((session) => session.status === "UNASSIGNED").length;
+
+  // Scheduled hours for the current week (Mon–Sun) across sessions the tutor
+  // leads — maxHoursPerWeek is the Tutor record's weekly cap.
+  const weekScheduledHours = useMemo(() => {
+    const now = new Date();
+    const mondayOffset = (now.getDay() + 6) % 7;
+    const weekStart = startOfDay(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset)
+    ).getTime();
+    const weekEnd = weekStart + 7 * MILLISECONDS_PER_DAY;
+
+    const total = sessions.reduce((sum, session) => {
+      if (!session.isMine || session.status !== "SCHEDULED") return sum;
+      const day = startOfDay(session.date).getTime();
+      if (day < weekStart || day >= weekEnd) return sum;
+      return sum + (sessionDurationHours(session) ?? 0);
+    }, 0);
+    return Math.round(total * 10) / 10;
+  }, [sessions]);
+
+  const weekBarPercent =
+    maxHoursPerWeek > 0 ? Math.min(100, Math.round((weekScheduledHours / maxHoursPerWeek) * 100)) : 0;
+
+  const firstName = userProfile?.firstName;
+  const courseCodes = courses.map((course) => course.courseCode);
+
   return (
-    <AppLayout title="Tutor Management System">
+    <AppLayout title="Tutor Dashboard">
       {isFirstVisit && <OnboardingWalkthrough steps={TUTOR_ONBOARDING_STEPS} onDismiss={markSeen} />}
 
       <div className="p-margin-page max-w-container-max mx-auto w-full">
-        <div className="mb-stack-lg">
-          <h2 className="font-display text-display text-primary mb-unit">Welcome back, Alex!</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Here's a quick overview of your tutoring schedule and progress this week.
+        {/* ── Course context — what this tutor is approved to teach ── */}
+        <header className="mb-stack-lg">
+          <p className="font-label-caps text-label-caps text-primary uppercase tracking-widest mb-unit">
+            Tutor Dashboard
           </p>
-        </div>
+          <h1 className="font-display text-display text-on-surface">
+            {firstName ? `${firstName}'s tutoring schedule` : "Your tutoring schedule"}
+          </h1>
+          {!isLoading && !error && courses.length > 0 && (
+            <p className="font-body-lg text-body-lg text-on-surface-variant mt-unit">
+              {courses.length === 1
+                ? `Tutoring ${courseCodes[0]}`
+                : `Tutoring ${courseCodes.join(" and ")}`}
+              {" · "}
+              {upcomingCount === 0
+                ? "no sessions scheduled yet"
+                : `${upcomingCount} upcoming session${upcomingCount === 1 ? "" : "s"}, ${sessionsToLead} for you to lead`}
+            </p>
+          )}
+        </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-lg mb-stack-lg">
-          <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary-fixed to-transparent opacity-30 z-0" />
-            <div className="relative z-10">
-              <div className="flex justify-between items-start mb-stack-md">
-                <span className="font-label-caps text-label-caps text-primary tracking-widest uppercase">Next Session</span>
-                <span className="bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full font-label-caps text-label-caps">In 2 Hours</span>
-              </div>
-              <h3 className="font-headline-lg text-headline-lg text-on-surface mb-unit">Intro to Data Structures</h3>
-              <p className="font-body-md text-body-md text-on-surface-variant mb-stack-md">COMP 201 - Room 402</p>
-              <div className="flex items-center gap-stack-sm">
-                <span className="material-symbols-outlined text-primary">schedule</span>
-                <span className="font-data-mono text-data-mono">14:00 - 15:30</span>
-              </div>
-            </div>
+        {error && (
+          <div className="mb-stack-lg">
+            <ErrorMessage>{error}</ErrorMessage>
           </div>
+        )}
 
-          <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-stack-md">
-              <span className="font-label-caps text-label-caps text-secondary tracking-widest uppercase">Hours Logged this Week</span>
-              <span className="material-symbols-outlined text-secondary">trending_up</span>
-            </div>
-            <div>
-              <div className="flex items-baseline gap-unit mb-unit">
-                <span className="font-display text-display text-on-surface">12.5</span>
-                <span className="font-body-lg text-body-lg text-on-surface-variant">/ 15 hrs</span>
-              </div>
-              <div className="w-full bg-surface-container-high rounded-full h-2 mb-stack-sm">
-                <div className="bg-secondary h-2 rounded-full" style={{ width: "83%" }} />
-              </div>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">You're on track to meet your weekly requirement!</p>
-            </div>
+        {isLoading ? (
+          <div className="animate-pulse space-y-gutter">
+            <div className="h-24 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
+            <div className="h-16 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
+            <div className="h-16 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
-          {/* Live sessions — loaded from /sessions/mine, with the excuse flow. */}
-          <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-full">
-            <div className="p-stack-lg border-b border-outline-variant flex justify-between items-center">
-              <div>
-                <h3 className="font-headline-md text-headline-md text-on-surface">Assigned Tutoring Sessions</h3>
-                <p className="font-body-sm text-body-sm text-on-surface-variant">Your schedule for the coming week</p>
-              </div>
-            </div>
-            <div className="p-stack-sm flex-1 overflow-x-auto">
-              {error && <ErrorMessage>{error}</ErrorMessage>}
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-outline-variant font-label-caps text-label-caps text-on-surface-variant">
-                    <th className="py-stack-sm px-stack-md">Course</th>
-                    <th className="py-stack-sm px-stack-md">Date / Time</th>
-                    <th className="py-stack-sm px-stack-md">Status</th>
-                    <th className="py-stack-sm px-stack-md">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant font-body-md">
-                  {isLoading ? (
-                    <tr>
-                      <td colSpan={4} className="py-stack-sm px-stack-md text-on-surface-variant">Loading your sessions…</td>
-                    </tr>
-                  ) : sessions.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-stack-sm px-stack-md text-on-surface-variant">You have no assigned sessions yet.</td>
-                    </tr>
-                  ) : (
-                    sessions.map((session) => {
-                      const course = session.assignment?.course;
-                      const badge = sessionStatusBadge(session.status);
-
-                      return (
-                        <React.Fragment key={session.id}>
-                          <tr>
-                            <td className="py-stack-sm px-stack-md font-bold text-primary">
-                              {course ? `${course.courseCode} — ${course.courseName}` : "Tutoring Session"}
-                            </td>
-                            <td className="py-stack-sm px-stack-md font-data-mono">
-                              {formatSessionDate(session.date)} / {formatSessionTimeRange(session)}
-                            </td>
-                            <td className="py-stack-sm px-stack-md">
-                              <span className={`${badge.className} px-2 py-1 rounded text-xs font-semibold`}>{badge.label}</span>
-                            </td>
-                            <td className="py-stack-sm px-stack-md">
-                              {session.status === "SCHEDULED" && (
-                                <button
-                                  type="button"
-                                  onClick={() => startExcuse(session.id)}
-                                  className="text-urgent-orange hover:opacity-80 font-label-caps text-label-caps underline-offset-2 hover:underline"
-                                >
-                                  Excuse Myself
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                          {excusingSessionId === session.id && (
-                            <tr>
-                              <td colSpan={4} className="py-stack-md px-stack-md bg-surface-container-low">
-                                <form onSubmit={(event) => handleExcuse(event, session.id)} className="space-y-stack-sm max-w-xl">
-                                  <label htmlFor={`excuse-reason-${session.id}`} className="font-label-caps text-label-caps text-on-surface-variant block">
-                                    Reason for excusing yourself
-                                  </label>
-                                  <textarea
-                                    id={`excuse-reason-${session.id}`}
-                                    value={excuseReason}
-                                    onChange={(event) => {
-                                      setExcuseReason(event.target.value);
-                                      setError("");
-                                    }}
-                                    rows={2}
-                                    required
-                                    placeholder="e.g. Medical appointment I could not move"
-                                    className="w-full border border-surface-variant rounded-DEFAULT p-stack-sm font-body-sm text-on-surface bg-surface-container-lowest focus:outline-none focus:border-primary"
-                                  />
-                                  <div className="flex gap-stack-sm">
-                                    <Button type="submit" loading={isExcusing}>
-                                      Confirm Excuse
-                                    </Button>
-                                    <button
-                                      type="button"
-                                      onClick={cancelExcuse}
-                                      className="px-4 py-3 rounded-DEFAULT font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-variant transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </form>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })
+        ) : courses.length === 0 ? (
+          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
+            <h2 className="font-headline-md text-headline-md text-on-surface mb-unit">
+              No course assignments yet
+            </h2>
+            <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+              You are not currently assigned to tutor any courses. Once the organiser assigns you to
+              a course you applied for, its details and every session the lecturer schedules for it
+              will appear here.
+            </p>
+          </section>
+        ) : (
+          <>
+            <section
+              aria-label="Courses you tutor"
+              className="mb-gutter bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+            >
+              {courses.map((course, index) => (
+                <div
+                  key={course.assignmentId}
+                  className={`flex flex-wrap items-baseline gap-x-stack-md gap-y-unit px-stack-lg py-stack-md ${
+                    index > 0 ? "border-t border-outline-variant/60" : ""
+                  }`}
+                >
+                  <span className="font-data-mono text-data-mono font-semibold text-primary min-w-[7.5rem]">
+                    {course.courseCode}
+                  </span>
+                  <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0">
+                    {course.courseName}
+                  </span>
+                  <span className="font-body-sm text-body-sm text-on-surface-variant">
+                    {course.allocatedHours} hrs allocated
+                  </span>
+                  {course.lecturerName && (
+                    <span className="font-body-sm text-body-sm text-outline hidden sm:inline">
+                      Lecturer: {course.lecturerName}
+                    </span>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="space-y-stack-lg">
-            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-              <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md">Quick Actions</h3>
-              <div className="space-y-stack-sm">
-                <button className="w-full flex items-center justify-between p-stack-sm bg-error-container text-on-error-container hover:bg-[#ffb4ab] transition-colors rounded-lg border border-error">
-                  <span className="font-body-md text-body-md font-semibold">Excuse from Session</span>
-                  <span className="material-symbols-outlined">event_busy</span>
-                </button>
-                <button className="w-full flex items-center justify-between p-stack-sm bg-secondary-fixed text-on-secondary-fixed hover:bg-secondary-fixed-dim transition-colors rounded-lg border border-secondary">
-                  <span className="font-body-md text-body-md font-semibold">Request More Hours</span>
-                  <span className="material-symbols-outlined">more_time</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-              <h3 className="font-headline-md text-headline-md text-on-surface mb-unit">Submit Timesheet</h3>
-              <p className="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">
-                Review your logged hours for this pay period before submitting.
-              </p>
-              <div className="bg-surface-container-low rounded-lg p-stack-md mb-stack-md border border-outline-variant">
-                <div className="flex justify-between items-center mb-unit">
-                  <span className="font-body-md text-body-md text-on-surface-variant">Logged:</span>
-                  <span className="font-data-mono text-data-mono text-primary font-bold">12.5 hrs</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-body-md text-body-md text-on-surface-variant">Required/Max:</span>
-                  <span className="font-data-mono text-data-mono text-on-surface">15.0 hrs</span>
+              ))}
+            </section>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-gutter items-start">
+              {/* ── The session ledger: every upcoming session for the tutor's courses ── */}
+              <section
+                aria-label="Upcoming sessions"
+                className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+              >
+                <div className="flex items-baseline justify-between gap-stack-md px-stack-lg py-stack-md border-b border-outline-variant">
+                  <h2 className="font-headline-md text-headline-md text-on-surface">
+                    Upcoming sessions
+                  </h2>
+                  {upcomingCount > 0 && (
+                    <p className="font-body-sm text-body-sm text-on-surface-variant">
+                      {sessionsToLead} to lead · {upcomingCount} total
+                    </p>
+                  )}
                 </div>
-              </div>
-              <button className="w-full bg-primary text-on-primary font-body-md font-bold py-stack-sm rounded-lg hover:bg-primary-container transition-colors shadow-md">
-                Submit Timesheet
-              </button>
+
+                {upcomingCount === 0 ? (
+                  <div className="px-stack-lg py-stack-lg">
+                    <p className="font-body-md text-body-md text-on-surface-variant">
+                      No sessions scheduled yet for {courseCodes.join(" or ")}.
+                    </p>
+                    <p className="font-body-sm text-body-sm text-outline mt-unit">
+                      Your lecturer schedules course sessions — they will appear here as soon as
+                      they are on the timetable.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    {upcomingGroups.map((group) => (
+                      <div key={group.day}>
+                        <div className="flex items-baseline justify-between gap-stack-md bg-surface-container-low px-stack-lg py-unit">
+                          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                            {dayHeading(group.date)}
+                          </h3>
+                          <span className="font-body-sm text-body-sm text-outline">
+                            {group.sessions.length} session{group.sessions.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <ul className="divide-y divide-outline-variant/50">
+                          {group.sessions.map((session) => (
+                            <SessionRow
+                              key={session.id}
+                              session={{
+                                ...session,
+                                draftReason:
+                                  excusingSessionId === session.id ? excuseReason : undefined,
+                              }}
+                              isExcusing={excusingSessionId === session.id}
+                              isSubmitting={isExcusing}
+                              onExcuse={startExcuse}
+                              onCancel={cancelExcuse}
+                              onSubmit={handleExcuse}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* ── Side rail: what matters next ── */}
+              <aside className="space-y-gutter">
+                <section
+                  aria-label="Next session you lead"
+                  className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg"
+                >
+                  <h2 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
+                    Next session you lead
+                  </h2>
+                  {nextSessionToLead ? (
+                    <>
+                      <p className="font-headline-lg text-headline-lg text-primary">
+                        {dayHeading(nextSessionToLead.date)}
+                      </p>
+                      <p className="font-body-md text-body-md text-on-surface mt-unit">
+                        <span className="font-data-mono font-semibold">
+                          {nextSessionToLead.course?.courseCode}
+                        </span>{" "}
+                        — {nextSessionToLead.course?.courseName}
+                      </p>
+                      <p className="font-data-mono text-data-mono text-on-surface-variant mt-unit">
+                        {formatSessionTimeRange(nextSessionToLead)}
+                        {nextSessionMeta && ` · ${nextSessionMeta}`}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="font-body-md text-body-md text-on-surface-variant">
+                      No sessions for you to lead right now. When your lecturer schedules one for
+                      you, it shows up here.
+                    </p>
+                  )}
+                </section>
+
+                <section
+                  aria-label="Hours this week"
+                  className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg"
+                >
+                  <h2 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
+                    This week
+                  </h2>
+                  <p className="font-body-md text-body-md">
+                    <span className="font-data-mono text-data-mono font-semibold text-primary">
+                      {weekScheduledHours}h
+                    </span>{" "}
+                    <span className="text-on-surface-variant">
+                      of {maxHoursPerWeek ?? "—"}h scheduled
+                    </span>
+                  </p>
+                  <div className="w-full bg-surface-container-high rounded-full h-1.5 mt-stack-sm mb-unit">
+                    <div
+                      className="bg-primary h-1.5 rounded-full"
+                      style={{ width: `${weekBarPercent}%` }}
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={maxHoursPerWeek ?? 0}
+                      aria-valuenow={weekScheduledHours}
+                      aria-label="Scheduled hours this week"
+                    />
+                  </div>
+                  <p className="font-body-sm text-body-sm text-outline">
+                    Across the sessions you lead, Monday to Sunday.
+                  </p>
+                </section>
+
+                {coverNeededCount > 0 && (
+                  <section
+                    aria-label="Cover needed"
+                    className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg"
+                  >
+                    <h2 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
+                      Cover needed
+                    </h2>
+                    <p className="font-body-md text-body-md text-on-surface mb-stack-md">
+                      {coverNeededCount} excused session{coverNeededCount === 1 ? "" : "s"} for your
+                      course{courses.length === 1 ? "" : "s"} still need a tutor.
+                    </p>
+                    <Link
+                      to="/volunteer"
+                      className="inline-block font-label-caps text-label-caps text-primary underline-offset-2 hover:underline"
+                    >
+                      View volunteer opportunities
+                    </Link>
+                  </section>
+                )}
+              </aside>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </AppLayout>
   );

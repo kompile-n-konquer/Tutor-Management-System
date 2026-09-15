@@ -5,6 +5,7 @@ const { requireRole } = require('../utils/roles');
 const {
   getUnassignedSessions,
   getMySessions,
+  getMyVolunteeredSessions,
   getLecturerSessions,
   scheduleSession,
   excuseSession,
@@ -15,6 +16,8 @@ const {
 router.get('/unassigned', authenticateFirebaseToken, getUnassignedSessions);
 // Every session scheduled for the signed-in tutor's assigned courses, used by the tutor dashboard.
 router.get('/mine', authenticateFirebaseToken, getMySessions);
+// Sessions the signed-in student has volunteered for (PENDING or APPROVED).
+router.get('/volunteered', authenticateFirebaseToken, getMyVolunteeredSessions);
 // The lecturer's own courses with their slots, tutors and scheduled sessions.
 router.get('/lecturer', authenticateFirebaseToken, requireRole('LECTURER'), getLecturerSessions);
 // A lecturer schedules a session for one of their courses, attached to a tutor assignment.

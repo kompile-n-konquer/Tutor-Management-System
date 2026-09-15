@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
@@ -6,6 +6,7 @@ import api from '../../utils/axiosInstance';
 import useAsync from '../../hooks/useAsync';
 import useAuth from '../../hooks/useAuth';
 import ErrorMessage from '../../components/error-message/ErrorMessage';
+import { formatSessionDate, formatSessionTimeRange } from '../../utils/formatSession';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -18,12 +19,13 @@ const minutesToLabel = (minutes) => {
 
 const EditTimetable = () => {
   const navigate = useNavigate();
-  const { currentUser, loading } = useAuth();
+  const { currentUser, role, loading } = useAuth();
   const { execute, isLoading } = useAsync();
 
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [grid, setGrid] = useState({}); // { [slotId]: { [dayIndex]: 'available' | 'empty' } }
   const [savedGrid, setSavedGrid] = useState({});
+  const [sessions, setSessions] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
 
@@ -63,6 +65,30 @@ const EditTimetable = () => {
 
     loadAvailability();
   }, [currentUser, loading, execute]);
+
+  // Fetch upcoming sessions for tutors (the dashboard's source of truth).
+  const fetchSessions = useCallback(async () => {
+    if (role !== 'tutor') return;
+    const response = await api.get('/sessions/mine');
+    if (response?.status === 200) {
+      // Only upcoming sessions (today or later).
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const upcoming = (response.data?.sessions ?? []).filter(
+        (s) => new Date(s.date) >= now,
+      );
+      setSessions(upcoming);
+    }
+    // Non-tutors get a 403 — silently ignore and show no sessions section.
+  }, [role]);
+
+  useEffect(() => {
+    if (!loading && currentUser) {
+      (async () => {
+        await fetchSessions();
+      })();
+    }
+  }, [loading, currentUser, fetchSessions]);
 
   if (loading) return null;
   if (!currentUser) return null;
@@ -200,6 +226,74 @@ const EditTimetable = () => {
             </div>
           </div>
         </div>
+
+        {/* ── Upcoming sessions (tutors only) ── */}
+        {role === 'tutor' && sessions.length > 0 && (
+          <div className="mt-gutter bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+              <div>
+                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                  Upcoming Sessions
+                </h3>
+                <p className="font-body-sm text-outline mt-1">
+                  Your scheduled tutoring sessions.
+                </p>
+              </div>
+              <span className="font-data-mono text-body-sm text-on-surface-variant">
+                {sessions.length} session{sessions.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            <div className="space-y-unit">
+              {sessions.map((session) => {
+                const chip =
+                  session.status === 'UNASSIGNED'
+                    ? { cls: 'bg-urgent-orange/10 text-urgent-orange', label: session.isMine ? 'Excused' : 'Cover needed' }
+                    : session.status === 'PENDING'
+                      ? { cls: 'bg-trust-blue/10 text-trust-blue', label: 'Volunteer pending' }
+                      : session.isMine
+                        ? { cls: 'bg-primary/10 text-primary', label: 'You lead' }
+                        : { cls: null, label: `Led by ${session.ledBy ?? 'another tutor'}` };
+
+                return (
+                  <div
+                    key={session.id}
+                    className="flex flex-wrap items-baseline gap-x-stack-md gap-y-unit px-stack-md py-unit border-b border-outline-variant/20 last:border-0"
+                  >
+                    <span className="font-data-mono text-data-mono font-semibold text-primary min-w-[5.5rem]">
+                      {session.course?.courseCode ?? '—'}
+                    </span>
+                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0">
+                      {session.course?.courseName}
+                    </span>
+                    <span className="font-data-mono text-body-sm text-on-surface-variant">
+                      {formatSessionDate(session.date)} · {formatSessionTimeRange(session)}
+                    </span>
+                    {session.courseSlot?.venue && (
+                      <span className="font-body-sm text-body-sm text-outline">
+                        {session.courseSlot.venue}
+                      </span>
+                    )}
+                    {chip.cls ? (
+                      <span className={`${chip.cls} px-2 py-0.5 rounded font-label-caps text-label-caps`}>
+                        {chip.label}
+                      </span>
+                    ) : (
+                      <span className="font-body-sm text-body-sm text-on-surface-variant">
+                        {chip.label}
+                      </span>
+                    )}
+                    {session.excuseReason && (
+                      <span className="w-full font-body-sm text-body-sm text-on-surface-variant italic mt-0.5">
+                        “{session.excuseReason}”
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

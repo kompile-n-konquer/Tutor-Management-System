@@ -359,6 +359,63 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
   res.json(updatedSession);
 });
 
+exports.getMyVolunteeredSessions = catchAsync(async (req, res, next) => {
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+
+  // Every SessionVolunteer record for this user whose status has not been
+  // rejected — PENDING means awaiting approval, APPROVED means confirmed.
+  const volunteerRecords = await prisma.sessionVolunteer.findMany({
+    where: {
+      userId: requestingUser.id,
+      status: { in: ['PENDING', 'APPROVED'] },
+    },
+    include: {
+      session: {
+        include: {
+          assignment: {
+            select: {
+              tutorId: true,
+              course: { select: { courseCode: true, courseName: true } },
+              tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+            },
+          },
+          courseSlot: {
+            include: {
+              timeSlot: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  res.json({
+    sessions: volunteerRecords.map((record) => ({
+      id: record.session.id,
+      date: record.session.date,
+      status: record.session.status,
+      volunteerStatus: record.status,
+      course: record.session.assignment.course,
+      courseSlot: {
+        id: record.session.courseSlot.id,
+        dayOfWeek: record.session.courseSlot.dayOfWeek,
+        venue: record.session.courseSlot.venue,
+        sessionType: record.session.courseSlot.sessionType,
+        timeSlot: record.session.courseSlot.timeSlot,
+      },
+      ledBy: record.session.assignment.tutor?.user
+        ? `${record.session.assignment.tutor.user.firstName} ${record.session.assignment.tutor.user.lastName}`
+        : null,
+    })),
+  });
+});
+
 exports.volunteerForSession = catchAsync(async (req, res, next) => {
   const sessionId = parseSessionId(req.params.id);
   if (!sessionId) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
 import { auth } from '../../firebase/firebase';
@@ -7,6 +7,7 @@ import api from '../../utils/axiosInstance';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import useAuth from '../../hooks/useAuth';
+import { formatSessionDate, formatSessionTimeRange } from '../../utils/formatSession';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -25,12 +26,39 @@ export default function Profile() {
 
   const [timeSlots, setTimeSlots] = useState([]); // [{ id, startMinute, endMinute }]
   const [availability, setAvailability] = useState([]); // [{ dayOfWeek, timeSlotId }]
+  const [sessions, setSessions] = useState([]); // upcoming sessions for the profile timetable
 
   useEffect(() => {
     if (!loading && !currentUser) {
       navigate('/login');
     }
   }, [currentUser, loading, navigate]);
+
+  // Fetch upcoming sessions for tutors (/sessions/mine) or volunteered
+  // sessions for students (/sessions/volunteered).  Other roles silently
+  // skip — the section simply won't render.
+  const fetchSessions = useCallback(async () => {
+    try {
+      if (role === 'tutor') {
+        const response = await api.get('/sessions/mine');
+        if (response?.status === 200) {
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          const upcoming = (response.data?.sessions ?? []).filter(
+            (s) => new Date(s.date) >= now,
+          );
+          setSessions(upcoming);
+        }
+      } else if (role === 'student') {
+        const response = await api.get('/sessions/volunteered');
+        if (response?.status === 200) {
+          setSessions(response.data?.sessions ?? []);
+        }
+      }
+    } catch {
+      // Silently ignore — the sessions section just won't appear.
+    }
+  }, [role]);
 
   useEffect(() => {
     if (loading || !currentUser) return;
@@ -44,7 +72,10 @@ export default function Profile() {
     };
 
     loadTimetable();
-  }, [currentUser, loading, executeTimetable]);
+    (async () => {
+      await fetchSessions();
+    })();
+  }, [currentUser, loading, executeTimetable, fetchSessions]);
 
   if (loading) return null; // TODO: Create a professional loading state 
   if (!currentUser) return null;
@@ -208,6 +239,81 @@ export default function Profile() {
                 </div>
               </div>
             </div>
+
+            {/* ── Scheduled sessions (tutors: upcoming sessions, students: volunteered work) ── */}
+            {(role === 'tutor' || role === 'student') && sessions.length > 0 && (
+              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+                <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                  <div>
+                    <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                      {role === 'tutor' ? 'Scheduled Sessions' : 'Volunteer Work'}
+                    </h3>
+                    <p className="font-body-sm text-outline mt-1">
+                      {role === 'tutor'
+                        ? 'Your upcoming tutoring sessions.'
+                        : 'Sessions you have volunteered for.'}
+                    </p>
+                  </div>
+                  <span className="font-data-mono text-body-sm text-on-surface-variant">
+                    {sessions.length} session{sessions.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="space-y-unit">
+                  {sessions.map((session) => {
+                    // Build a status chip appropriate for the role.
+                    let chip;
+                    if (role === 'tutor') {
+                      chip =
+                        session.status === 'UNASSIGNED'
+                          ? { cls: 'bg-urgent-orange/10 text-urgent-orange', label: session.isMine ? 'Excused' : 'Cover needed' }
+                          : session.status === 'PENDING'
+                            ? { cls: 'bg-trust-blue/10 text-trust-blue', label: 'Volunteer pending' }
+                            : session.isMine
+                              ? { cls: 'bg-primary/10 text-primary', label: 'You lead' }
+                              : { cls: null, label: `Led by ${session.ledBy ?? 'another tutor'}` };
+                    } else {
+                      // Student volunteer view
+                      chip =
+                        session.volunteerStatus === 'APPROVED'
+                          ? { cls: 'bg-primary/10 text-primary', label: 'Approved' }
+                          : { cls: 'bg-trust-blue/10 text-trust-blue', label: 'Pending' };
+                    }
+
+                    return (
+                      <div
+                        key={session.id}
+                        className="flex flex-wrap items-baseline gap-x-stack-md gap-y-unit px-stack-md py-unit border-b border-outline-variant/20 last:border-0"
+                      >
+                        <span className="font-data-mono text-data-mono font-semibold text-primary min-w-[5.5rem]">
+                          {session.course?.courseCode ?? '—'}
+                        </span>
+                        <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0">
+                          {session.course?.courseName}
+                        </span>
+                        <span className="font-data-mono text-body-sm text-on-surface-variant">
+                          {formatSessionDate(session.date)} · {formatSessionTimeRange(session)}
+                        </span>
+                        {session.courseSlot?.venue && (
+                          <span className="font-body-sm text-body-sm text-outline">
+                            {session.courseSlot.venue}
+                          </span>
+                        )}
+                        {chip.cls ? (
+                          <span className={`${chip.cls} px-2 py-0.5 rounded font-label-caps text-label-caps`}>
+                            {chip.label}
+                          </span>
+                        ) : (
+                          <span className="font-body-sm text-body-sm text-on-surface-variant">
+                            {chip.label}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
               <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">

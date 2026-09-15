@@ -1,5 +1,6 @@
 // Mock the Prisma client before requiring the controller
 jest.mock('../prisma/client', () => ({
+  user: { findUnique: jest.fn() },
   course: { findMany: jest.fn() },
 }));
 
@@ -12,6 +13,10 @@ function flushMicrotasks() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function mockReq() {
+  return { user: { user_id: 'uid-123' } };
+}
+
 function mockRes() {
   const res = {};
   res.status = jest.fn().mockReturnValue(res);
@@ -22,6 +27,9 @@ function mockRes() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Most tests exercise the staff path — an organiser requesting the full
+  // registry. Tests that need another role override this mock.
+  prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
 });
 
 describe('getCourses', () => {
@@ -54,7 +62,7 @@ describe('getCourses', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourses({}, res, next);
+    await getCourses(mockReq(), res, next);
     await flushMicrotasks();
 
     expect(prisma.course.findMany).toHaveBeenCalledTimes(1);
@@ -114,7 +122,7 @@ describe('getCourses', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourses({}, res, next);
+    await getCourses(mockReq(), res, next);
     await flushMicrotasks();
 
     const body = res.json.mock.calls[0][0];
@@ -130,11 +138,46 @@ describe('getCourses', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourses({}, res, next);
+    await getCourses(mockReq(), res, next);
     await flushMicrotasks();
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith([]);
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('returns 404 when the requesting user does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourses(mockReq(), res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404 }),
+    );
+    expect(prisma.course.findMany).not.toHaveBeenCalled();
+  });
+
+  test.each(['STUDENT', 'TUTOR'])(
+    'returns an empty list for a %s — the registry is staff-only data',
+    async (role) => {
+      prisma.user.findUnique.mockResolvedValue({ id: 5, role });
+
+      const res = mockRes();
+      const next = jest.fn();
+
+      await getCourses(mockReq(), res, next);
+      await flushMicrotasks();
+
+      // The catalogue is never queried for applicants — they see open
+      // opportunities through GET /applications instead.
+      expect(prisma.course.findMany).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith([]);
+      expect(next).not.toHaveBeenCalled();
+    },
+  );
 });

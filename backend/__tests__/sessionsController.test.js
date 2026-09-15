@@ -5,6 +5,7 @@ jest.mock('../prisma/client', () => ({
   course: { findMany: jest.fn() },
   courseSlot: { findUnique: jest.fn() },
   session: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
+  roleApplication: { findFirst: jest.fn() },
 }));
 
 const prisma = require('../prisma/client');
@@ -84,6 +85,7 @@ describe('getMySessions', () => {
 
   test('scopes sessions to the courses the tutor is actively assigned to, not just their own assignments', async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.roleApplication.findFirst.mockResolvedValue(null);
     prisma.tutorAssignment.findMany.mockResolvedValue([
       {
         id: 11,
@@ -139,6 +141,7 @@ describe('getMySessions', () => {
 
   test('marks own sessions with isMine and names the tutor leading each session', async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.roleApplication.findFirst.mockResolvedValue(null);
     prisma.tutorAssignment.findMany.mockResolvedValue([]);
     prisma.session.findMany.mockResolvedValue([
       {
@@ -199,6 +202,157 @@ describe('getMySessions', () => {
             excuseReason: 'Medical appointment',
           }),
         ],
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('derives allocatedHours from the tutor\'s still-scheduled sessions and the cap from the approved application', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.roleApplication.findFirst.mockResolvedValue({ maxHoursPerWeek: 10 });
+    prisma.tutorAssignment.findMany.mockResolvedValue([
+      {
+        id: 11,
+        semester: '2026-S2',
+        course: {
+          id: 100,
+          courseCode: 'COMS1015',
+          courseName: 'Introduction to Programming',
+          user: { firstName: 'Sarah', lastName: 'Van Wyk' },
+        },
+      },
+    ]);
+
+    // Anchor the teaching week on next Monday — the same weekday logic the
+    // seed uses — so the test is date-independent.
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+    const nextWednesday = new Date(nextMonday.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    const baseSession = {
+      date: nextMonday,
+      status: 'SCHEDULED',
+      excuseReason: null,
+      assignment: {
+        userId: 1,
+        courseId: 100,
+        course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        user: { firstName: 'Thabo', lastName: 'Demotutor' },
+      },
+      courseSlot: {
+        id: 31,
+        dayOfWeek: 0,
+        venue: 'Lab 2',
+        sessionType: 'Tutorial',
+        timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+      },
+    };
+    prisma.session.findMany.mockResolvedValue([
+      { ...baseSession, id: 21 },
+      // Excused by the tutor — excluded from the allocated hours.
+      { ...baseSession, id: 22, date: nextWednesday, status: 'UNASSIGNED', excuseReason: 'Medical appointment' },
+      // Another tutor's session on the same course — never this tutor's hours.
+      {
+        ...baseSession,
+        id: 23,
+        assignment: { ...baseSession.assignment, userId: 9 },
+      },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.roleApplication.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1, requestedRole: 'TUTOR', status: 'APPROVED' } }),
+    );
+
+    // Only the Monday 08:00–09:30 session counts: 1.5 hours, not the 1.5h
+    // excused session nor the other tutor's session.
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxHoursPerWeek: 10,
+        courses: [expect.objectContaining({ courseCode: 'COMS1015', allocatedHours: 1.5 })],
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('reports weekScheduledHours for the current Monday-to-Sunday week, separate from the teaching week', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.roleApplication.findFirst.mockResolvedValue({ maxHoursPerWeek: 10 });
+    prisma.tutorAssignment.findMany.mockResolvedValue([
+      {
+        id: 11,
+        semester: '2026-S2',
+        course: {
+          id: 100,
+          courseCode: 'COMS1015',
+          courseName: 'Introduction to Programming',
+          user: { firstName: 'Sarah', lastName: 'Van Wyk' },
+        },
+      },
+    ]);
+
+    // Anchor on the current Monday-to-Sunday week so the test is
+    // date-independent whichever day it runs.
+    const thisMonday = new Date();
+    thisMonday.setUTCHours(0, 0, 0, 0);
+    thisMonday.setUTCDate(thisMonday.getUTCDate() - ((thisMonday.getUTCDay() + 6) % 7));
+    const dayAt = (offset) => new Date(thisMonday.getTime() + offset * 24 * 60 * 60 * 1000);
+
+    const baseSession = {
+      status: 'SCHEDULED',
+      excuseReason: null,
+      assignment: {
+        userId: 1,
+        courseId: 100,
+        course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        user: { firstName: 'Thabo', lastName: 'Demotutor' },
+      },
+      courseSlot: {
+        id: 31,
+        dayOfWeek: 0,
+        venue: 'Lab 2',
+        sessionType: 'Tutorial',
+        timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+      },
+    };
+
+    prisma.session.findMany.mockResolvedValue([
+      // Earlier this week — the day may already have passed, but its hours
+      // still count against this week's cap.
+      { ...baseSession, id: 21, date: dayAt(0) },
+      // Excused this week — excluded from the card.
+      { ...baseSession, id: 22, date: dayAt(2), status: 'UNASSIGNED', excuseReason: 'Medical appointment' },
+      // Another tutor's session this week — never this tutor's hours.
+      { ...baseSession, id: 23, date: dayAt(3), assignment: { ...baseSession.assignment, userId: 9 } },
+      // Later this week — counts.
+      { ...baseSession, id: 24, date: dayAt(4) },
+      // Next week — feeds the teaching-week allocatedHours, not this card.
+      { ...baseSession, id: 25, date: dayAt(8) },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    // Monday's and Friday's 08:00–09:30 sessions are 3h in the current week;
+    // next Tuesday's 1.5h, the excused session and the other tutor's session
+    // never reach the card.
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxHoursPerWeek: 10,
+        weekScheduledHours: 3,
       }),
     );
     expect(next).not.toHaveBeenCalled();

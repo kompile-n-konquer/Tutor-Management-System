@@ -7,7 +7,7 @@ import OnboardingWalkthrough from "../../components/onboarding/OnboardingWalkthr
 import useAuth from "../../hooks/useAuth.js";
 import { useFirstVisit } from "../../hooks/useFirstVisit.js";
 import api from "../../utils/axiosInstance.js";
-import { formatSessionTimeRange, sessionDurationHours } from "../../utils/formatSession.js";
+import { formatSessionTimeRange } from "../../utils/formatSession.js";
 
 const TUTOR_ONBOARDING_STEPS = [
   {
@@ -178,6 +178,7 @@ export default function TutorDashboard() {
   const [courses, setCourses] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [maxHoursPerWeek, setMaxHoursPerWeek] = useState(null);
+  const [weekScheduledHours, setWeekScheduledHours] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [excusingSessionId, setExcusingSessionId] = useState(null);
@@ -194,6 +195,7 @@ export default function TutorDashboard() {
       setCourses(response.data?.courses ?? []);
       setSessions(response.data?.sessions ?? []);
       setMaxHoursPerWeek(response.data?.maxHoursPerWeek ?? null);
+      setWeekScheduledHours(response.data?.weekScheduledHours ?? 0);
       setError("");
     } catch {
       setError("Could not load your sessions. Please try again later.");
@@ -282,27 +284,14 @@ export default function TutorDashboard() {
     .flatMap((group) => group.sessions)
     .filter((session) => session.status === "UNASSIGNED").length;
 
-  // Scheduled hours for the current week (Mon–Sun) across sessions the tutor
-  // leads — maxHoursPerWeek is the Tutor record's weekly cap.
-  const weekScheduledHours = useMemo(() => {
-    const now = new Date();
-    const mondayOffset = (now.getDay() + 6) % 7;
-    const weekStart = startOfDay(
-      new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset)
-    ).getTime();
-    const weekEnd = weekStart + 7 * MILLISECONDS_PER_DAY;
-
-    const total = sessions.reduce((sum, session) => {
-      if (!session.isMine || session.status !== "SCHEDULED") return sum;
-      const day = startOfDay(session.date).getTime();
-      if (day < weekStart || day >= weekEnd) return sum;
-      return sum + (sessionDurationHours(session) ?? 0);
-    }, 0);
-    return Math.round(total * 10) / 10;
-  }, [sessions]);
-
+  // The backend sums the current Monday-to-Sunday week's hours server-side
+  // (weekScheduledHours) — only the sessions the tutor still leads, so
+  // excusing one lowers the card immediately. maxHoursPerWeek is the cap
+  // from their approved tutor application; the bar shows how much of it
+  // this week's sessions use, and turns orange once they exceed it.
   const weekBarPercent =
     maxHoursPerWeek > 0 ? Math.min(100, Math.round((weekScheduledHours / maxHoursPerWeek) * 100)) : 0;
+  const isOverWeeklyCap = maxHoursPerWeek > 0 && weekScheduledHours > maxHoursPerWeek;
 
   const firstName = userProfile?.firstName;
   const courseCodes = courses.map((course) => course.courseCode);
@@ -499,7 +488,7 @@ export default function TutorDashboard() {
                   </p>
                   <div className="w-full bg-surface-container-high rounded-full h-1.5 mt-stack-sm mb-unit">
                     <div
-                      className="bg-primary h-1.5 rounded-full"
+                      className={`${isOverWeeklyCap ? "bg-urgent-orange" : "bg-primary"} h-1.5 rounded-full`}
                       style={{ width: `${weekBarPercent}%` }}
                       role="progressbar"
                       aria-valuemin={0}

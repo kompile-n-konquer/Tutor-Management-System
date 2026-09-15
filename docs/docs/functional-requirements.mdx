@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 6
 title: Functional Requirements
 description: Implemented functional requirements for the TutorFlow Tutor Management System
 ---
@@ -162,8 +162,7 @@ current implementation status.
 - The system shall display a weekly calendar grid showing the user's available time slots,
   scheduled sessions, and any scheduling conflicts.
 - Scheduling conflicts shall be visually highlighted with a hover tooltip explaining the clash.
-- **Status:** Pending — availability grid is rendered in `Profile.jsx` but uses static data and
-  does not yet save changes.
+- **Status:** Implemented.
 
 ### FR-6.4 — Notification Preferences
 
@@ -186,8 +185,7 @@ current implementation status.
 ### FR-7.1 — View Weekly Timesheets
 
 - The system shall display weekly timesheet entries with total logged hours and approval status.
-- **Status:** Pending — timesheet cards exist in `Timesheets.jsx` but use static data; backend
-  integration is not yet complete.
+- **Status:** Implemented.
 
 ### FR-7.2 — Submit New Time Logs
 
@@ -203,16 +201,12 @@ current implementation status.
 
 - The system shall display navigation links filtered by the logged-in user's role
   (organiser, tutor, student, lecturer).
-- **Status:** Pending — role-based navigation is defined in `navConfig.js` but active role
-  resolution from authentication state is not yet wired up.
-
+- **Status:** Implemented
 ### FR-8.2 — Application Layout
 
 - The system shall provide a consistent application layout with a sidebar, top navigation
   bar, and content area across all authenticated pages.
-- **Status:** Pending — application layout components (`AppLayout.jsx`, `Sidebar.jsx`, `TopNavBar.jsx`)
-  exist but are not yet driven by live authentication/role data.
-
+- **Status:** Implemented
 ---
 
 ## FR-9: Backend API

@@ -18,6 +18,13 @@ jobs:
         run: npm ci
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # SQL Server refuses to drop a column that still owns a default constraint,
+      # and prisma db push does not drop those constraints itself — clear them first.
+      - name: Drop stale default constraints before db push
+        working-directory: backend
+        run: node prisma/dropStaleDefaultConstraints.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Push Prisma schema to database
         working-directory: backend
         run: npx prisma db push --accept-data-loss

@@ -1,0 +1,237 @@
+---
+sidebar_position: 13
+title: Third-Party Code
+description: Every dependency across the backend, frontend, and docs packages — what it is, why we chose it, and how we use it
+---
+
+## Why this page exists
+
+The Tutor Management System is deliberately built on established, well-maintained open-source libraries instead of hand-rolled infrastructure. This is partly a course requirement — the brief mandates an **established authentication service, not a self-built system**, and a **non-monolithic architecture** — and partly engineering judgement: every package below removes an entire class of work (database boilerplate, bundling, test harnesses, diagram rendering) so the team can focus on the actual domain problem of allocating tutors to courses.
+
+Third-party code is declared in three `package.json` manifests, one per deployable part of the system. Versions shown throughout are the ranges declared in each manifest.
+
+| Manifest                  | Runtime deps | Dev deps | Builds                                      |
+| ------------------------- | ------------ | -------- | ------------------------------------------- |
+| `backend/package.json`    | 7            | 4        | The Node.js REST API — Azure App Service    |
+| `frontend/package.json`   | 5            | 22       | The React SPA — Vercel                      |
+| `docs/package.json`       | 9            | 2        | This documentation site                     |
+
+**Runtime dependencies** ship to production with the app. **Development dependencies** are build, test, and lint tooling that never reaches production. Both are documented and motivated below. All packages are open source under permissive licenses (MIT, Apache-2.0, BSD, ISC), and each manifest's `package-lock.json` is committed so CI installs with `npm ci` always reproduce the exact same dependency tree.
+
+---
+
+## Backend — Node.js REST API
+
+### Runtime dependencies
+
+#### `express` (^5.2.1)
+
+- **What it is:** A minimalist web framework for Node.js and the de-facto standard for building REST APIs.
+- **Why we chose it:** The course requires a hand-written REST API served by a separately deployed backend. Express's middleware architecture maps exactly onto our cross-cutting concerns — JSON body parsing, CORS, request logging, token verification, and global error handling — without imposing structure on the domain code. Its enormous ecosystem means every integration question already has a documented answer.
+- **How we use it:** `backend/index.js` builds the app: `express.json()` parses request bodies, routers are mounted for `/api/users`, `/api/allocation`, and `/api/courses`, an Express 5 wildcard route (`app.all('/{*splat}')`) catches unmatched paths, and a `globalErrorHandler` middleware converts thrown errors into consistent JSON error responses. The `/health` endpoint uses it to answer Azure's availability probes.
+
+#### `@prisma/client` (^6.19.3)
+
+- **What it is:** An auto-generated, type-safe database client produced from a schema file.
+- **Why we chose it:** It replaces hand-written SQL strings with generated query builders whose correctness is checked against the schema, eliminating the most common class of backend bugs. The single `schema.prisma` file doubles as living documentation of the data model (see the [Database Schema](./database-schema) page).
+- **How we use it:** Instantiated once as a singleton in `backend/prisma/client.js` and imported by every controller (`auth.js`, `allocation.js`, `courses.js`, `availability.js`) for `findUnique`, `findMany`, `create`, `update`, and aggregate queries. `index.js` calls `prisma.$connect()` eagerly at startup so the first request doesn't pay a cold-start penalty, and the health check pings the database with `prisma.$queryRaw`.
+
+#### `prisma` (^6.19.3)
+
+- **What it is:** The Prisma CLI and engines — the companion tool to the runtime client above.
+- **Why we chose it:** Schema changes need to be versioned, reviewable, and repeatable across every developer's machine and the production database. Prisma's migration system gives us that without writing migration SQL by hand.
+- **How we use it:** `prisma/schema.prisma` defines the full SQL Server data model; `npx prisma migrate` generates the versioned SQL under `prisma/migrations/`; the `postinstall: prisma generate` script regenerates the typed client on every install; `npm run seed` populates a local database via `prisma/seed.js`; and `docker-compose.yml` provides the local SQL Server instance it all runs against.
+
+#### `cors` (^2.8.6)
+
+- **What it is:** Express middleware that attaches Cross-Origin Resource Sharing headers to responses.
+- **Why we chose it:** Because the frontend (a Vercel domain) and the backend (an Azure domain) are different origins — the non-monolithic split the course requires — browsers would silently block the frontend's API calls without these headers. CORS is inherent to our architecture, not optional.
+- **How we use it:** Enabled globally with `app.use(cors())` in `backend/index.js`.
+
+#### `dotenv` (^16.6.1)
+
+- **What it is:** Loads key-value pairs from a `.env` file into `process.env`.
+- **Why we chose it:** Database connection strings, Firebase service-account credentials, and ports differ between local development and Azure and must never be committed to source control. Centralising them in environment variables keeps the same code deployable anywhere.
+- **How we use it:** `require('dotenv/config')` is the first line of `backend/index.js`, guaranteeing every later `process.env` read — including the Firebase Admin setup in `firebase/admin.js` — sees the loaded values.
+
+#### `firebase-admin` (^14.3.0)
+
+- **What it is:** The Firebase Admin SDK for trusted server environments.
+- **Why we chose it:** The brief requires an established authentication service rather than self-built auth. The frontend signs users in with Firebase, but a client token is only trustworthy once the server has verified it — so the backend needs the same service's server-side SDK to validate tokens and manage accounts. Using the official SDK means cryptographic verification is correct by construction, not by our own implementation.
+- **How we use it:** `backend/firebase/admin.js` initialises the SDK from service-account credentials supplied through environment variables (or a `GOOGLE_APPLICATION_CREDENTIALS` file). `backend/middleware/auth.js` then verifies the `Bearer` ID token on every protected request with `verifyIdToken()`, and maps the verified `firebaseUid` to a database user and role. `controllers/auth.js` also uses `getAuth().updateUser()` to disable the Firebase account when a user is deactivated.
+
+#### `morgan` (^1.11.0)
+
+- **What it is:** HTTP request-logger middleware for Express.
+- **Why we chose it:** Cheap observability — when an endpoint misbehaves during development or a demo, the request line and status code are already on the console. Debugging REST APIs without request logs means guessing.
+- **How we use it:** `app.use(morgan('dev'))` in `backend/index.js` logs every incoming request with its status and response time.
+
+### Development dependencies
+
+#### `jest` (^30.4.2)
+
+- **What it is:** A zero-config JavaScript testing framework.
+- **Why we chose it:** The course rubric explicitly rewards automated API testing. Jest is the Node.js ecosystem's standard runner — `describe`/`test` blocks, matchers, and mocking included — so tests for controllers and utilities are cheap to write and run.
+- **How we use it:** Configured in `backend/jest.config.js` to target the controllers, utils, and `__tests__` directories. The suite covers allocation validation, course endpoints, the global error handlers, and the `catchAsync` wrapper. `npm test` runs it in CI (`.gitea/workflows/test.yml`), and `npm run test:coverage` produces coverage reports.
+
+#### `@types/jest` (^30.0.0)
+
+- **What it is:** Type definitions for Jest's globals (`describe`, `test`, `expect`, `vi`-style mocks).
+- **Why we chose it:** Gives editors full IntelliSense and type-checking inside test files instead of treating every test helper as an unknown global.
+- **How we use it:** Declared as a development dependency so it is available to any type-aware tooling that inspects the test suite.
+
+#### `nodemon` (^3.1.14)
+
+- **What it is:** A watcher that restarts a Node process whenever files change.
+- **Why we chose it:** Backend development involves rapid edit-run cycles; manually stopping and restarting the server after every change wastes time and breaks flow.
+- **How we use it:** The `npm run dev` script wraps `index.js` with nodemon for live reload during development; production uses plain `npm start`.
+
+#### `@sonar/scan` (^5.0.0)
+
+- **What it is:** The official SonarQube scanner CLI for JavaScript/Node projects.
+- **Why we chose it:** Static analysis catches code smells, duplicated logic, and maintainability issues that reviews miss, and SonarQube tracks those metrics over time — directly supporting the project's quality-assessment requirements.
+- **How we use it:** `backend/sonar.js` wraps the scanner with our project configuration, and `.gitea/workflows/sonarqube.yml` runs it against the frontend and backend sources on every push and pull request to `main`.
+
+---
+
+## Frontend — React SPA
+
+### Runtime dependencies
+
+#### `react` / `react-dom` (^19.2.8)
+
+- **What it is:** The React UI library and its DOM renderer.
+- **Why we chose it:** React's component model matches how the product is actually designed: shared building blocks (`Button`, `Input`, `ErrorMessage`, the sidebar and layout) are written once and reused across every auth flow and dashboard, which is what keeps the views consistent. Hooks give us local and context-based state without a state-management library, and its ecosystem is the largest of any UI framework. The full rationale is on the [Architecture](./architecture) page.
+- **How we use it:** The entire SPA under `frontend/src` — the `features/` views (organiser board and analytics, tutor dashboard, timesheets, timetable, volunteering, profile, auth flows), the shared `components/`, and the `AuthProvider` context that holds the signed-in user.
+
+#### `react-router-dom` (^7.18.2)
+
+- **What it is:** Client-side routing for React.
+- **Why we chose it:** The app is a single-page application: navigation must swap views without full page reloads, and routes need layout nesting, error boundaries, and an auth guard. React Router provides all of this as the ecosystem's standard router.
+- **How we use it:** `Router.jsx` defines the route tree with `createBrowserRouter` — nested routes under `RootLayout` with a shared `errorElement` — and `main.jsx` mounts it with `RouterProvider`. `authLoader.js` uses a loader to redirect unauthenticated users away from protected routes; `Link`, `NavLink`, `useNavigate`, and `useRouteError` are used across the views and navigation.
+
+#### `axios` (^1.19.0)
+
+- **What it is:** A promise-based HTTP client for the browser.
+- **Why we chose it:** Interceptors. Every API call needs the user's Firebase ID token attached, and axios lets us do that in exactly one place instead of repeating header logic in every feature. The shared instance also centralises the backend base URL and error semantics.
+- **How we use it:** `frontend/src/utils/axiosInstance.js` creates the `api` instance with `baseURL` from `VITE_BACKEND_BASE_URL`; a request interceptor reads the current Firebase user, fetches a fresh ID token, and sets `Authorization: Bearer …`. Every feature that talks to the backend — Login, Signup, the organiser board and analytics, Profile, EditTimetable, GlobalSearch, and AuthProvider — imports this one instance.
+
+#### `firebase` (^12.17.1)
+
+- **What it is:** The Firebase client SDK — used here for Firebase Authentication.
+- **Why we chose it:** The brief requires using an established authentication service. Firebase Auth's free tier, built-in email/password and Google providers, and short-lived verifiable ID tokens meant we could ship a complete sign-up/sign-in/reset flow with no auth code of our own to build, secure, or maintain. Its benefits are argued in detail on the [Architecture](./architecture) page.
+- **How we use it:** `firebase/firebase.js` initialises the app and auth instance from environment variables. Login uses `signInWithEmailAndPassword` and `signInWithPopup` (Google), Signup uses `createUserWithEmailAndPassword`, ForgotPassword uses `sendPasswordResetEmail`, `AuthProvider` subscribes to `onAuthStateChanged` to keep the app's user state live, `authLoader` fetches `getIdToken` for route protection, and `getFirebaseErrorMessage.js` translates Firebase error codes into friendly messages (a module with its own unit tests).
+
+### Development dependencies
+
+#### Build tooling
+
+- **`vite` (^8.2.0)** — The frontend's dev server and production bundler. Chosen over heavier bundlers for near-instant cold starts and hot module replacement, which matters for a team iterating on UI. `vite.config.js` configures the dev server, and Vite's `import.meta.env` mechanism exposes the `VITE_*` variables (backend URL, Firebase config) that the app reads.
+- **`@vitejs/plugin-react` (^6.0.4)** — The official React plugin for Vite, providing the JSX transform and Fast Refresh so component edits appear instantly without losing state.
+
+#### Testing
+
+- **`vitest` (^4.1.10)** — The test runner, chosen because it is Vite-native: it reuses `vite.config.js` (globals, setup files, jsdom environment) instead of duplicating bundler config the way a standalone runner would. Runs the component and utility test suites (`Button.test.jsx`, `getFirebaseErrorMessage.test.js`, `validEmail.test.js`) locally via `npm test` and in CI via `test.yml`.
+- **`@vitest/coverage-v8` (^4.1.10)** — The V8-powered coverage provider behind `npm run test:coverage`, reporting statement and branch coverage in text, JSON, and HTML.
+- **`@testing-library/react` (^16.3.2)** — Renders components and queries them the way a user would (by role, by text) so tests assert observable behaviour rather than implementation details.
+- **`@testing-library/jest-dom` (^7.0.1)** — Adds the DOM matchers (`toBeInTheDocument`, `toBeDisabled`, …) used throughout the component tests; wired in via `src/setupTests.ts`.
+- **`@testing-library/user-event` (^14.6.4)** — Completes the Testing Library toolkit with realistic user-interaction simulation (clicking, typing) for interaction-level tests as the suite grows.
+- **`jsdom` (^30.0.1)** — A standards-compliant DOM implementation in pure JavaScript, required so React components can render under Node in tests (`environment: 'jsdom'`).
+
+#### Styling
+
+- **`@tailwindcss/postcss` (^4.3.3)** — Tailwind CSS v4's PostCSS integration, the engine that compiles utility classes at build time. Wired in through `postcss.config.js` and the `@import "tailwindcss"` directive in `index.css`.
+- **`@tailwindcss/forms` (^0.5.10)** — A plugin that normalises form controls across browsers; the auth flows and timesheet forms are built on it (registered in `tailwind.config.js`).
+- **`@tailwindcss/container-queries` (^0.1.1)** — Adds container-query utilities so components (board columns, dashboard cards) can respond to their container's size rather than only the viewport.
+- **`autoprefixer` (^10.5.4)** — The standard PostCSS vendor-prefixing plugin, kept in the CSS toolchain for cross-browser compatibility; Tailwind v4's own pipeline already covers most prefixing needs.
+
+#### Language and lint tooling
+
+- **`typescript` (~6.0.2)** — The codebase is JavaScript-first with TypeScript support files (e.g. `setupTests.ts`); Vite transpiles TS natively and the compiler provides type-aware editing.
+- **`@types/react`, `@types/react-dom`, `@types/node`** — Type definitions for React, the DOM, and Node APIs, powering editor IntelliSense and type-checking across the source.
+- **`eslint` (^10.8.0)** — The linter, run via `npm run lint`, catching bugs and enforcing style before code review.
+- **`@eslint/js` (^10.0.1)** — ESLint's own recommended rule set, the base the flat config in `eslint.config.js` extends.
+- **`eslint-plugin-react-hooks` (^7.1.1)** — Enforces the Rules of Hooks, preventing the entire category of stale-state and ordering bugs in React components.
+- **`eslint-plugin-react-refresh` (^0.5.3)** — Validates Fast Refresh boundaries so Vite's hot reload stays reliable during development.
+- **`globals` (^17.7.0)** — The vocabulary of browser globals (`window`, `document`, …) that ESLint needs to lint frontend code without false positives.
+- **`typescript-eslint` (^8.65.0)** — TypeScript-aware ESLint tooling available for the TS files in the repository.
+
+### Version overrides
+
+The frontend manifest also pins several transitive dependencies (`undici`, `postcss`, `tailwindcss`, `vite`) in its `overrides` section. This forces every path through the dependency tree to resolve to the same tested version, keeping builds reproducible and making upgrades a deliberate, visible change rather than an accident of nested version resolution.
+
+---
+
+## Docs site — Docusaurus
+
+This documentation site is itself a third-party artefact: a Docusaurus static site, so the team's diagrams and decisions live somewhere structured and deployed rather than in scattered files.
+
+### Runtime dependencies
+
+#### `@docusaurus/core` (3.10.2)
+
+- **What it is:** The Docusaurus static-site generator core.
+- **Why we chose it:** The project needs a maintained, deployed documentation site for requirements, architecture, and meeting records. Docusaurus is React-based (matching the team's stack), has first-class MDX support, and builds to static files that deploy anywhere.
+- **How we use it:** `docusaurus.config.js` configures the site — title, theming, the docs plugin with the auto-generated sidebar, and the `future.v4` compatibility flag. The `build`, `start`, and `serve` scripts in `docs/package.json` drive it.
+
+#### `@docusaurus/preset-classic` (3.10.2)
+
+- **What it is:** The classic preset bundling the docs plugin, default theme, and sitemap.
+- **Why we chose it:** It is the batteries-included configuration — docs versioning, sidebars, and theming without assembling plugins manually.
+- **How we use it:** Declared in the `presets` array of `docusaurus.config.js` with the docs sidebar path; the blog feature is disabled as it is not needed.
+
+#### `@docusaurus/faster` (3.10.2)
+
+- **What it is:** The opt-in performance package providing the faster Rspack/SWC build pipeline for Docusaurus sites.
+- **Why we chose it:** Declared so the site's build pipeline has access to the speed-optimised bundler, keeping documentation builds quick as the site grows.
+- **How we use it:** Installed alongside the core packages; the site currently builds with the stable default pipeline.
+
+#### `@docusaurus/theme-mermaid` (^3.10.2)
+
+- **What it is:** The Mermaid theme that renders `mermaid` code fences as real diagrams.
+- **Why we chose it:** The system design documentation — component, ER, and sequence diagrams — is maintained as code, which means it can be reviewed in pull requests and diffed like any other source file instead of drifting as screenshots.
+- **How we use it:** Enabled through `markdown: { mermaid: true }` and the `themes` array in `docusaurus.config.js`; it renders the diagrams on the [Database Schema](./database-schema) page.
+
+#### `@mdx-js/react` (^3.0.0)
+
+- **What it is:** The React runtime for MDX, the markdown-with-JSX format Docusaurus pages are written in.
+- **Why we chose it:** It is what allows documentation pages to mix prose with live React components and JSX expressions.
+- **How we use it:** Underpins every `.mdx` page in the docs site, including this one.
+
+#### `clsx` (^2.0.0)
+
+- **What it is:** A tiny utility for constructing `className` strings conditionally.
+- **Why we chose it:** The standard idiom for composing CSS classes in React without string concatenation bugs.
+- **How we use it:** In the homepage feature cards (`docs/src/components/HomepageFeatures/index.js`) to build the layout classes.
+
+#### `prism-react-renderer` (^2.3.0)
+
+- **What it is:** A syntax-highlighting theme provider for code blocks.
+- **Why we chose it:** Documentation full of code and schema snippets needs readable highlighting in both light and dark modes.
+- **How we use it:** Imported in `docusaurus.config.js` to set the Prism `theme` (GitHub) and `darkTheme` (Dracula) for every code block on the site.
+
+#### `react` / `react-dom` (^19.0.0)
+
+- **What it is:** The React runtime required by Docusaurus itself.
+- **Why we chose it:** Docusaurus 3.x is a React application; the site's own components run on the same library as the main product.
+- **How we use it:** Renders the site's React components, such as the homepage features.
+
+### Development dependencies
+
+#### `@docusaurus/module-type-aliases` (3.10.2)
+
+- **What it is:** Type aliases for Docusaurus's module system (themes, CSS modules, site aliases).
+- **Why we chose it:** So editors can resolve and type-check the `@theme/…` and `@site/…` imports used in the site's source instead of flagging them as unknown modules.
+- **How we use it:** Backs the `@theme/Heading` and `@site/static/...` imports in the homepage feature components (`docs/src/components/HomepageFeatures/index.js`).
+
+#### `@docusaurus/types` (3.10.2)
+
+- **What it is:** The type definitions for Docusaurus configuration objects.
+- **Why we chose it:** Configuration files are code too — typed configs catch typos like `sidebarPath` misspellings at authoring time rather than at build time.
+- **How we use it:** Referenced by the `@type {import('@docusaurus/types').Config}` JSDoc annotation in `docusaurus.config.js` and the `SidebarsConfig` annotation in `sidebars.js`.
+
+---
+
+## Summary
+
+Across the three manifests the project uses **21 runtime dependencies** and **28 development dependencies**. Each was chosen deliberately against the same criteria: it must be established and actively maintained, it must remove real work the team would otherwise hand-write and maintain, and it must fit the course's architectural requirements (non-monolithic deployment, an established authentication service, and a relational database accessed through an ORM). Nothing in the manifests is an unused experiment — every package above is either exercised by the running system or by its build, test, and quality pipelines.

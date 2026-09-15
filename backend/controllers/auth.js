@@ -3,15 +3,51 @@ const catchAsync = require('../utils/catchAsync');
 const getFirebaseAdmin = require('../firebase/admin');
 const { normaliseRole } = require('../utils/roles');
 
+// Fields every user endpoint may expose. firebaseUid is the Firebase subject
+// identifier and never leaves the server — clients already know their own UID
+// from the Firebase SDK, and other users' UIDs are nobody's business.
+const USER_PUBLIC_SELECT = {
+  id: true,
+  studentNumber: true,
+  employeeNumber: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  phoneNumber: true,
+  yearOfStudy: true,
+  role: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+// Organiser/admin view of every registered account (no authentication secrets).
+// Route-level requireRole gates this to ORGANISER and ADMIN.
 exports.getAllUsers = catchAsync(async (req, res, next) => {
-  const users = await prisma.user.findMany();
+  const users = await prisma.user.findMany({
+    select: USER_PUBLIC_SELECT,
+    orderBy: { id: 'asc' },
+  });
   res.json(users);
 });
 
 exports.getUser = catchAsync(async (req, res, next) => {
   const firebaseUid = req.params.firebaseUid;
 
-  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  // A user may only look up their own record; organisers and admins
+  // administer everyone.
+  const isSelf = req.user.user_id === firebaseUid;
+  const isStaff = req.user.role === 'ORGANISER' || req.user.role === 'ADMIN';
+  if (!isSelf && !isStaff) {
+    const error = new Error('You can only view your own profile');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { firebaseUid },
+    select: USER_PUBLIC_SELECT,
+  });
   if (!user) {
     const error = new Error('User not found. Please check if the user exists');
     error.statusCode = 404;
@@ -22,7 +58,10 @@ exports.getUser = catchAsync(async (req, res, next) => {
 });
 
 exports.getUserMe = catchAsync(async (req, res, next) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: USER_PUBLIC_SELECT,
+  });
 
   if (!user) {
     const error = new Error('User not found');
@@ -42,10 +81,38 @@ exports.createUser = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  const userDetails = { firstName, lastName, email, firebaseUid, role: 'STUDENT' };
-  const user = await prisma.user.create({ data: userDetails });
+  // Signup must prove ownership of the Firebase identity being registered: the
+  // token's uid (set by verifyFirebaseTokenOnly) has to match the firebaseUid in
+  // the body, so nobody can create a profile for someone else's account.
+  const caller = req.firebaseUser;
+  if (!caller || caller.uid !== firebaseUid) {
+    const error = new Error('The Firebase ID token does not match the user being created');
+    error.statusCode = 403;
+    return next(error);
+  }
 
-  res.status(201).json(user);
+  if (caller.email && String(email).trim().toLowerCase() !== String(caller.email).toLowerCase()) {
+    const error = new Error('The email does not match the Firebase account');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  const userDetails = { firstName, lastName, email, firebaseUid, role: 'STUDENT' };
+  try {
+    const user = await prisma.user.create({
+      data: userDetails,
+      select: USER_PUBLIC_SELECT,
+    });
+    res.status(201).json(user);
+  } catch (error) {
+    // Unique violation: this email or Firebase account is already registered
+    if (error.code === 'P2002') {
+      const duplicate = new Error('A user with this email or Firebase account already exists');
+      duplicate.statusCode = 409;
+      return next(duplicate);
+    }
+    throw error;
+  }
 });
 
 // Valid year-of-study values — kept in sync with the frontend select options
@@ -86,7 +153,11 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   if (phoneNumber !== undefined) data.phoneNumber = phoneNumber || null;
   if (yearOfStudy !== undefined) data.yearOfStudy = yearOfStudy || null;
 
-  const updated = await prisma.user.update({ where: { firebaseUid }, data });
+  const updated = await prisma.user.update({
+    where: { firebaseUid },
+    data,
+    select: USER_PUBLIC_SELECT,
+  });
   res.status(200).json(updated);
 });
 

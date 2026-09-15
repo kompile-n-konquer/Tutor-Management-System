@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 11
 title: Stakeholder Interaction Log
 ---
 
@@ -7,8 +7,10 @@ title: Stakeholder Interaction Log
 
 **Milestone 1: Sprint 1 — Owner: Ndumiso Skhosana — Compiled 25 Aug 2026**
 
+**Milestone 2: Sprint 2 — Compiled 15 Sep 2026**
+
 :::info Rubric target — Stakeholder Interaction (10%)
-Advanced (80–100%): *"Great stakeholder interaction, all requirements discussed."* This document evidences three client meetings (10 Aug, 17 Aug, 25 Aug), each with dated decisions, direct requirement discussion, and demonstrable follow-through into next steps — not a single check-in.
+Advanced (80–100%): *"Great stakeholder interaction, all requirements discussed."* This document evidences five client meetings across two sprints — three in Sprint 1 (10, 17, 25 Aug) and two in Sprint 2 (10 and 13 Sep). Each has dated decisions, direct requirement discussion, and demonstrable follow-through into next steps — not a single check-in.
 :::
 
 ## 1. Meeting summary
@@ -154,3 +156,193 @@ The rubric rewards not just discussion but integration — showing the client's 
 - CD (continuous deployment) portion of the pipeline still requires configuration — CI functions correctly, but full CD is not yet complete (flagged 17 Aug).
 - External API integration target still to be finalised by the team.
 - Client's detailed Sprint 1 demonstration checklist — due by Wednesday per the 17 Aug meeting — to be confirmed received and actioned.
+
+---
+
+Sprint 2 added two further client meetings — a requirements and status meeting on **10 Sep 2026**, and a four-hour live review session on **13 Sep 2026**. Both were recorded sessions with auto-generated (Gemini) meeting notes that the team reviewed; the full notes are archived as the reference documents for everything below.
+
+:::info Sprint 2 reference documents — full meeting notes
+
+- [Meeting of 10 Sep 2026, 15:03 SAST — full Gemini notes (.docx)](pathname:///meetings/2026-09-10-client-meeting-notes.docx)
+- [Meeting of 13 Sep 2026, 20:49 SAST — full Gemini notes (.docx)](pathname:///meetings/2026-09-13-client-meeting-notes.docx)
+
+:::
+
+## 7. Sprint 2 meeting summary
+
+| Date | Type | Format | Key focus |
+|---|---|---|---|
+| 10 Sep 2026 | Client meeting | Recorded, timestamped (28 min) | Availability & timetable entry, notification system, database migration, 90% coverage policy, API testing & deployment, user-feedback evidence, third-party code documentation, volunteering & timesheet requirements |
+| 13 Sep 2026 | Client review & working session | Recorded, timestamped (4 h 8 min) | End-to-end live walkthrough of every role view, timesheet approval workflow, volunteering & overflow scope, PR merging strategy, deployment, documentation-site requirements |
+
+## 8. Requirements discussed with the client (Sprint 2)
+
+As with Sprint 1, pulled directly from the meeting records, in the order discussed.
+
+### 8.1 Availability & timetable entry
+
+- Applicants enter their weekly availability manually through the calendar for now — enough to stop a tutor being recommended for a course that clashes with their lectures; PDF timetable import is planned future work (10 Sep, 00:00:00–00:01:04).
+- Client questioned the reliability of unverified manual availability (e.g. exam clashes); the team explained the system produces suggestions and organisers retain final override authority — accepted, with timetable import acknowledged as an advanced future feature (13 Sep, 00:28:39–00:33:54).
+- The four role views were confirmed as admin, tutor, student, and lecturer (10 Sep, 00:19:12); the organiser assignment interface was additionally demonstrated live on 13 Sep (00:38:05).
+
+### 8.2 Notifications & session attendance
+
+- Email notification to a tutor when they are assigned to a course is live (10 Sep, 00:02:37) and was demonstrated with the organiser assignment interface, including an "auto" action that selects the top candidates by marks (13 Sep, 00:38:05–00:40:47).
+- A QR-code digital register for session sign-in/sign-out — mirroring the university's tutorial attendance system — is planned as a future phase (10 Sep, 00:02:37); the client later suggested a secret verification code for event attendance to replace manual supervisor sign-offs (13 Sep, 01:49:39).
+- During the assignment demo, the client flagged the risk of accidental clicks sending assignment-removal emails; the team agreed to add a confirmation prompt before saving assignment changes (13 Sep, 00:39:42).
+
+### 8.3 Testing standards & API testing
+
+- 90% unit test coverage is now required on every pull request before it can be merged, enforced at review time (10 Sep, 00:05:03).
+- API testing is required for Milestone 2: every endpoint must be verified to return the expected status codes and response structures, with parameters as defined — the client recommended Postman and Newman (10 Sep, 00:06:23–00:09:55).
+- The testing procedure itself must be documented on the documentation site, with screenshots of Postman requests as evidence (13 Sep, 00:52:53–00:57:54).
+
+### 8.4 API deployment
+
+- The API must be deployed so third parties can use it — with permissions, and documentation of what each endpoint expects and returns — the client suggested Render or Railway; the team added the requirement to its issue tracker (10 Sep, 00:09:55–00:11:32).
+- Where API documentation is presented as an interactive endpoint listing (Swagger-style), the client expressed a preference for that format (13 Sep, 00:52:53).
+
+### 8.5 User feedback evidence
+
+- Feedback collection requires evidence — a form (e.g. Google Forms) plus analytics showing how many people responded, with a target of roughly 10 responses, and documentation showing the feedback was collected and then acted on (10 Sep, 00:11:32–00:16:17).
+- The client confirmed the feedback does not need to come from live external users at this stage — the team may submit the entries itself, provided the evidence trail (the form and its response data) is preserved and shows follow-through (10 Sep, 00:14:55).
+- Reaffirmed on 13 Sep: a Google Form is to be created, its responses summarised on the documentation site, and used to justify improvements (00:57:54–01:00:36).
+
+### 8.6 Third-party code documentation
+
+- Any third-party code used (e.g. Firebase) must be documented with a clear motivation for why external code was chosen over writing our own (10 Sep, 00:16:17).
+
+### 8.7 Volunteering & overflow work
+
+- The client identified the volunteering feature as missing: an organiser posts a session shortage, students volunteer, and the organiser approves the requests (10 Sep, 00:19:12–00:24:49).
+- Scope aligned on 13 Sep: overflow work covers administrative tasks, marking, and invigilation when tutor staffing is insufficient, and volunteers are existing tutors stepping in during overflow — not a separate user group (02:13:01–02:31:40).
+- The client questioned why users must apply to volunteer before viewing opportunities; the team defended filtering candidates by scheduling criteria to avoid emailing roughly 300 students when only a few positions are needed — the client accepted the design provided the team can defend it under scrutiny (13 Sep, 00:15:29–00:25:54).
+- The excuses feature will track how many tutors have excused themselves from a session, so a shift can be opened for volunteering once a threshold is exceeded (13 Sep, 02:35:18).
+
+### 8.8 Timesheets, approvals & signatures
+
+- The timesheet feature is required, including requesting signatures from authorisers, with a notification to the person responsible for signing (10 Sep, 00:20:36).
+- The full workflow was demonstrated live (13 Sep, 01:50:47–01:55:31): a lecturer creates a course event, the allocated tutor claims it into a timesheet, entries and titles update in real time, submission locks the timesheet against edits, and a supervising lecturer approves or rejects it — rejection by any single supervisor rejects the whole timesheet.
+- The signature requirement was debated (13 Sep, 01:56:41–02:02:23): although the web app tracks approvals digitally, payroll operates outside the system and still needs a supervisor's physical signature on the PDF timesheet — the team concluded signature requirements must align with payroll's operational needs. Approved timesheets export as a correctly populated PDF for exactly this purpose (demonstrated 01:59:03).
+
+### 8.9 Course applications & governance
+
+- The client ruled that lecturers must not independently open applications and dictate tutor numbers without organiser review; the team committed to adding a pending-review status and the ability to manually close a course's application process (13 Sep, 01:31:45–01:33:16).
+- Lecturers specify the maximum weekly hours required for their courses (13 Sep, 00:48:55).
+- Course applications are filtered by the applicant's availability — opportunities only appear when the timetable matches — and an applicant's slot selection locks while the application is pending, preventing scheduling inconsistencies (13 Sep, 01:34:38–01:37:12).
+- The claimable-hours cap is enforced at application time: a second course that would push an applicant over the weekly limit is blocked with an explanatory warning — the client reviewed and confirmed the validation logic (13 Sep, 01:43:26–01:44:54).
+
+### 8.10 System configuration & payroll
+
+- Organiser-managed, system-wide settings drive the claim rules: the maximum claimable hours and the event claim window (demonstrated with test values of 3 hours and one month), and hourly pay rates by year of study feed the automatic payout calculation on timesheets (13 Sep, 01:08:50–01:14:36).
+- An uploaded PDF payroll template is used to generate the finalised timesheet exports (13 Sep, 01:15:32).
+- The client critiqued the "Settings" label for organisation-wide standards (it suggests personal profile management); a rename was agreed for later (13 Sep, 01:11:21–01:12:32).
+- The client suggested an onboarding tutorial guide for first-time users, acknowledged as a valid future addition (13 Sep, 00:51:05).
+
+### 8.11 Infrastructure & deployment
+
+- The database was migrated to a new Azure server after the previous account's free trial expired (attributed to hosting several projects on one server); the new database is live (10 Sep, 00:03:51).
+- The live database was verified working on 13 Sep; local databases must be deleted and the app restarted to reconnect, and dependencies were downgraded for compatibility with the stable Node 22 runtime (13 Sep).
+- Frontend deployment to Vercel was in progress: the workflow had a build step but no deploy step, and required the project ID and token secrets (13 Sep, 02:50:33–02:53:47).
+- Frontend error handling was called out: login failures were silent because only 200-status responses were handled, while the backend already returns standard 403/404 codes — flagged for fixing (13 Sep, 00:06:57–00:08:09).
+
+### 8.12 Review & merging strategy
+
+- A backlog of 10–11 pull requests with merge conflicts and slow approvals led to a paired-merging agreement: each PR author pairs with a designated reviewer, briefs them directly, and merges — clearing the backlog faster than the general approval queue (13 Sep, 02:05:35–02:07:27).
+- Redundant pull requests were closed and working environments re-synchronised with main (13 Sep, 02:16:02–02:18:49).
+
+## 9. Sprint 2 decisions log
+
+| Date | Decision | Rationale |
+|---|---|---|
+| 10 Sep | Manual weekly calendar entry for availability (PDF import later) | Unblocks availability-based recommendation now; timetable parsing is future work |
+| 10 Sep | 90% unit test coverage required on every merged PR | Code-quality standard for Milestone 2, enforced at review |
+| 10 Sep | API testing (Postman/Newman) required for M2 | Validate endpoints, status codes, and response structures |
+| 10 Sep | API to be deployed with permissions and documentation | Third-party accessibility (Render/Railway suggested) |
+| 10 Sep | User feedback via form, ~10 responses, with evidence | Feedback must demonstrably drive improvements |
+| 10 Sep | Third-party code documented with motivation | e.g. Firebase — why external code instead of our own |
+| 13 Sep | Confirmation prompt before saving assignment changes | Prevent accidental clicks triggering removal emails |
+| 13 Sep | Lecturers specify max weekly hours per course | Claimable-hours control at course level |
+| 13 Sep | Testing section on the documentation site (Postman + screenshots) | Rubric requires extensive testing documentation |
+| 13 Sep | User feedback and third-party code documented on the docs site | Central, public evidence trail |
+| 13 Sep | Paired merging adopted for the PR backlog | Clear 10–11 conflicted PRs faster; author briefs a reviewer directly |
+| 13 Sep | Overflow work = administrative tasks, marking, invigilation | Staffing-shortage scope; volunteers are existing tutors, not a separate group |
+| 13 Sep | Timesheet signature requirements follow payroll's needs | Payroll works from the PDF timesheet with a physical signature |
+| 13 Sep | Organiser review required before course applications open | Lecturers cannot unilaterally launch applications; pending-review status to be added |
+
+## 10. Assigned tasks arising from Sprint 2 meetings
+
+### 10.1 From 10 Sep meeting
+
+| Owner | Task |
+|---|---|
+| The group | Deploy the API to a hosting platform, with documentation and access permissions |
+| Glann Mulaudzi (client) | Research API-testing methods and share them with the team |
+| Kgaogelo G | Develop functionality to process uploaded PDF timetables |
+| The group | Create a questionnaire to record user encounters and feedback; collect responses from at least 10 individuals |
+| The group | Update technical documentation with database structure and schema details |
+| The group | Compile documentation for all used third-party code, including the motivation for its integration |
+| The group | Implement the timesheet feature, including requesting signatures with notifications |
+| The group | Implement the volunteer system — organisers post session shortages, students volunteer |
+| Kgaogelo G, Muhammad | Add the API deployment requirement to the issues list |
+| The group | Convene on Sunday for a project status review |
+
+### 10.2 From 13 Sep meeting
+
+| Owner | Task |
+|---|---|
+| The group | Delete local databases and restart the application to connect to the live database |
+| Kgaogelo G | Fix the availability feature that keeps prompting for input after saving |
+| Mogomotsi Motoma | Add a confirmation prompt before the save operation in the assignment module |
+| Ndumiso Skhosana → Mogomotsi Motoma | Complete and merge the excuses feature branch (ownership handed over during the meeting) |
+| Kgaogelo G | Review the excuses feature implementation |
+| Mogomotsi Motoma | Repair the errors identified in the excuses feature codebase |
+| Tlhale Sebaeng | Resolve database migration and schema synchronisation issues across branches |
+| Tlhale Sebaeng | Rename the settings tab and move the logout functionality |
+| Tlhale Sebaeng | Fix the save button triggering both event-claim fields simultaneously |
+| Tlhale Sebaeng | Implement approval of task-assignment numbers for module capacity compliance |
+| Tlhale Sebaeng | Add the ability to manually terminate a course's application process |
+| Tlhale Sebaeng | Display time slots as start and end times only |
+| Tlhale Sebaeng | Enable lecturers to approve timesheets as tutors submit them |
+| Tlhale Sebaeng | Align the timesheet signature field with payroll requirements |
+| Tlhale Sebaeng | Implement the overflow-work feature (administrative tasks, marking, invigilation) |
+| Tlhale Sebaeng | Resolve merge conflicts across open pull requests |
+| Nduvho Mulaudzi | Update the live database with the latest schema changes |
+| Nduvho Mulaudzi | Configure the frontend deployment secrets (Vercel project ID and token) |
+| Nduvho Mulaudzi | Investigate and resolve the database issues preventing user logins |
+| Mogomotsi Motoma | Debug the unauthorised-access errors occurring on the site |
+| Ndumiso Skhosana | Create the user-feedback Google form and share it with the team |
+| The group | Add a testing section to the documentation site, including Postman screenshots |
+| The group | Incorporate the collected feedback responses into the project documentation |
+| The group | Audit the application against the rubric for missing features |
+| Nhlamulo Mabuza | Draft the project documentation, including testing details and instructions |
+| Kgaogelo G | Add comments to the codebase to improve readability |
+| Ndumiso Skhosana | Distribute the meeting minutes to the group chat |
+
+## 11. Evidence of follow-through (Sprint 2)
+
+The Sprint 2 requirements moved into the product quickly — the highlights below are cross-referenced where they are documented in depth:
+
+- **Email notifications** (10 Sep, live; 13 Sep, demonstrated) → the notifier in `backend/email/notifier.js` sends assignment-added/removed and timesheet-approved/rejected emails via Resend, with every attempt audited in `EmailLog` and duplicate-send prevention; the test suite asserts the notifier fires without ever hitting Resend (see [Testing](./testing)).
+- **Timesheet feature** (10 Sep requirement; 13 Sep live demo) → merged as PR #58 ("Fully implemented timesheet workflow"): the full create, submit, approve/reject, and PDF-export flow in `backend/routes/timesheets.js`, with colour-coded status badges and re-editable rejected timesheets in the frontend.
+- **90% coverage / substantive-tests policy** (10 Sep) → the backend suite has since grown from 33 tests across 4 suites to 74 across 6, adding onboarding, claim-rules, and allocation coverage (see [Testing](./testing)).
+- **User feedback with evidence** (10 Sep, target of 10 responses) → the [Google Form](https://forms.gle/YUQ5izwGdhK44JWV9) went out on 14 Sep and collected 15 responses; the raw responses (archived PDF and live sheet), trust-rating breakdown, themes, and the mapping of every request to what has since been implemented are documented on the [Testing](./testing) page.
+- **Database documentation** (10 Sep) → the [Database Schema](./database-schema) page matches the current `schema.prisma`, with the ER diagram and modelling notes.
+- **Third-party code documentation** (10 Sep) → the [Third-Party Code](./third-party-code) page documents each external dependency and the motivation for its use.
+- **Testing documentation** (13 Sep) → the [Testing](./testing) page documents the feedback process, the automated suites, CI enforcement, and the team's policy around tests (Postman screenshots still to be added).
+- **Claimable-hours cap and system settings** (13 Sep demo) → organiser-managed `SystemSetting` values with the 31-day sliding-window cap enforced in `backend/utils/claimRules.js` and unit-tested in `claimRules.test.js`.
+- **Availability-filtered applications** (13 Sep demo) → the onboarding controller only offers courses whose session slots fit the applicant's availability and rejects clashing applications — both rules under test in `onboardingController.test.js`.
+- **Follow-through between the two meetings** → the status review agreed for Sunday at the 10 Sep meeting was held on schedule: the 13 Sep session is that meeting, opened against the 10 Sep action items.
+- **Infrastructure** (10 Sep migration; 13 Sep verification) → the migrated Azure SQL database is live and was verified working during the 13 Sep session; the Vercel project for the frontend is linked in the repository, with deployment in progress by the end of that meeting.
+
+## 12. Open items carried forward (Sprint 2)
+
+- API deployment for third-party access (Render/Railway), with permissions and endpoint documentation — still open.
+- Postman/Newman API testing with screenshots on the documentation site — still open (the suites and policy are documented; the Postman evidence is not yet added).
+- Excuses feature — schema support is on main (`Session.excuseReason`); the feature branch is being completed and merged (Mogomotsi Motoma).
+- Save-confirmation prompt in the assignment module — agreed, not yet implemented.
+- Organiser pending-review status for lecturer-initiated course applications, and manual application closing — committed to on 13 Sep.
+- QR-code / secret-code attendance verification for sessions — planned future phase.
+- PDF timetable import — planned future work.
+- Renaming the "Settings" tab and relocating logout — agreed for later.
+- Quality-of-experience improvements raised in the user-feedback round (confirmation toasts, status visibility, warning specificity, batch actions) — tracked with the feedback mapping on the [Testing](./testing) page.

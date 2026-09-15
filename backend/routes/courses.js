@@ -3,7 +3,6 @@ const router = express.Router();
 const authenticateFirebaseToken = require('../middleware/auth');
 const {
   getTimeSlots,
-  getAllCourses,
   createCourse,
   getCourses,
   getCourse,
@@ -14,7 +13,6 @@ const {
 
 // Literal paths are registered before /:courseId so they are not matched as an id
 router.get('/', authenticateFirebaseToken, getCourses);
-router.get('/', getAllCourses);
 router.get('/time-slots', authenticateFirebaseToken, getTimeSlots);
 router.put('/open-applications', authenticateFirebaseToken, startApplicationProcess);
 router.get('/:courseId', authenticateFirebaseToken, getCourse);

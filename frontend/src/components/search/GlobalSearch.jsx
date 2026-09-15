@@ -23,12 +23,13 @@ export default function GlobalSearch() {
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
-  // Fetch courses once on mount for the search index
+  // Fetch courses once on mount for the search index. GET /courses returns
+  // a plain array.
   useEffect(() => {
     let cancelled = false;
     api.get("/courses").then((res) => {
-      if (!cancelled && res.status === 200 && res.data?.courses) {
-        setCourses(res.data.courses.map(mapApiCourse));
+      if (!cancelled && res.status === 200 && Array.isArray(res.data)) {
+        setCourses(res.data.map(mapApiCourse));
       }
     }).catch(() => {});
     return () => { cancelled = true; };

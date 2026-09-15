@@ -6,16 +6,15 @@ const MAX_AVAILABLE_TUTORS = 15;
 
 /**
  * Maps a backend course record into the shape the sidebar expects.
+ * GET /courses returns a plain array with tutorsRequired/assignedTutors.
  */
 function mapApiCourse(c) {
   return {
     id: c.id,
     code: c.courseCode,
     name: c.courseName,
-    req: c.requiredTutors,
-    budget: c.budgetHours,
-    rate: c.hourlyRate,
-    assignedCount: c.assignedCount,
+    req: c.tutorsRequired,
+    assignedCount: c.assignedTutors,
   };
 }
 
@@ -178,8 +177,8 @@ export default function Organiser() {
         const coursesRes = await api.get("/courses");
         if (cancelled) return;
 
-        if (coursesRes.status === 200 && coursesRes.data?.courses) {
-          const mappedCourses = coursesRes.data.courses.map(mapApiCourse);
+        if (coursesRes.status === 200 && Array.isArray(coursesRes.data)) {
+          const mappedCourses = coursesRes.data.map(mapApiCourse);
           setCourses(mappedCourses);
           // Auto-select the first course on initial load only
           if (mappedCourses.length > 0 && selectedCourse == null) {
@@ -268,8 +267,8 @@ export default function Organiser() {
   async function refetchCourses() {
     try {
       const res = await api.get("/courses");
-      if (res.status === 200 && res.data?.courses) {
-        setCourses(res.data.courses.map(mapApiCourse));
+      if (res.status === 200 && Array.isArray(res.data)) {
+        setCourses(res.data.map(mapApiCourse));
       }
     } catch {
       // Keep the current sidebar counts

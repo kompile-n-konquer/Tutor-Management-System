@@ -1,5 +1,6 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { slotHours } = require('../utils/claimRules');
 
 // Session lifecycle:
 //   SCHEDULED  — assigned to a tutor through their TutorAssignment
@@ -46,27 +47,27 @@ exports.getUnassignedSessions = catchAsync(async (req, res, next) => {
 exports.getMySessions = catchAsync(async (req, res, next) => {
   const requestingUser = await prisma.user.findUnique({
     where: { firebaseUid: req.user.user_id },
-    include: { tutor: true },
   });
   if (!requestingUser) {
     return next(createHttpError(404, 'User not found. Please check if the user exists'));
   }
-  if (!requestingUser.tutor) {
+  if (requestingUser.role !== 'TUTOR') {
     return next(createHttpError(403, 'Only tutors can view their assigned sessions'));
   }
 
-  const tutorId = requestingUser.tutor.id;
+  const userId = requestingUser.id;
 
-  // The tutor's ACTIVE assignments — the courses they were approved to tutor.
+  // The tutor's assignments — the courses they were approved to tutor.
   const assignments = await prisma.tutorAssignment.findMany({
-    where: { tutorId, status: 'ACTIVE' },
+    where: { userId },
     include: {
       course: {
         select: {
           id: true,
           courseCode: true,
           courseName: true,
-          lecturer: { select: { user: { select: { firstName: true, lastName: true } } } },
+          user: { select: { firstName: true, lastName: true } },
+          slots: { include: { timeSlot: true } },
         },
       },
     },
@@ -75,21 +76,21 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
 
   // Every session the lecturer scheduled for those courses — not just the ones
   // attached to this tutor's own assignments. A session belongs to the tutor's
-  // dashboard when its assignment's course has an ACTIVE assignment for them,
+  // dashboard when its assignment's course has an assignment for them,
   // which is exactly how the organiser links tutors to courses.
   const sessions = await prisma.session.findMany({
     where: {
       assignment: {
-        course: { assignments: { some: { tutorId, status: 'ACTIVE' } } },
+        course: { assignments: { some: { userId } } },
       },
     },
     include: {
       assignment: {
         select: {
-          tutorId: true,
+          userId: true,
           courseId: true,
           course: { select: { courseCode: true, courseName: true } },
-          tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+          user: { select: { firstName: true, lastName: true } },
         },
       },
       courseSlot: {
@@ -102,17 +103,22 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
   });
 
   res.json({
-    maxHoursPerWeek: requestingUser.tutor.maxHoursPerWeek,
+    maxHoursPerWeek: null,
     courses: assignments.map((assignment) => ({
       assignmentId: assignment.id,
       courseId: assignment.course.id,
       courseCode: assignment.course.courseCode,
       courseName: assignment.course.courseName,
-      allocatedHours: assignment.allocatedHours,
       semester: assignment.semester,
-      lecturerName: assignment.course.lecturer?.user
-        ? `${assignment.course.lecturer.user.firstName} ${assignment.course.lecturer.user.lastName}`
+      lecturerName: assignment.course.user
+        ? `${assignment.course.user.firstName} ${assignment.course.user.lastName}`
         : null,
+      // Weekly hours the course's tutoring slots add up to — the dashboard
+      // renders this per course. Same round-up rule as the timesheet claims.
+      allocatedHours: (assignment.course.slots ?? []).reduce(
+        (total, slot) => total + slotHours(slot.timeSlot.startMinute, slot.timeSlot.endMinute),
+        0,
+      ),
     })),
     sessions: sessions.map((session) => ({
       id: session.id,
@@ -121,9 +127,9 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
       excuseReason: session.excuseReason,
       // isMine — the session is attached to this tutor's own assignment, so
       // they are the tutor expected to run it (and the one who can excuse it).
-      isMine: session.assignment.tutorId === tutorId,
-      ledBy: session.assignment.tutor?.user
-        ? `${session.assignment.tutor.user.firstName} ${session.assignment.tutor.user.lastName}`
+      isMine: session.assignment.userId === userId,
+      ledBy: session.assignment.user
+        ? `${session.assignment.user.firstName} ${session.assignment.user.lastName}`
         : null,
       course: session.assignment.course,
       courseSlot: {
@@ -137,18 +143,17 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
   });
 });
 
-// Loads the requesting user with their Lecturer profile, or errors out.
+// Loads the requesting user and verifies they have the LECTURER role.
 // Shared by the lecturer-only session endpoints.
 const requireLecturerProfile = async (req, next) => {
   const requestingUser = await prisma.user.findUnique({
     where: { firebaseUid: req.user.user_id },
-    include: { lecturer: true },
   });
   if (!requestingUser) {
     next(createHttpError(404, 'User not found. Please check if the user exists'));
     return null;
   }
-  if (!requestingUser.lecturer) {
+  if (requestingUser.role !== 'LECTURER') {
     next(createHttpError(403, 'Only lecturers can schedule and view course sessions'));
     return null;
   }
@@ -163,16 +168,15 @@ exports.getLecturerSessions = catchAsync(async (req, res, next) => {
   // the course's weekly slots, its assigned tutors, and the sessions already
   // scheduled (flattened across the course's tutor assignments).
   const courses = await prisma.course.findMany({
-    where: { lecturerId: requestingUser.lecturer.id },
+    where: { userId: requestingUser.id },
     include: {
       slots: {
         include: { timeSlot: true },
         orderBy: [{ dayOfWeek: 'asc' }, { id: 'asc' }],
       },
       assignments: {
-        where: { status: 'ACTIVE' },
         include: {
-          tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+          user: { select: { firstName: true, lastName: true } },
           sessions: {
             include: { courseSlot: { include: { timeSlot: true } } },
             orderBy: [{ date: 'asc' }, { id: 'asc' }],
@@ -193,8 +197,8 @@ exports.getLecturerSessions = catchAsync(async (req, res, next) => {
           status: session.status,
           excuseReason: session.excuseReason,
           assignmentId: assignment.id,
-          tutorName: assignment.tutor?.user
-            ? `${assignment.tutor.user.firstName} ${assignment.tutor.user.lastName}`
+          tutorName: assignment.user
+            ? `${assignment.user.firstName} ${assignment.user.lastName}`
             : null,
           courseSlot: {
             id: session.courseSlot.id,
@@ -217,16 +221,13 @@ exports.getLecturerSessions = catchAsync(async (req, res, next) => {
           sessionType: slot.sessionType,
           timeSlot: slot.timeSlot,
         })),
-        tutors: course.assignments
-          .filter((assignment) => assignment.tutorId != null)
-          .map((assignment) => ({
-            assignmentId: assignment.id,
-            tutorId: assignment.tutorId,
-            name: assignment.tutor?.user
-              ? `${assignment.tutor.user.firstName} ${assignment.tutor.user.lastName}`
-              : null,
-            allocatedHours: assignment.allocatedHours,
-          })),
+        tutors: course.assignments.map((assignment) => ({
+          assignmentId: assignment.id,
+          userId: assignment.userId,
+          name: assignment.user
+            ? `${assignment.user.firstName} ${assignment.user.lastName}`
+            : null,
+        })),
         sessions: scheduledSessions,
       };
     }),
@@ -258,18 +259,15 @@ exports.scheduleSession = catchAsync(async (req, res, next) => {
     where: { id: parsedAssignmentId },
     include: {
       course: {
-        select: { id: true, courseCode: true, courseName: true, lecturerId: true },
+        select: { id: true, courseCode: true, courseName: true, userId: true },
       },
     },
   });
   if (!assignment) {
     return next(createHttpError(404, 'Tutor assignment not found. Please check if it exists'));
   }
-  if (assignment.course.lecturerId !== requestingUser.lecturer.id) {
+  if (assignment.course.userId !== requestingUser.id) {
     return next(createHttpError(403, 'You can only schedule sessions for your own courses'));
-  }
-  if (assignment.status !== 'ACTIVE' || assignment.tutorId == null) {
-    return next(createHttpError(409, 'This tutor is not actively assigned to the course'));
   }
 
   const courseSlot = await prisma.courseSlot.findUnique({
@@ -304,7 +302,7 @@ exports.scheduleSession = catchAsync(async (req, res, next) => {
       assignment: {
         select: {
           course: { select: { courseCode: true, courseName: true } },
-          tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+          user: { select: { firstName: true, lastName: true } },
         },
       },
       courseSlot: { include: { timeSlot: true } },
@@ -327,12 +325,11 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
 
   const requestingUser = await prisma.user.findUnique({
     where: { firebaseUid: req.user.user_id },
-    include: { tutor: true },
   });
   if (!requestingUser) {
     return next(createHttpError(404, 'User not found. Please check if the user exists'));
   }
-  if (!requestingUser.tutor) {
+  if (requestingUser.role !== 'TUTOR') {
     return next(createHttpError(403, 'Only tutors can excuse themselves from a session'));
   }
 
@@ -346,7 +343,7 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
   if (session.status !== 'SCHEDULED') {
     return next(createHttpError(409, 'This session has already been excused or has a pending volunteer'));
   }
-  if (session.assignment.tutorId !== requestingUser.tutor.id) {
+  if (session.assignment.userId !== requestingUser.id) {
     return next(createHttpError(403, 'You can only excuse yourself from your own sessions'));
   }
 
@@ -379,9 +376,9 @@ exports.getMyVolunteeredSessions = catchAsync(async (req, res, next) => {
         include: {
           assignment: {
             select: {
-              tutorId: true,
+              userId: true,
               course: { select: { courseCode: true, courseName: true } },
-              tutor: { select: { user: { select: { firstName: true, lastName: true } } } },
+              user: { select: { firstName: true, lastName: true } },
             },
           },
           courseSlot: {
@@ -409,8 +406,8 @@ exports.getMyVolunteeredSessions = catchAsync(async (req, res, next) => {
         sessionType: record.session.courseSlot.sessionType,
         timeSlot: record.session.courseSlot.timeSlot,
       },
-      ledBy: record.session.assignment.tutor?.user
-        ? `${record.session.assignment.tutor.user.firstName} ${record.session.assignment.tutor.user.lastName}`
+      ledBy: record.session.assignment.user
+        ? `${record.session.assignment.user.firstName} ${record.session.assignment.user.lastName}`
         : null,
     })),
   });

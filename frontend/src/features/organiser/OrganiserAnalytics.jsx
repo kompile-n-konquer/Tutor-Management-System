@@ -3,15 +3,17 @@ import AppLayout from "../../components/layout/AppLayout";
 import api from "../../utils/axiosInstance";
 import { TUTORS, TIMESHEETS } from "../../data/mockData";
 
+// GET /courses returns a plain array. The schema no longer carries
+// budgetHours/hourlyRate, so the budget figures fall back to 0.
 function mapApiCourse(c) {
   return {
     id: c.id,
     code: c.courseCode,
     name: c.courseName,
-    req: c.requiredTutors,
-    budget: c.budgetHours,
-    rate: c.hourlyRate,
-    assignedCount: c.assignedCount,
+    req: c.tutorsRequired,
+    budget: c.budgetHours ?? 0,
+    rate: c.hourlyRate ?? 0,
+    assignedCount: c.assignedTutors,
   };
 }
 
@@ -62,8 +64,8 @@ export default function OrganiserAnalytics() {
   useEffect(() => {
     let cancelled = false;
     api.get("/courses").then((res) => {
-      if (!cancelled && res.status === 200 && res.data?.courses) {
-        setCourses(res.data.courses.map(mapApiCourse));
+      if (!cancelled && res.status === 200 && Array.isArray(res.data)) {
+        setCourses(res.data.map(mapApiCourse));
       }
     }).catch(() => {});
     return () => { cancelled = true; };

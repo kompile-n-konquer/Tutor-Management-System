@@ -1,7 +1,7 @@
 // Mock the Prisma client before requiring the controller
 jest.mock('../prisma/client', () => ({
   user: { findUnique: jest.fn() },
-  tutorAssignment: { findMany: jest.fn(), findUnique: jest.fn() },
+  tutorAssignment: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
   course: { findMany: jest.fn() },
   courseSlot: { findUnique: jest.fn() },
   session: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
@@ -67,7 +67,7 @@ describe('getMySessions', () => {
   });
 
   test('returns 403 when the requesting user is not a tutor', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, tutor: null });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
 
     const req = mockReq();
     const res = mockRes();
@@ -83,17 +83,16 @@ describe('getMySessions', () => {
   });
 
   test('scopes sessions to the courses the tutor is actively assigned to, not just their own assignments', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, tutor: { id: 7, maxHoursPerWeek: 20 } });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.tutorAssignment.findMany.mockResolvedValue([
       {
         id: 11,
-        allocatedHours: 6,
         semester: '2026-S2',
         course: {
           id: 100,
           courseCode: 'COMS1015',
           courseName: 'Introduction to Programming',
-          lecturer: { user: { firstName: 'Sarah', lastName: 'Van Wyk' } },
+          user: { firstName: 'Sarah', lastName: 'Van Wyk' },
         },
       },
     ]);
@@ -111,20 +110,20 @@ describe('getMySessions', () => {
     // for this tutor, which is the course-level scoping the dashboard needs.
     expect(prisma.session.findMany.mock.calls[0][0].where).toEqual({
       assignment: {
-        course: { assignments: { some: { tutorId: 7, status: 'ACTIVE' } } },
+        course: { assignments: { some: { userId: 1 } } },
       },
     });
 
     // The tutor's own assignments drive the courses list.
     expect(prisma.tutorAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { tutorId: 7, status: 'ACTIVE' },
+        where: { userId: 1 },
       }),
     );
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        maxHoursPerWeek: 20,
+        maxHoursPerWeek: null,
         courses: [
           expect.objectContaining({
             assignmentId: 11,
@@ -139,7 +138,7 @@ describe('getMySessions', () => {
   });
 
   test('marks own sessions with isMine and names the tutor leading each session', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, tutor: { id: 7, maxHoursPerWeek: 10 } });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.tutorAssignment.findMany.mockResolvedValue([]);
     prisma.session.findMany.mockResolvedValue([
       {
@@ -148,10 +147,10 @@ describe('getMySessions', () => {
         status: 'SCHEDULED',
         excuseReason: null,
         assignment: {
-          tutorId: 7,
+          userId: 1,
           courseId: 100,
           course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
-          tutor: { user: { firstName: 'Thabo', lastName: 'Demotutor' } },
+          user: { firstName: 'Thabo', lastName: 'Demotutor' },
         },
         courseSlot: {
           id: 31,
@@ -167,10 +166,10 @@ describe('getMySessions', () => {
         status: 'UNASSIGNED',
         excuseReason: 'Medical appointment',
         assignment: {
-          tutorId: 9,
+          userId: 9,
           courseId: 100,
           course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
-          tutor: { user: { firstName: 'Alex', lastName: 'Mercer' } },
+          user: { firstName: 'Alex', lastName: 'Mercer' },
         },
         courseSlot: {
           id: 32,
@@ -211,7 +210,7 @@ describe('getMySessions', () => {
 // ════════════════════════════════════════════════════════════════════════
 describe('getLecturerSessions', () => {
   test('returns 403 when the requesting user is not a lecturer', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, lecturer: null });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
 
     const req = mockReq();
     const res = mockRes();
@@ -227,7 +226,7 @@ describe('getLecturerSessions', () => {
   });
 
   test('returns only the courses owned by the lecturer with slots, tutors and flattened sessions', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, lecturer: { id: 5 } });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'LECTURER' });
     prisma.course.findMany.mockResolvedValue([
       {
         id: 100,
@@ -245,9 +244,8 @@ describe('getLecturerSessions', () => {
         assignments: [
           {
             id: 11,
-            tutorId: 7,
-            allocatedHours: 6,
-            tutor: { user: { firstName: 'Thabo', lastName: 'Demotutor' } },
+            userId: 7,
+            user: { firstName: 'Thabo', lastName: 'Demotutor' },
             sessions: [
               {
                 id: 21,
@@ -276,7 +274,7 @@ describe('getLecturerSessions', () => {
     await flushMicrotasks();
 
     expect(prisma.course.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { lecturerId: 5 } }),
+      expect.objectContaining({ where: { userId: 1 } }),
     );
 
     expect(res.json).toHaveBeenCalledWith({
@@ -301,7 +299,7 @@ describe('getLecturerSessions', () => {
 // ════════════════════════════════════════════════════════════════════════
 describe('scheduleSession', () => {
   function lecturerUser() {
-    return { id: 2, lecturer: { id: 5 } };
+    return { id: 2, role: 'LECTURER' };
   }
 
   function validBody() {
@@ -311,10 +309,9 @@ describe('scheduleSession', () => {
   function ownAssignment() {
     return {
       id: 11,
-      tutorId: 7,
+      userId: 7,
       courseId: 100,
-      status: 'ACTIVE',
-      course: { id: 100, courseCode: 'COMS1015', courseName: 'Introduction to Programming', lecturerId: 5 },
+      course: { id: 100, courseCode: 'COMS1015', courseName: 'Introduction to Programming', userId: 2 },
     };
   }
 
@@ -346,7 +343,7 @@ describe('scheduleSession', () => {
   });
 
   test('returns 403 when the requesting user is not a lecturer', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, lecturer: null });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
 
     const req = mockReq({ body: validBody() });
     const res = mockRes();
@@ -380,7 +377,7 @@ describe('scheduleSession', () => {
   test('returns 403 when the course belongs to a different lecturer', async () => {
     prisma.user.findUnique.mockResolvedValue(lecturerUser());
     const foreignAssignment = ownAssignment();
-    foreignAssignment.course = { ...foreignAssignment.course, lecturerId: 999 };
+    foreignAssignment.course = { ...foreignAssignment.course, userId: 999 };
     prisma.tutorAssignment.findUnique.mockResolvedValue(foreignAssignment);
 
     const req = mockReq({ body: validBody() });
@@ -392,24 +389,6 @@ describe('scheduleSession', () => {
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: 403, message: expect.stringContaining('your own courses') }),
-    );
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('returns 409 when the assignment is not active or has no tutor', async () => {
-    prisma.user.findUnique.mockResolvedValue(lecturerUser());
-    const inactiveAssignment = { ...ownAssignment(), status: 'REMOVED', tutorId: null };
-    prisma.tutorAssignment.findUnique.mockResolvedValue(inactiveAssignment);
-
-    const req = mockReq({ body: validBody() });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 409, message: expect.stringContaining('not actively assigned') }),
     );
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
@@ -463,7 +442,7 @@ describe('scheduleSession', () => {
       status: 'SCHEDULED',
       assignment: {
         course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
-        tutor: { user: { firstName: 'Thabo', lastName: 'Demotutor' } },
+        user: { firstName: 'Thabo', lastName: 'Demotutor' },
       },
       courseSlot: { timeSlot: { startMinute: 480, endMinute: 570 } },
     };
@@ -523,11 +502,11 @@ describe('excuseSession', () => {
   });
 
   test('returns 403 when the session belongs to another tutor', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, tutor: { id: 7 } });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.session.findUnique.mockResolvedValue({
       id: 21,
       status: 'SCHEDULED',
-      assignment: { tutorId: 9 },
+      assignment: { userId: 9 },
     });
 
     const req = mockReq({ params: { id: '21' }, body: { reason: 'Medical appointment' } });
@@ -544,11 +523,11 @@ describe('excuseSession', () => {
   });
 
   test('returns 409 when the session has already been excused or volunteered for', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, tutor: { id: 7 } });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.session.findUnique.mockResolvedValue({
       id: 21,
       status: 'UNASSIGNED',
-      assignment: { tutorId: 7 },
+      assignment: { userId: 1 },
     });
 
     const req = mockReq({ params: { id: '21' }, body: { reason: 'Medical appointment' } });
@@ -565,11 +544,11 @@ describe('excuseSession', () => {
   });
 
   test('marks the session UNASSIGNED with the trimmed reason', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, tutor: { id: 7 } });
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.session.findUnique.mockResolvedValue({
       id: 21,
       status: 'SCHEDULED',
-      assignment: { tutorId: 7 },
+      assignment: { userId: 1 },
     });
     prisma.session.update.mockResolvedValue({ id: 21, status: 'UNASSIGNED' });
 

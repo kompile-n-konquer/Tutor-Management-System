@@ -174,18 +174,16 @@ async function sendNotification({
 
 /**
  * Assignment Added trigger. Expects `assignment` loaded with
- * course { courseCode, courseName } and tutor { user { id, firstName, lastName, email } }.
+ * course { courseCode, courseName } and user { id, firstName, lastName, email }.
  */
 async function notifyAssignmentAdded(assignment) {
-  const user = assignment?.tutor?.user;
+  const user = assignment?.user;
   const recipient = toRecipient(user);
   const email = assignmentAddedEmail({
     recipientName: recipient?.name ?? 'there',
     courseCode: assignment?.course?.courseCode,
     courseName: assignment?.course?.courseName,
-    allocatedHours: assignment?.allocatedHours,
     semester: assignment?.semester,
-    status: assignment?.status,
   });
   return sendNotification({
     eventType: EVENT_TYPES.ASSIGNMENT_ADDED,
@@ -202,7 +200,7 @@ async function notifyAssignmentAdded(assignment) {
  * as plain columns, so the audit record survives the deletion).
  */
 async function notifyAssignmentRemoved(assignment) {
-  const user = assignment?.tutor?.user;
+  const user = assignment?.user;
   const recipient = toRecipient(user);
   const email = assignmentRemovedEmail({
     recipientName: recipient?.name ?? 'there',

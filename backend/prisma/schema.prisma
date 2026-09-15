@@ -30,6 +30,7 @@ model User {
   roleApplications RoleApplication[]
   supervisedTimesheets TimesheetEntry[] @relation("TimesheetSupervisor")
   overflowClaims OverflowWork[]
+  volunteerRequests SessionVolunteer[]
 }
 
 // Join table between User (role TUTOR) and Course — one row records that a user

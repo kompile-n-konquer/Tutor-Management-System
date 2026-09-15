@@ -6,7 +6,6 @@ const prisma = require('./prisma/client');
 const { globalErrorHandler, notFoundErrorHandler } = require('./controllers/error');
 const usersRouter = require('./routes/auth');
 const sessionsRouter = require('./routes/sessions');
-const availabilityRouter = require('./routes/availability');
 const allocationRouter = require('./routes/allocation');
 const coursesRouter = require('./routes/courses');
 const availabilityRouter = require('./routes/availability');
@@ -49,7 +48,6 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/users', usersRouter);
 app.use('/api/sessions', sessionsRouter);
-app.use('/api/availability', availabilityRouter);
 app.use('/api/allocation', allocationRouter);
 app.use('/api/courses', coursesRouter);
 app.use('/api/availability', availabilityRouter);

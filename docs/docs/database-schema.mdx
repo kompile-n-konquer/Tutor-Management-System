@@ -1,5 +1,236 @@
 ---
-sidebar_position: 4
+sidebar_position: 2
 title: Database Schema
-description: Walkthrough of the Prisma schema and key models
+description: Data model, key Prisma models, and system design diagrams
 ---
+
+This page brings together the system design diagrams for the Tutor Management System: how the components fit together (component diagram), how the data is modelled (ER diagram), and how the core tutor-allocation flow works end to end (sequence diagram).
+
+## Component Diagram
+
+This diagram shows the high-level architecture of the Tutor Management System: how the frontend, backend, database, and third-party services connect.
+
+```mermaid
+graph TD
+  subgraph Client["Client (Browser)"]
+    FE["Frontend App<br/>React — Vercel"]
+  end
+
+  subgraph Server["Application Server"]
+    BE["Backend API<br/>Node.js — Azure App Service"]
+  end
+
+  subgraph Data["Data Layer"]
+    DB[("SQL Server DB<br/>via Prisma ORM")]
+  end
+
+  AUTH["Firebase Auth"]
+  EXT["External API<br/>(TBD — planned integration)"]
+
+  FE -- "REST/HTTPS<br/>hand-written API" --> BE
+  BE -- "Prisma queries" --> DB
+  FE -- "sign up / sign in / token" --> AUTH
+  BE -- "verifies Firebase ID token" --> AUTH
+  BE -. "planned" .-> EXT
+
+  classDef client fill:#E6F1FB,stroke:#185FA5,color:#0C447C;
+  classDef server fill:#E1F5EE,stroke:#0F6E56,color:#085041;
+  classDef data fill:#FAEEDA,stroke:#854F0B,color:#633806;
+  classDef ext fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A,stroke-dasharray: 4 3;
+
+  class FE client;
+  class BE server;
+  class DB data;
+  class AUTH,EXT ext;
+```
+
+### Notes
+
+- **Non-monolithic split**: the frontend (React, deployed on Vercel) and backend (Node.js, deployed on Azure App Service) are separate deployable applications, communicating only over a hand-written REST API — satisfying the course's non-monolithic architecture requirement.
+- **Auth**: Firebase Auth is used as an established authentication library, not a self-built system. The frontend handles sign-up/sign-in directly against Firebase; the backend verifies the resulting Firebase ID token on each request to identify the user and their role.
+- **External API integration**: not yet decided at MS1 — the connection point is drawn here as planned/dashed to acknowledge the requirement exists, and will be filled in once the specific service is chosen (e.g. a timetable/calendar service).
+- **Database**: SQL Server, accessed exclusively through Prisma ORM from the backend — the frontend never talks to the database directly.
+
+## Data Model (ER Diagram)
+
+This reflects the current `schema.prisma`. All user roles (student, tutor, lecturer, organiser, admin) live on `User.role` — there are no separate role tables. It covers the application/waitlist flow, course assignment, timesheets, and overflow work.
+
+```mermaid
+erDiagram
+  USER ||--o{ APPLICATION : "submits"
+  USER ||--o{ COURSE : "teaches"
+  USER ||--o{ TUTOR_ASSIGNMENT : "tutors"
+  USER ||--o{ AVAILABILITY : "sets"
+  USER ||--o{ BUSY_BLOCK : "blocks"
+  USER ||--o{ TIMESHEET : "submits"
+  USER ||--o{ OVERFLOW_WORK : "claims"
+
+  COURSE ||--o{ APPLICATION : "receives"
+  COURSE ||--o{ TUTOR_ASSIGNMENT : "has"
+  COURSE ||--o{ COURSE_SLOT : "scheduled at"
+  COURSE ||--o{ OVERFLOW_WORK : "posts"
+  COURSE ||--o{ TIMESHEET_ENTRY : "logged against"
+
+  TUTOR_ASSIGNMENT ||--o{ SESSION : "generates"
+  COURSE_SLOT ||--o{ SESSION : "schedules"
+  TIMESHEET ||--o{ TIMESHEET_ENTRY : "contains"
+  TIME_SLOT ||--o{ AVAILABILITY : "used by"
+  TIME_SLOT ||--o{ COURSE_SLOT : "used by"
+
+  USER {
+    int id PK
+    string firebaseUid UK
+    string studentNumber
+    string employeeNumber
+    string firstName
+    string lastName
+    string email UK
+    string role "STUDENT, TUTOR, LECTURER, ORGANISER, ADMIN"
+    boolean isActive
+  }
+  APPLICATION {
+    int id PK
+    int userId FK
+    int courseId FK
+    float courseMark
+    string status "PENDING, WAITLISTED, APPROVED, REJECTED"
+    datetime appliedAt
+    datetime reviewedAt
+  }
+  COURSE {
+    int id PK
+    string courseCode UK
+    string courseName
+    float minimumMark
+    int tutorsRequired
+    boolean acceptingApplications
+    datetime createdAt
+    int userId FK "owning lecturer or organiser"
+  }
+  TUTOR_ASSIGNMENT {
+    int id PK
+    int userId FK
+    int courseId FK
+    string semester
+  }
+  AVAILABILITY {
+    int id PK
+    int userId FK
+    int dayOfWeek
+    int timeSlotId FK
+  }
+  BUSY_BLOCK {
+    int id PK
+    int userId FK
+    int dayOfWeek
+    int startMinute
+    int endMinute
+  }
+  COURSE_SLOT {
+    int id PK
+    int courseId FK
+    int dayOfWeek
+    int timeSlotId FK
+    string venue
+    string sessionType
+  }
+  SESSION {
+    int id PK
+    int assignmentId FK
+    int courseSlotId FK
+    datetime date
+    string status
+    string excuseReason
+  }
+  TIMESHEET {
+    int id PK
+    int userId FK
+    string payrollNumber
+    float totalHours
+    string status "DRAFT, SUBMITTED, APPROVED"
+  }
+  TIMESHEET_ENTRY {
+    int id PK
+    int timesheetId FK
+    int courseId FK
+    datetime workDate
+    float duration
+    string taskType
+    boolean isApproved
+  }
+  OVERFLOW_WORK {
+    int id PK
+    int courseId FK
+    string description
+    int hours
+    int postedBy
+    int claimedBy FK
+    string status
+  }
+  SYSTEM_SETTING {
+    string key PK
+    string value
+    datetime updatedAt
+  }
+```
+
+### Notes on modeling decisions
+
+- **One `User` table, roles as a string**: `User.role` distinguishes student / tutor / lecturer / organiser / admin. There are no separate role tables — every tutor-role construct (availability, busy blocks, assignments, timesheets, overflow claims) references `User` directly, so a user's data survives role changes.
+- **Waitlist is a status, not a new entity**: `Application.status` moves through `PENDING → WAITLISTED / APPROVED / REJECTED`. When an approved applicant declines or a `TutorAssignment` frees up, the next-ranked `WAITLISTED` application (ordered by `courseMark`) can be promoted to `APPROVED` without any schema change.
+- **`TutorAssignment` is the join entity** between `User` (tutor role) and `Course`, carrying only the `semester` — the many-to-many relationship of which users tutor which courses. Hours are not stored: they are derived from the course's slots (each slot rounds up to at least one whole hour), and the overall cap lives in `SystemSetting` (`TUTOR_MONTHLY_CLAIMABLE_HOURS`, set by an organiser).
+- **Availability vs `CourseSlot`**: a tutor's own weekly availability (`Availability`) is checked against each course's fixed teaching times (`CourseSlot`) to detect scheduling clashes — these are separate tables because tutors set availability once per term, while course slots are fixed by the timetable. Both reference the shared `TimeSlot` catalogue.
+
+:::note Models added after this diagram was drawn
+
+`schema.prisma` has since gained three models that are not yet shown above: `Event` (a lecturer-scheduled calendar event on a course date, which tutors claim as a timesheet entry), `RoleApplication` (a student's application to become a tutor or lecturer, reviewed by the organiser), and `EmailLog` (an audit log for outgoing notification emails, with duplicate-send prevention).
+
+:::
+
+## Sequence Diagram: Assigning a Tutor to a Course
+
+This shows the core Basic-tier flow: a lecturer assigns a tutor to a course from the allocation board, with all three validation checks (marks, timetable clash, remaining hours) run server-side through **one combined validation endpoint**.
+
+```mermaid
+sequenceDiagram
+  actor L as Lecturer
+  participant FE as Frontend (Board)
+  participant BE as Backend API
+  participant DB as Database
+
+  L->>FE: Select tutor for course, click "Assign"
+  FE->>BE: POST /assignments/validate {userId, courseId}
+
+  BE->>DB: Get Application.courseMark for (userId, courseId)
+  DB-->>BE: courseMark
+  BE->>DB: Get Course.minimumMark
+  DB-->>BE: minimumMark
+
+  BE->>DB: Get SystemSetting max claimable hours + assigned courses' slots
+  DB-->>BE: maxClaimableHours, assigned hours
+
+  BE->>DB: Get User.Availability + Course.CourseSlot
+  DB-->>BE: availability, slot times
+
+  Note over BE: Run all 3 checks:<br/>marksOk, hoursOk, clashOk
+
+  BE-->>FE: 200 {marksOk, hoursOk, clashOk}
+
+  alt All checks pass
+    FE-->>L: Show green — ready to confirm
+    L->>FE: Click "Confirm"
+    FE->>BE: POST /assignments {userId, courseId, semester}
+    BE->>DB: Re-validate + create TutorAssignment
+    DB-->>BE: Assignment created
+    BE-->>FE: 201 Created
+    FE-->>L: Board updates, assignment visible
+  else Any check fails
+    FE-->>L: Show red flag(s) on the failing check(s)<br/>inline, before saving
+  end
+```
+
+### Notes
+
+- **One combined endpoint** (`POST /assignments/validate`) runs all three checks server-side in a single request/response cycle, rather than three separate calls or purely client-side checks. This keeps the validation logic centralized and easy to test (directly satisfies the automated API testing rubric line).
+- **Live feedback**: the check runs as soon as the lecturer selects a tutor and clicks "Assign" — before anything is saved — satisfying the brief's requirement that a broken choice be "visible as it is made, not after it is saved."
+- **Two-step confirm**: a final `POST /assignments` re-validates server-side at the moment of actual commit, guarding against race conditions (e.g. two lecturers assigning the same tutor to different courses at the same time, both passing the initial check).

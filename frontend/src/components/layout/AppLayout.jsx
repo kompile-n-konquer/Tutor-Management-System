@@ -12,7 +12,7 @@ export default function AppLayout({ title, showSearch = true, avatarUrl, childre
   const { role } = useAuth();
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen flex">
-      <Sidebar role={role} />
+      <Sidebar />
       <div className="flex-1 ml-0 md:ml-sidebar-width flex flex-col h-screen overflow-hidden">
         <TopNavBar title={title} showSearch={showSearch} avatarUrl={avatarUrl} />
         <main className="flex-1 overflow-y-auto">{children}</main>

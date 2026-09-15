@@ -1,114 +1,155 @@
-import { useMemo, useState } from "react";
-import AppLayout from "../../components/layout/AppLayout";
-import { TIMESHEETS as INITIAL_TIMESHEETS } from "../../data/mockData";
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import AppLayout from '../../components/layout/AppLayout';
+import Button from '../../components/button/Button';
+import api from '../../utils/axiosInstance';
+import useAsync from '../../hooks/useAsync';
+import { useAuth } from '../context/AuthContext';
 
-export default function Timesheets() {
-  const [timesheets, setTimesheets] = useState(INITIAL_TIMESHEETS);
-  const [selectedIds, setSelectedIds] = useState([]);
+const STATUS_STYLES = {
+  DRAFT: 'bg-surface-variant text-on-surface-variant',
+  SUBMITTED: 'bg-trust-blue/10 text-trust-blue',
+  APPROVED: 'bg-green-600/10 text-green-700',
+  REJECTED: 'bg-error/10 text-error',
+};
 
-  const pending = useMemo(() => timesheets.filter((t) => t.status === "pending"), [timesheets]);
-  const approved = useMemo(() => timesheets.filter((t) => t.status === "approved"), [timesheets]);
-  const allPendingSelected = pending.length > 0 && pending.every((t) => selectedIds.includes(t.id));
+const Timesheets = () => {
+  const navigate = useNavigate();
+  const { currentUser, loading } = useAuth();
+  const { execute, isLoading } = useAsync();
 
-  function toggleSelect(id) {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-  function toggleSelectAll() {
-    setSelectedIds(allPendingSelected ? [] : pending.map((t) => t.id));
-  }
-  function bulkApprove() {
-    if (selectedIds.length === 0) return;
-    setTimesheets((prev) => prev.map((t) => (selectedIds.includes(t.id) ? { ...t, status: "approved" } : t)));
-    setSelectedIds([]);
-  }
+  const [timesheets, setTimesheets] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
+  const role = currentUser?.role?.toLowerCase();
+  const isTutor = role === 'tutor' || role === 'student';
+  const isLecturer = role === 'lecturer' || role === 'organiser' || role === 'admin';
+
+  const loadTimesheets = useCallback(async () => {
+    if (!currentUser) return;
+    const res = await execute(() => (isTutor ? api.get('/timesheets') : api.get('/timesheets/pending-review')));
+    if (res && res.status === 200) setTimesheets(res.data);
+    setLoaded(true);
+  }, [currentUser, execute, isTutor]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!currentUser) navigate('/login');
+  }, [currentUser, loading, navigate]);
+
+  useEffect(() => {
+    if (loading || !currentUser) return;
+    loadTimesheets();
+  }, [currentUser, loading, loadTimesheets]);
+
+  const handleCreate = async () => {
+    const res = await execute(() => api.post('/timesheets'));
+    if (res && res.status === 201) {
+      navigate(`/timesheets/${res.data.id}`);
+    }
+  };
+
+  if (loading) return null;
+  if (!currentUser) return null;
+
+  const formatDate = (iso) => new Date(iso).toLocaleDateString();
+
+  console.log(timesheets);
   return (
-    <AppLayout title="Tutor Management System">
-      <div className="p-margin-page max-w-container-max mx-auto w-full">
-        <div className="flex justify-between items-end mb-stack-lg flex-wrap gap-4">
+    <AppLayout role={role} title="Timesheets">
+      <div className="p-gutter md:p-margin-page space-y-gutter">
+        <div className="mb-stack-lg flex flex-wrap items-center justify-between gap-gutter">
           <div>
             <h2 className="font-display text-display text-primary">Timesheets</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              Review and approve submitted hours for this pay period.
+              {isTutor
+                ? 'Track your tutoring hours and submit them for approval.'
+                : 'Review and sign off submitted timesheets.'}
             </p>
           </div>
-          <button
-            onClick={bulkApprove}
-            disabled={selectedIds.length === 0}
-            className="bg-primary text-on-primary font-label-caps text-label-caps px-stack-md py-stack-sm rounded-lg hover:bg-primary-container transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">done_all</span>
-            Approve Selected ({selectedIds.length})
-          </button>
+          <div>
+            {isTutor && (
+              <Button className="min-w-40" onClick={handleCreate}>
+                Create Timesheet
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-left">
-            <thead className="bg-surface border-b border-outline-variant">
-              <tr>
-                <th className="p-stack-sm w-10">
-                  <input
-                    type="checkbox"
-                    checked={allPendingSelected}
-                    onChange={toggleSelectAll}
-                    aria-label="Select all pending timesheets"
-                    className="h-4 w-4 text-primary rounded border-outline-variant"
-                  />
-                </th>
-                <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Tutor</th>
-                <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Course</th>
-                <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Week Of</th>
-                <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Hours</th>
-                <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((t) => (
-                <tr key={t.id} className="border-b border-outline-variant/50 hover:bg-surface-container-low">
-                  <td className="p-stack-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(t.id)}
-                      onChange={() => toggleSelect(t.id)}
-                      className="h-4 w-4 text-primary rounded border-outline-variant"
-                    />
-                  </td>
-                  <td className="p-stack-sm font-body-md text-on-surface">{t.tutorName}</td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">{t.courseCode}</td>
-                  <td className="p-stack-sm font-body-sm text-on-surface-variant">{t.weekOf}</td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-primary font-bold">{t.hours}h</td>
-                  <td className="p-stack-sm">
-                    <span className="font-label-caps text-label-caps text-urgent-orange bg-urgent-orange/10 px-2 py-0.5 rounded">
-                      PENDING
-                    </span>
-                  </td>
+        <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
+          {isLoading && !loaded ? (
+            <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading timesheets...</p>
+          ) : timesheets.length === 0 ? (
+            <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
+              {isTutor
+                ? 'No timesheets yet. Click "Create Timesheet" to start one.'
+                : 'No timesheets are awaiting your review.'}
+            </p>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
+                  <th className="py-stack-sm px-stack-md">Name</th>
+                  {isLecturer && <th className="py-stack-sm px-stack-md">Tutor</th>}
+                  {!isLecturer && <th className="py-stack-sm px-stack-md">Created</th>}
+                  {!isLecturer && <th className="py-stack-sm px-stack-md">Last Saved</th>}
+                  <th className="py-stack-sm px-stack-md">Total Hours</th>
+                  <th className="py-stack-sm px-stack-md">Status</th>
+                  <th className="py-stack-sm px-stack-md"></th>
                 </tr>
-              ))}
-              {approved.map((t) => (
-                <tr key={t.id} className="border-b border-outline-variant/50 opacity-60">
-                  <td className="p-stack-sm" />
-                  <td className="p-stack-sm font-body-md text-on-surface">{t.tutorName}</td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">{t.courseCode}</td>
-                  <td className="p-stack-sm font-body-sm text-on-surface-variant">{t.weekOf}</td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface">{t.hours}h</td>
-                  <td className="p-stack-sm">
-                    <span className="font-label-caps text-label-caps text-trust-blue bg-trust-blue/10 px-2 py-0.5 rounded">
-                      APPROVED
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {pending.length === 0 && approved.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-stack-lg text-center text-on-surface-variant font-body-sm">
-                    No timesheets submitted yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-surface-variant font-body-md">
+                {timesheets.map((timesheet) => {
+                  const editable = timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED';
+                  return (
+                    <tr key={timesheet.id}>
+                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">{timesheet.name}</td>
+                      {isLecturer && (
+                        <td className="py-stack-sm px-stack-md">
+                          <span className="font-semibold text-on-surface">{timesheet.tutorName}</span>
+                          <span className="text-on-surface-variant text-xs ml-1">{timesheet.tutorEmail}</span>
+                        </td>
+                      )}
+                      {!isLecturer && (
+                        <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          {formatDate(timesheet.createdAt)}
+                        </td>
+                      )}
+                      {!isLecturer && (
+                        <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          {formatDate(timesheet.updatedAt)}
+                        </td>
+                      )}
+                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                        {(timesheet.entries || []).reduce((sum, e) => sum + Number(e.duration || 0), 0)}
+                      </td>
+                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-semibold font-data-mono ${STATUS_STYLES[timesheet.status] || ''}`}
+                        >
+                          {timesheet.status}
+                        </span>
+                      </td>
+                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                        <Button
+                          className="min-w-24 max-h-8 text-[11px]"
+                          onClick={() =>
+                            navigate(editable ? `/timesheets/${timesheet.id}` : `/timesheets/${timesheet.id}/details`)
+                          }
+                        >
+                          {editable ? 'Continue Editing' : 'View'}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </AppLayout>
   );
-}
+};
+
+export default Timesheets;

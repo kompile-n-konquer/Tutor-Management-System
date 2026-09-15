@@ -1,0 +1,219 @@
+---
+sidebar_position: 8
+title: Public API
+description: Open data endpoints anyone can query — no account required
+---
+
+## Overview
+
+The Public API is a small set of **open data endpoints** built for people who are not users of TutorFlow — the same way a weather API serves anyone who wants the forecast. A student who has never signed up can still find out when tutoring happens for their course, and any calendar app can subscribe to a course's tutoring schedule.
+
+Three rules govern every endpoint here:
+
+- **No authentication.** No account, no API key, no token — just an HTTP GET.
+- **No personal data.** Responses expose course, schedule and aggregate numbers only. Names, emails, student numbers and tutor identities never appear.
+- **Cached, not rate-limited.** Every response is cached server-side for 60 seconds and sent with `Cache-Control: public, max-age=60`, so hammering an endpoint gains you nothing. Be a good citizen and respect the cache header in your client.
+
+### Base URL
+
+| Environment | Base URL |
+| --- | --- |
+| Local development | `http://localhost:3000/api` |
+| Production | `https://<backend-host>/api` |
+
+All examples below use the local development URL.
+
+:::note URL placeholders
+Segments like `:courseCode` in an endpoint definition are placeholders — replace the whole segment including the colon. For example, `GET /public/courses/:courseCode/schedule` becomes
+`http://localhost:3000/api/public/courses/COMS1017A/schedule`. Look up codes (and their names, like IDSA for COMS1017A) via [Discover courses](#discover-courses).
+:::
+
+---
+
+## Discover courses
+
+### `GET /public/courses`
+
+The starting point: which courses offer tutoring, and how much per week. Use the `courseCode` values in the other endpoints.
+
+```bash
+curl http://localhost:3000/api/public/courses
+```
+
+```json
+{
+  "courses": [
+    {
+      "courseCode": "COMS1017A",
+      "courseName": "IDSA",
+      "weeklySlots": 3,
+      "weeklyHours": 3
+    }
+  ]
+}
+```
+
+`weeklyHours` uses the same round-up rule as tutor claims: every slot counts as at least one full hour.
+
+---
+
+## Weekly schedule
+
+### `GET /public/courses/:courseCode/schedule`
+
+The recurring weekly tutoring pattern for one course. Course codes are matched case-insensitively.
+
+```bash
+curl http://localhost:3000/api/public/courses/coms1017a/schedule
+```
+
+```json
+{
+  "courseCode": "COMS1017A",
+  "courseName": "IDSA",
+  "schedule": [
+    { "dayOfWeek": 3, "day": "Thursday", "start": "14:00", "end": "15:00", "venue": null, "sessionType": null },
+    { "dayOfWeek": 3, "day": "Thursday", "start": "15:00", "end": "16:00", "venue": null, "sessionType": null },
+    { "dayOfWeek": 3, "day": "Thursday", "start": "16:00", "end": "17:00", "venue": null, "sessionType": null }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `dayOfWeek` | 0 = Monday … 4 = Friday |
+| `venue` | Room if the lecturer set one, otherwise `null` |
+| `sessionType` | e.g. tutoring, marking — `null` when unset |
+
+Unknown course codes return a `404` through the standard error envelope:
+
+```json
+{ "message": "Course not found", "path": "/api/public/courses/NOPE101/schedule", "timestamp": "…" }
+```
+
+:::note
+This is the *recurring pattern* — the days and times tutoring normally runs. It is derived live from the course's tutoring slots, so it stays correct whenever a lecturer edits them. For concrete dated sessions, use [live sessions](#live-sessions) or the [calendar feed](#calendar-feed).
+:::
+
+---
+
+## Live sessions
+
+### `GET /public/sessions/live`
+
+"Is tutoring on right now, and what's coming up?" — answered from concrete, lecturer-created events for the next 14 days.
+
+```bash
+curl http://localhost:3000/api/public/sessions/live
+```
+
+```json
+{
+  "generatedAt": "2026-09-16T10:30:00.000Z",
+  "live": [
+    {
+      "courseCode": "COMS3007",
+      "courseName": "Machine Learning",
+      "description": "tutoring",
+      "venue": "CH-3",
+      "start": "10:00",
+      "end": "11:00"
+    }
+  ],
+  "next": [
+    {
+      "courseCode": "COMS3007",
+      "courseName": "Machine Learning",
+      "description": "tutoring",
+      "date": "2026-09-16",
+      "venue": "F1",
+      "start": "14:00",
+      "end": "15:00"
+    }
+  ]
+}
+```
+
+- `live` — sessions running at this exact moment (checked against `generatedAt`).
+- `next` — up to 10 upcoming sessions that have not started yet, soonest first.
+
+Sessions are included only when a lecturer has created an event for that date; each event's times come from the course's slots on that weekday. When no events exist, both arrays are simply empty.
+
+---
+
+## Programme statistics
+
+### `GET /public/stats`
+
+Aggregate, anonymised numbers about the tutoring programme.
+
+```bash
+curl http://localhost:3000/api/public/stats
+```
+
+```json
+{
+  "coursesWithTutoring": 1,
+  "activeTutors": 0,
+  "approvedHoursThisYear": 0,
+  "generatedAt": "2026-09-14T22:46:24.824Z"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `coursesWithTutoring` | Courses with at least one tutoring slot |
+| `activeTutors` | Users currently assigned as tutors to at least one course |
+| `approvedHoursThisYear` | Sum of approved timesheet hours since 1 January (UTC) |
+
+---
+
+## Calendar feed
+
+### `GET /public/calendar/:courseCode.ics`
+
+An [iCalendar (RFC 5545)](https://icalendar.org/RFC-Specifications/iCalendar-RFC-5545/) feed of one course's upcoming tutoring sessions. Because it is a standard format, calendar apps can subscribe to it and stay up to date automatically.
+
+```bash
+curl http://localhost:3000/api/public/calendar/COMS1017A.ics
+```
+
+```text
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TutorFlow//Public Tutoring Calendar//EN
+CALSCALE:GREGORIAN
+X-WR-CALNAME:COMS1017A tutoring
+BEGIN:VEVENT
+UID:coms1017a-42-1@tutorflow
+DTSTAMP:20260921T000000Z
+DTSTART:20260921T080000Z
+DTEND:20260921T090000Z
+SUMMARY:COMS1017A tutoring
+LOCATION:CH-3
+END:VEVENT
+END:VCALENDAR
+```
+
+One `VEVENT` is emitted per time range of each upcoming lecturer-created event. Feeds must end in `.ics`; anything else (or an unknown course) returns `404`.
+
+### Subscribing in a calendar app
+
+- **Google Calendar:** Other calendars → *From URL* → paste the feed URL.
+- **Outlook:** Add calendar → *Subscribe from web* → paste the feed URL.
+- **Apple Calendar:** File → *New Calendar Subscription* → paste the feed URL.
+
+Apps re-fetch the feed periodically, and the server caches it for 60 seconds, so schedules stay current without any polling logic on your side.
+
+---
+
+## Conventions
+
+- **Format:** JSON (except the `.ics` feed, which is `text/calendar`).
+- **Times:** `HH:MM` 24-hour labels and ISO `YYYY-MM-DD` dates; all comparisons happen server-side in UTC.
+- **Caching:** every response carries `Cache-Control: public, max-age=60`.
+- **Errors:** unknown courses and malformed feeds return `404` in the API's standard error envelope `{ message, path, timestamp }`.
+
+## What the Public API will never expose
+
+The public endpoints read only from the course catalogue, tutoring slots, lecturer-created events and aggregate counts. User profiles, applications, timesheets and any other personal data require an authenticated Firebase ID token and a permitted role — see the authenticated API on the backend for those.

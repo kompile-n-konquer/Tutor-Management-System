@@ -95,6 +95,7 @@ const router = createBrowserRouter([
       { path: 'onboarding/tutor-application', element: <TutorApplication /> },
       { path: 'onboarding/lecturer-application', element: <LecturerApplication /> },
       { path: 'application-review', element: <ApplicationReview /> },
+      { path: '*', element: <ErrorPage /> },
     ],
   },
 ]);

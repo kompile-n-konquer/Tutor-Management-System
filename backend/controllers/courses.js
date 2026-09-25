@@ -164,6 +164,22 @@ exports.getCourses = catchAsync(async (req, res, next) => {
 });
 
 exports.getCourse = catchAsync(async (req, res, next) => {
+  const firebaseUid = req.user.user_id;
+
+  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  const role = user.role.toUpperCase();
+  if (role !== 'LECTURER' && role !== 'ORGANISER' && role !== 'ADMIN') {
+    const error = new Error('Only a lecturer, organiser or admin can view course details');
+    error.statusCode = 403;
+    return next(error);
+  }
+
   const courseId = Number(req.params.courseId);
   if (!Number.isInteger(courseId)) {
     const error = new Error('courseId must be a number');
@@ -189,6 +205,14 @@ exports.getCourse = catchAsync(async (req, res, next) => {
   if (!course) {
     const error = new Error('Course not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers may only inspect the courses they created; organisers and admins
+  // keep the global view required for allocation management.
+  if (role === 'LECTURER' && course.userId !== user.id) {
+    const error = new Error('You can only view courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 
@@ -255,6 +279,14 @@ exports.updateCourse = catchAsync(async (req, res, next) => {
   if (!course) {
     const error = new Error('Course not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers may only edit the courses they created; organisers and admins
+  // keep the global edit access required for allocation management.
+  if (role === 'LECTURER' && course.userId !== user.id) {
+    const error = new Error('You can only update courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 
@@ -370,6 +402,14 @@ exports.updateCourseSlots = catchAsync(async (req, res, next) => {
   if (!course) {
     const error = new Error('Course not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers may only edit the courses they created; organisers and admins
+  // keep the global edit access required for allocation management.
+  if (role === 'LECTURER' && course.userId !== user.id) {
+    const error = new Error('You can only update slots for courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 

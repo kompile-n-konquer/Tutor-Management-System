@@ -487,11 +487,19 @@ exports.startApplicationProcess = catchAsync(async (req, res, next) => {
 
   const existingCourses = await prisma.course.findMany({
     where: { id: { in: parsedIds } },
-    select: { id: true },
+    select: { id: true, userId: true },
   });
   if (existingCourses.length !== parsedIds.length) {
     const error = new Error('One or more courses were not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers may only open their own courses for applications; organisers and
+  // admins manage the process across the whole course catalogue.
+  if (role === 'LECTURER' && existingCourses.some((existing) => existing.userId !== user.id)) {
+    const error = new Error('You can only start the application process for courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 

@@ -25,13 +25,18 @@ export default defineConfig(({ mode }) => {
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
-        include: ['src/**/*.{ts,tsx}'],
+        // Only report files the test run actually imports. With `all: true`
+        // coverage-v8 parses never-imported .jsx files as plain JavaScript and
+        // dies on the first JSX expression (src/App.jsx pos 661), and most of
+        // the app has no tests yet after the suite cleanup.
+        all: false,
+        include: ['src/**/*.{js,jsx}'],
         exclude: [
           'src/**/*.d.ts',
-          'src/main.tsx',
+          'src/main.jsx',
           'src/setupTests.ts',
           'src/**/__tests__/**',
-          'src/**/*.test.{ts,tsx}',
+          'src/**/*.test.{js,jsx}',
         ],
       },
     },

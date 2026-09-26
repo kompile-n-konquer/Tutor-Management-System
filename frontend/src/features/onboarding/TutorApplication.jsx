@@ -112,7 +112,7 @@ export default function TutorApplication() {
     return (
       <AppLayout title="Tutor Application" showSearch={false}>
         <div className="p-stack-md md:p-margin-page max-w-container-max mx-auto w-full">
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] text-center">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento text-center">
             <span className="material-symbols-outlined text-5xl text-trust-blue mb-stack-md">check_circle</span>
             <h2 className="font-headline-lg text-headline-lg text-on-surface mb-unit">Application Submitted!</h2>
             <p className="font-body-md text-on-surface-variant mb-stack-lg">
@@ -158,7 +158,7 @@ export default function TutorApplication() {
           </p>
         </div>
 
-        <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento">
           {coursesLoading && (
             <div className="flex items-center gap-unit text-on-surface-variant font-body-md p-stack-md mb-stack-md">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>

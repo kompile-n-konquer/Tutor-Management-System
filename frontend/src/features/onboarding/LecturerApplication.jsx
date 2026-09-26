@@ -43,7 +43,7 @@ export default function LecturerApplication() {
     return (
       <AppLayout title="Lecturer Application" showSearch={false}>
         <div className="p-stack-md md:p-margin-page max-w-container-max mx-auto w-full">
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] text-center">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento text-center">
             <span className="material-symbols-outlined text-5xl text-trust-blue mb-stack-md">check_circle</span>
             <h2 className="font-headline-lg text-headline-lg text-on-surface mb-unit">Application Submitted!</h2>
             <p className="font-body-md text-on-surface-variant mb-stack-lg">
@@ -86,7 +86,7 @@ export default function LecturerApplication() {
           </p>
         </div>
 
-        <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento">
           <form onSubmit={handleSubmit} className="space-y-stack-md">
             <div>
               <label className="font-label-caps text-label-caps text-on-surface-variant block mb-unit">

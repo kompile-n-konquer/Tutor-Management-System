@@ -3,6 +3,223 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/*
+ * Theme tokens — every tailwind colour resolves to a variable below, so the
+ * utility classes pick up whatever palette the <html> classes activate.
+ * ThemeProvider (frontend/src/features/context/ThemeProvider.jsx) toggles the
+ * classes; the inline script in index.html applies them before first paint.
+ *
+ * Cascade order matters: colour-vision palettes come last so their hues win
+ * over both the dark and high-contrast blocks when combined.
+ */
+:root {
+  color-scheme: light;
+
+  /* Primary */
+  --color-primary: #2e0052;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #4b0082;
+  --color-on-primary-container: #ba7ef4;
+  --color-primary-fixed: #f0dbff;
+  --color-primary-fixed-dim: #ddb7ff;
+  --color-on-primary-fixed: #2c0050;
+  --color-on-primary-fixed-variant: #622599;
+
+  /* Secondary */
+  --color-secondary: #904d00;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #fd8b00;
+  --color-on-secondary-container: #603100;
+  --color-secondary-fixed: #ffdcc3;
+  --color-secondary-fixed-dim: #ffb77d;
+  --color-on-secondary-fixed: #2f1500;
+  --color-on-secondary-fixed-variant: #6e3900;
+
+  /* Tertiary */
+  --color-tertiary: #3f0025;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #65003e;
+  --color-on-tertiary-container: #f863ae;
+  --color-tertiary-fixed: #ffd8e6;
+  --color-tertiary-fixed-dim: #ffb0d0;
+  --color-on-tertiary-fixed: #3d0024;
+  --color-on-tertiary-fixed-variant: #8c0058;
+
+  /* Error + success status colours */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-error-container-hover: #ffb4ab;
+  --color-success: #15803d;
+
+  /* Surfaces */
+  --color-background: #f8f9fa;
+  --color-on-background: #191c1d;
+  --color-surface: #f8f9fa;
+  --color-on-surface: #191c1d;
+  --color-surface-variant: #e1e3e4;
+  --color-on-surface-variant: #4c4451;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f4f5;
+  --color-surface-container: #edeeef;
+  --color-surface-container-high: #e7e8e9;
+  --color-surface-container-highest: #e1e3e4;
+  --color-surface-dim: #d9dadb;
+  --color-surface-bright: #f8f9fa;
+  --color-surface-tint: #7b41b3;
+
+  /* Outlines */
+  --color-outline: #7d7483;
+  --color-outline-variant: #cec3d3;
+
+  /* Inverse */
+  --color-inverse-surface: #2e3132;
+  --color-inverse-on-surface: #f0f1f2;
+  --color-inverse-primary: #ddb7ff;
+
+  /* Accents — clash highlight, trust and urgency indicators */
+  --color-clash-bg: #ff69b4;
+  --color-on-clash-bg: #ffffff;
+  --color-trust-blue: #1e90ff;
+  --color-on-trust-blue: #ffffff;
+  --color-urgent-orange: #ff8c00;
+  --color-on-urgent-orange: #ffffff;
+
+  --shadow-bento: 0px 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+/* Dark mode — light text and accents on deep neutral surfaces. */
+.dark {
+  color-scheme: dark;
+
+  --color-primary: #cfbcff;
+  --color-on-primary: #2e0052;
+  --color-primary-container: #53329b;
+  --color-on-primary-container: #e8ddff;
+  --color-on-primary-fixed-variant: #b695ef;
+
+  --color-secondary: #ffb877;
+  --color-on-secondary: #4a2800;
+  --color-secondary-container: #6b3d00;
+  --color-on-secondary-container: #ffdcc3;
+  --color-on-secondary-fixed-variant: #ffb77d;
+
+  --color-tertiary: #ffb1c1;
+  --color-on-tertiary: #65003a;
+  --color-tertiary-container: #8c0050;
+  --color-on-tertiary-container: #ffd8e5;
+  --color-on-tertiary-fixed-variant: #ffb0d0;
+
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+  --color-error-container-hover: #ab2b22;
+  --color-success: #7fd991;
+
+  --color-background: #121316;
+  --color-on-background: #e3e1e8;
+  --color-surface: #121316;
+  --color-on-surface: #e3e1e8;
+  --color-surface-variant: #48454e;
+  --color-on-surface-variant: #cac4d0;
+  --color-surface-container-lowest: #0d0e11;
+  --color-surface-container-low: #1a1c1f;
+  --color-surface-container: #1f2023;
+  --color-surface-container-high: #2a2b2e;
+  --color-surface-container-highest: #35353a;
+  --color-surface-dim: #121316;
+  --color-surface-bright: #e3e1e8;
+  --color-surface-tint: #cfbcff;
+
+  --color-outline: #948f99;
+  --color-outline-variant: #48454e;
+
+  --color-inverse-surface: #e3e1e8;
+  --color-inverse-on-surface: #2f3033;
+  --color-inverse-primary: #622599;
+
+  --color-on-clash-bg: #46002b;
+  --color-trust-blue: #4da3ff;
+  --color-on-trust-blue: #06284d;
+  --color-urgent-orange: #ffa236;
+  --color-on-urgent-orange: #3d2000;
+
+  --shadow-bento: 0px 4px 20px rgba(0, 0, 0, 0.55);
+}
+
+/* High contrast (light base) — near-black text, harder borders, deeper accents. */
+.high-contrast {
+  --color-on-background: #000000;
+  --color-on-surface: #000000;
+  --color-on-surface-variant: #26262b;
+  --color-outline: #26262b;
+  --color-outline-variant: #404045;
+  --color-primary: #190033;
+  --color-on-primary-container: #ffffff;
+  --color-error: #8f0000;
+  --color-on-error-container: #6b0008;
+  --color-error-container-hover: #ff9d94;
+  --color-success: #0c4a1e;
+  --color-trust-blue: #0b4a8f;
+  --color-urgent-orange: #8a4300;
+}
+
+/* High contrast (dark base) — pure white text and maximised accents. */
+.dark.high-contrast {
+  --color-on-background: #ffffff;
+  --color-on-surface: #ffffff;
+  --color-on-surface-variant: #f2f2f5;
+  --color-outline: #f2f2f5;
+  --color-outline-variant: #ffffff;
+  --color-primary: #e6dcff;
+  --color-primary-container: #6d4bd0;
+  --color-on-primary-container: #ffffff;
+  --color-error: #ffd2cc;
+  --color-on-error-container: #ffe6e3;
+  --color-error-container-hover: #a8392f;
+  --color-success: #9ff0ae;
+  --color-trust-blue: #8cc4ff;
+  --color-urgent-orange: #ffc07a;
+}
+
+/*
+ * Colour vision deficiency palettes. Red/green statuses never rely on hue
+ * alone, but these remaps keep the hues themselves distinguishable.
+ * Protanopia and deuteranopia (red-green) share a burnt-orange/blue scheme;
+ * tritanopia (blue-yellow) shifts the blue and orange accents off the
+ * confused axis. Red and green themselves are safe for tritanopia.
+ */
+.theme-protanopia,
+.theme-deuteranopia {
+  --color-error: #9a3f00;
+  --color-error-container: #7a3200;
+  --color-on-error-container: #ffddbb;
+  --color-error-container-hover: #8f3a00;
+  --color-success: #0057b8;
+}
+
+.dark.theme-protanopia,
+.dark.theme-deuteranopia {
+  --color-error: #ffab70;
+  --color-error-container: #7a3800;
+  --color-on-error-container: #ffddbb;
+  --color-error-container-hover: #964a00;
+  --color-success: #6f9cff;
+}
+
+.theme-tritanopia {
+  --color-trust-blue: #4051c0;
+  --color-urgent-orange: #cc3d00;
+}
+
+.dark.theme-tritanopia {
+  --color-trust-blue: #7d9df5;
+  --color-urgent-orange: #ff7043;
+  --color-on-urgent-orange: #331200;
+}
+
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
@@ -42,6 +259,6 @@
 }
 .bento-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-bento);
   border-color: theme("colors.outline");
 }

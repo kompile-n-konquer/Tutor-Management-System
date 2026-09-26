@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 
 import RootLayout from './RootLayout.jsx';
 import ErrorPage from './components/error-page/ErrorPage.jsx';
+import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 
 import Home from './features/home/Home.jsx';
 import Login from './features/auth/login/Login.jsx';
@@ -48,53 +49,245 @@ const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
       { path: 'forgot-password', element: <ForgotPassword /> },
       { path: 'confirmation-message', element: <ConfirmationMessage /> },
-      { path: 'organiser', element: <Organiser /> },
-      { path: 'organiser-analytics', element: <OrganiserAnalytics /> },
-      { path: 'tutor-dashboard', element: <TutorDashboard /> },
-      { path: 'volunteer', element: <VolunteerView /> },
-      { path: 'profile', element: <Profile /> },
-      { path: 'profile/edit', element: <EditProfile /> },
-      { path: 'timetable/edit', element: <EditTimetable /> },
+      // Every route below is protected. Signed-out visitors are sent to /login;
+      // signed-in users whose role is not allowed see the 404 ErrorPage instead
+      // of a generic error. Omitting allowedRoles allows any signed-in role.
+      {
+        path: 'organiser',
+        element: (
+          <ProtectedRoute allowedRoles={['organiser', 'admin']}>
+            <Organiser />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'organiser-analytics',
+        element: (
+          <ProtectedRoute allowedRoles={['organiser', 'admin']}>
+            <OrganiserAnalytics />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'tutor-dashboard',
+        element: (
+          <ProtectedRoute allowedRoles={['tutor']}>
+            <TutorDashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'volunteer',
+        element: (
+          <ProtectedRoute allowedRoles={['student', 'tutor']}>
+            <VolunteerView />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'profile',
+        element: (
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'profile/edit',
+        element: (
+          <ProtectedRoute>
+            <EditProfile />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'timetable/edit',
+        element: (
+          <ProtectedRoute>
+            <EditTimetable />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'applications',
         children: [
-          { index: true, element: <Applications /> },
-          { path: ':courseId', element: <OpportunityDetails /> },
+          {
+            index: true,
+            element: (
+              <ProtectedRoute allowedRoles={['student', 'tutor']}>
+                <Applications />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':courseId',
+            element: (
+              <ProtectedRoute allowedRoles={['student', 'tutor']}>
+                <OpportunityDetails />
+              </ProtectedRoute>
+            ),
+          },
         ],
       },
       {
         path: 'timesheets',
         children: [
-          { index: true, element: <Timesheets /> },
-          { path: ':id', element: <EditTimesheet /> },
-          { path: ':id/details', element: <TimesheetDetails /> },
+          {
+            index: true,
+            element: (
+              <ProtectedRoute>
+                <Timesheets />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':id',
+            element: (
+              <ProtectedRoute>
+                <EditTimesheet />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':id/details',
+            element: (
+              <ProtectedRoute>
+                <TimesheetDetails />
+              </ProtectedRoute>
+            ),
+          },
         ],
       },
-      { path: 'settings', element: <Settings /> },
+      {
+        path: 'settings',
+        element: (
+          <ProtectedRoute allowedRoles={['organiser', 'admin']}>
+            <Settings />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'courses',
         children: [
-          { index: true, element: <ViewAllCourses /> },
-          { path: 'add', element: <AddCourse /> },
-          { path: ':courseId', element: <CourseDetails /> },
-          { path: ':courseId/edit', element: <EditCourse /> },
+          {
+            index: true,
+            element: (
+              <ProtectedRoute allowedRoles={['lecturer', 'organiser']}>
+                <ViewAllCourses />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'add',
+            element: (
+              <ProtectedRoute allowedRoles={['lecturer']}>
+                <AddCourse />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':courseId',
+            element: (
+              <ProtectedRoute allowedRoles={['lecturer', 'organiser']}>
+                <CourseDetails />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':courseId/edit',
+            element: (
+              <ProtectedRoute allowedRoles={['lecturer', 'organiser']}>
+                <EditCourse />
+              </ProtectedRoute>
+            ),
+          },
         ],
       },
       {
         path: 'events',
         children: [
-          { index: true, element: <Events /> },
-          { path: 'add', element: <AddEvent /> },
-          { path: ':id', element: <EventDetails /> },
-          { path: ':id/edit', element: <EditEvent /> },
+          {
+            index: true,
+            element: (
+              <ProtectedRoute allowedRoles={['tutor', 'lecturer', 'organiser', 'admin']}>
+                <Events />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'add',
+            element: (
+              <ProtectedRoute allowedRoles={['lecturer']}>
+                <AddEvent />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':id',
+            element: (
+              <ProtectedRoute allowedRoles={['tutor', 'lecturer', 'organiser', 'admin']}>
+                <EventDetails />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: ':id/edit',
+            element: (
+              <ProtectedRoute allowedRoles={['lecturer']}>
+                <EditEvent />
+              </ProtectedRoute>
+            ),
+          },
         ],
       },
-      { path: 'lecturer-view', element: <LecturerView /> },
-      { path: 'admin-view', element: <AdminView /> },
-      { path: 'onboarding', element: <OnboardingHub /> },
-      { path: 'onboarding/tutor-application', element: <TutorApplication /> },
-      { path: 'onboarding/lecturer-application', element: <LecturerApplication /> },
-      { path: 'application-review', element: <ApplicationReview /> },
+      {
+        path: 'lecturer-view',
+        element: (
+          <ProtectedRoute allowedRoles={['lecturer']}>
+            <LecturerView />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin-view',
+        element: (
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminView />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'onboarding',
+        element: (
+          <ProtectedRoute allowedRoles={['student']}>
+            <OnboardingHub />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'onboarding/tutor-application',
+        element: (
+          <ProtectedRoute allowedRoles={['student']}>
+            <TutorApplication />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'onboarding/lecturer-application',
+        element: (
+          <ProtectedRoute allowedRoles={['student']}>
+            <LecturerApplication />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'application-review',
+        element: (
+          <ProtectedRoute allowedRoles={['organiser']}>
+            <ApplicationReview />
+          </ProtectedRoute>
+        ),
+      },
       { path: '*', element: <ErrorPage /> },
     ],
   },

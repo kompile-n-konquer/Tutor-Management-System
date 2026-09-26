@@ -23,11 +23,19 @@ export const NAV_LINKS = [
 ];
 
 export const FOOTER_LINKS = [
-  { to: "/settings", icon: "settings", label: "Settings" },
+  // Settings is organiser/admin configuration — same roles the /settings
+  // route guard allows, so the link never leads an unauthorized user to a 404.
+  { to: "/settings", icon: "settings", label: "Settings", roles: ["organiser", "admin"] },
   { to: "/", icon: "logout", label: "Logout" },
 ];
 
 export function getNavLinksForRole(role) {
   if (!role) return [];
   return NAV_LINKS.filter((link) => link.roles.includes(role.toLowerCase()));
+}
+
+export function getFooterLinksForRole(role) {
+  return FOOTER_LINKS.filter(
+    (link) => !link.roles || (role && link.roles.includes(role.toLowerCase()))
+  );
 }

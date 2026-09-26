@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { getNavLinksForRole, FOOTER_LINKS } from "../../config/navConfig";
+import { getNavLinksForRole, getFooterLinksForRole } from "../../config/navConfig";
 import useAuth from "../../hooks/useAuth";
 
 export default function Sidebar() {
@@ -7,6 +7,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
 
   const links = getNavLinksForRole(role);
+  const footerLinks = getFooterLinksForRole(role);
 
   const handleNavigate = async (label, url) => {
     if (label === "Logout") {
@@ -71,7 +72,7 @@ export default function Sidebar() {
         )}
 
         <div className="pt-stack-md border-t border-outline-variant space-y-unit">
-          {FOOTER_LINKS.map((link) => {
+          {footerLinks.map((link) => {
             return <div
               key={link.to}
               onClick={() => handleNavigate(link.label, link.to)}

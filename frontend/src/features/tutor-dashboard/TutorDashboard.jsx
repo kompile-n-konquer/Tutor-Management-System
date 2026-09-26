@@ -1,6 +1,7 @@
 import AppLayout from "../../components/layout/AppLayout";
 import OnboardingWalkthrough from "../../components/onboarding/OnboardingWalkthrough";
 import { useFirstVisit } from "../../hooks/useFirstVisit";
+import useAuth from "../../hooks/useAuth";
 
 const TUTOR_ONBOARDING_STEPS = [
   { title: "Welcome to your Tutor Dashboard", body: "This is where you'll see upcoming sessions, hours logged, and quick actions every time you log in." },
@@ -11,6 +12,8 @@ const TUTOR_ONBOARDING_STEPS = [
 
 export default function TutorDashboard() {
   const { isFirstVisit, markSeen } = useFirstVisit("tutor-dashboard");
+  const { userProfile } = useAuth();
+  const firstName = userProfile?.firstName;
 
   return (
     <AppLayout title="Tutor Management System">
@@ -18,7 +21,7 @@ export default function TutorDashboard() {
 
       <div className="p-margin-page max-w-container-max mx-auto w-full">
         <div className="mb-stack-lg">
-          <h2 className="font-display text-display text-primary mb-unit">Welcome back, Alex!</h2>
+          <h2 className="font-display text-display text-primary mb-unit">Welcome back{firstName ? `, ${firstName}` : ""}!</h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
             Here's a quick overview of your tutoring schedule and progress this week.
           </p>

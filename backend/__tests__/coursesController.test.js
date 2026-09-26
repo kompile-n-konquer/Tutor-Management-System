@@ -16,6 +16,7 @@ jest.mock('../prisma/client', () => ({
 const prisma = require('../prisma/client');
 const {
   getAllCourses,
+  getCourses,
   getCourse,
   updateCourse,
   updateCourseSlots,
@@ -204,6 +205,102 @@ const updatedCourseRecord = {
     { id: 10, dayOfWeek: 1, timeSlotId: 2, timeSlot: { startMinute: 480, endMinute: 525 } },
   ],
 };
+
+// ════════════════════════════════════════════════════════════════════════
+// getCourses
+// ════════════════════════════════════════════════════════════════════════
+describe('getCourses', () => {
+  const listedCourse = {
+    id: 1,
+    courseCode: 'CS101',
+    courseName: 'Intro to Programming',
+    minimumMark: 50,
+    tutorsRequired: 2,
+    createdAt: new Date('2026-01-15T10:00:00Z'),
+    acceptingApplications: false,
+    userId: 5,
+    user: { id: 5, firstName: 'Sarah', lastName: 'Van Wyk', email: 'sarah@test.com' },
+    _count: { assignments: 1, slots: 2, applications: 3 },
+  };
+
+  test('scopes a lecturer to the courses they created', async () => {
+    prisma.user.findUnique.mockResolvedValue(lecturerUser);
+    prisma.course.findMany.mockResolvedValue([listedCourse]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourses(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.course.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 5 } }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 1,
+        courseCode: 'CS101',
+        assignedTutors: 1,
+        tutorsMissing: 1,
+        isAllocated: true,
+        slotsCount: 2,
+      }),
+    ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('gives an organiser the unrestricted catalogue', async () => {
+    prisma.user.findUnique.mockResolvedValue(organiserUser);
+    prisma.course.findMany.mockResolvedValue([listedCourse]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourses(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.course.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('gives an admin the unrestricted catalogue', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 77, role: 'ADMIN', firebaseUid: 'firebase-uid-1' });
+    prisma.course.findMany.mockResolvedValue([listedCourse]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourses(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.course.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for tutor and student roles without reading courses', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 6, role: 'TUTOR', firebaseUid: 'firebase-uid-1' });
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourses(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(prisma.course.findMany).not.toHaveBeenCalled();
+  });
+});
 
 // ════════════════════════════════════════════════════════════════════════
 // getCourse

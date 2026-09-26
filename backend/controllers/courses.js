@@ -133,7 +133,29 @@ exports.createCourse = catchAsync(async (req, res, next) => {
 });
 
 exports.getCourses = catchAsync(async (req, res, next) => {
+  const firebaseUid = req.user.user_id;
+
+  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  const role = user.role.toUpperCase();
+  if (role !== 'LECTURER' && role !== 'ORGANISER' && role !== 'ADMIN') {
+    const error = new Error('Only a lecturer, organiser or admin can view courses');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  // Lecturers only see the courses they created (same visibility rule as
+  // events.js); organisers and admins keep the full catalogue required for
+  // allocation management.
+  const where = role === 'LECTURER' ? { userId: user.id } : {};
+
   const courses = await prisma.course.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
     include: {
       user: { select: { id: true, firstName: true, lastName: true, email: true } },

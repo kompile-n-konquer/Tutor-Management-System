@@ -37,7 +37,6 @@ const ViewAllCourses = () => {
       const response = await execute(() => api.get('/courses'));
       if (response && response.status === 200) {
         setCourses(response.data);
-        console.log(response.data);
       } else {
         setError(response?.data?.message || 'Could not load the courses. Please refresh the page.');
       }
@@ -113,7 +112,9 @@ const ViewAllCourses = () => {
           <div>
             <h2 className="font-display text-display text-primary">Courses</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              All courses and their tutoring status. Click a course to see its details.
+              {role === 'lecturer'
+                ? 'The courses you created and their tutoring status. Click a course to see its details.'
+                : 'All courses and their tutoring status. Click a course to see its details.'}
             </p>
           </div>
           <div>
@@ -135,7 +136,9 @@ const ViewAllCourses = () => {
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading courses...</p>
           ) : courses.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
-              No courses have been added yet.
+              {role === 'lecturer'
+                ? "You haven't created any courses yet."
+                : 'No courses have been added yet.'}
             </p>
           ) : (
             <>

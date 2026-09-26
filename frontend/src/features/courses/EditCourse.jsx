@@ -51,16 +51,6 @@ const EditCourse = () => {
   const role = currentUser?.role?.toLowerCase();
   const canViewCourses = role === 'lecturer' || role === 'organiser';
 
-  // Only logged-in lecturers and organisers may view this page
-  useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      navigate('/login');
-    } else if (!canViewCourses) {
-      navigate('/tutor-dashboard');
-    }
-  }, [currentUser, loading, navigate, canViewCourses]);
-
   useEffect(() => {
     if (loading || !currentUser || !canViewCourses) return;
 

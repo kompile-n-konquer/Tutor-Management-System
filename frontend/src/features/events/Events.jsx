@@ -32,16 +32,6 @@ const Events = () => {
   const canViewEvents = role === 'tutor' || role === 'lecturer' || role === 'organiser' || role === 'admin';
   const isLecturer = role === 'lecturer';
 
-  // Tutors, lecturers and organisers may view events
-  useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      navigate('/login');
-    } else if (!canViewEvents) {
-      navigate('/tutor-dashboard');
-    }
-  }, [currentUser, loading, navigate, canViewEvents]);
-
   useEffect(() => {
     if (loading || !currentUser || !canViewEvents) return;
 

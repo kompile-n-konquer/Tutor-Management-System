@@ -12,6 +12,8 @@ import ErrorPage from '../error-page/ErrorPage.jsx';
  * - Signed-in users whose role is not in `allowedRoles` see the 404 ErrorPage
  *   instead of a generic error, so unauthorized routes are indistinguishable
  *   from missing ones. Omitting `allowedRoles` allows any signed-in role.
+ * - This component is the single route guard: pages must not re-implement
+ *   auth redirects in their own effects, so every route behaves the same.
  */
 export default function ProtectedRoute({ allowedRoles, children }) {
   const { currentUser, role, loading } = useAuth();

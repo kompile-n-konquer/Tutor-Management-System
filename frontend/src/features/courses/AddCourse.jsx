@@ -29,15 +29,6 @@ const AddCourse = () => {
   const isLecturer = currentUser?.role?.toLowerCase() === 'lecturer';
 
   useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      navigate('/login');
-    } else if (!isLecturer) {
-      navigate('/tutor-dashboard');
-    }
-  }, [currentUser, loading, navigate, isLecturer]);
-
-  useEffect(() => {
     if (loading || !currentUser || !isLecturer) return;
 
     const loadTimeSlots = async () => {

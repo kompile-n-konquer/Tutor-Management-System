@@ -19,7 +19,7 @@ const minutesToLabel = (minutes) => {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { currentUser, userProfile, role, loading } = useAuth();
+  const { currentUser, role, loading } = useAuth();
   const { execute, isLoading } = useAsync();
   const { execute: executeTimetable } = useAsync();
 
@@ -34,12 +34,6 @@ export default function Profile() {
     email: '',
     createdAt: null,
   });
-
-  useEffect(() => {
-    if (!loading && !currentUser) {
-      navigate('/login');
-    }
-  }, [currentUser, loading, navigate]);
 
   useEffect(() => {
     if (loading || !currentUser) return;
@@ -95,8 +89,6 @@ export default function Profile() {
     }
   };
 
-  const displayName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 'Loading...';
-  const displayId = userProfile?.studentNumber || userProfile?.employeeNumber || '';
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
 
   return (

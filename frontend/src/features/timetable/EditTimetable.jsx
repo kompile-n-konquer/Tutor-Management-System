@@ -29,12 +29,6 @@ const EditTimetable = () => {
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    if (!loading && !currentUser) {
-      navigate('/login');
-    }
-  }, [currentUser, loading, navigate]);
-
-  useEffect(() => {
     if (loading || !currentUser) return;
 
     const loadAvailability = async () => {

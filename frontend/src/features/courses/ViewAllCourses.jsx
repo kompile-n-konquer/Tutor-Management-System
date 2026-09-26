@@ -22,15 +22,6 @@ const ViewAllCourses = () => {
   const canViewCourses = role === 'lecturer' || role === 'organiser';
 
   useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      navigate('/login');
-    } else if (!canViewCourses) {
-      navigate('/tutor-dashboard');
-    }
-  }, [currentUser, loading, navigate, canViewCourses]);
-
-  useEffect(() => {
     if (loading || !currentUser || !canViewCourses) return;
 
     const loadCourses = async () => {

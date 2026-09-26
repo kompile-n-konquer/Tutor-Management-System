@@ -99,11 +99,7 @@ const EditTimesheet = () => {
   // ── Load reference data ──────────────────────────────────────────────────
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
+    if (authLoading || !currentUser) return;
 
     const loadReferenceData = async () => {
       const [settingsRes, eventsRes] = await execute(() =>
@@ -123,7 +119,7 @@ const EditTimesheet = () => {
     };
 
     loadReferenceData();
-  }, [currentUser, authLoading, navigate, execute, isTutor]);
+  }, [currentUser, authLoading, execute, isTutor]);
 
   // ── Load existing timesheet ──────────────────────────────────────────────
 

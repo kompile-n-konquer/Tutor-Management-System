@@ -45,15 +45,6 @@ const OpportunityDetails = () => {
   const canApply = role === 'student' || role === 'tutor';
 
   useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      navigate('/login');
-    } else if (!canApply) {
-      navigate(role === 'lecturer' || role === 'organiser' ? '/courses' : '/tutor-dashboard');
-    }
-  }, [currentUser, loading, navigate, canApply, role]);
-
-  useEffect(() => {
     if (loading || !currentUser || !canApply) return;
 
     const loadOpportunity = async () => {

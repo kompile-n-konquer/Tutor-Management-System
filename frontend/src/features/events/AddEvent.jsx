@@ -22,16 +22,6 @@ const AddEvent = () => {
 
   const isLecturer = currentUser?.role?.toLowerCase() === 'lecturer';
 
-  // Only logged-in lecturers may create events
-  useEffect(() => {
-    if (loading) return;
-    if (!currentUser) {
-      navigate('/login');
-    } else if (!isLecturer) {
-      navigate('/tutor-dashboard');
-    }
-  }, [currentUser, loading, navigate, isLecturer]);
-
   useEffect(() => {
     if (loading || !currentUser || !isLecturer) return;
 

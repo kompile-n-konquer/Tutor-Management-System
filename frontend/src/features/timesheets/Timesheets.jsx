@@ -33,13 +33,10 @@ const Timesheets = () => {
   }, [currentUser, execute, isTutor]);
 
   useEffect(() => {
-    if (loading) return;
-    if (!currentUser) navigate('/login');
-  }, [currentUser, loading, navigate]);
-
-  useEffect(() => {
     if (loading || !currentUser) return;
-    loadTimesheets();
+    (async () => {
+      await loadTimesheets();
+    })();
   }, [currentUser, loading, loadTimesheets]);
 
   const handleCreate = async () => {

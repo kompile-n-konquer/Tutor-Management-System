@@ -22,11 +22,6 @@ export default function EditProfile() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Auth guard
-  useEffect(() => {
-    if (!loading && !currentUser) navigate('/login');
-  }, [currentUser, loading, navigate]);
-
   // Load current user data from the backend
   useEffect(() => {
     if (loading || !currentUser) return;

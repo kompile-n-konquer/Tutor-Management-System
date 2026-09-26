@@ -6,7 +6,6 @@ import ErrorMessage from "../../components/error-message/ErrorMessage";
 import api from "../../utils/axiosInstance";
 import useAsync from "../../hooks/useAsync";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 // A month has at most 744 hours (31 days) — the backend enforces the same bound
 const MAX_MONTHLY_HOURS = 744;
@@ -22,7 +21,6 @@ const RATE_LABELS = {
 };
 
 const Settings = () => {
-  const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
   const { execute, isLoading } = useAsync();
 
@@ -40,12 +38,6 @@ const Settings = () => {
 
   const role = currentUser?.role?.toLowerCase();
   const isOrganiser = role === "organiser" || role === "admin";
-
-  useEffect(() => {
-    if (!loading && !currentUser) {
-      navigate("/login");
-    }
-  }, [currentUser, loading, navigate]);
 
   useEffect(() => {
     if (loading || !currentUser || !isOrganiser) return;

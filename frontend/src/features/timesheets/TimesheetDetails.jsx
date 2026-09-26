@@ -82,13 +82,6 @@ const TimesheetDetails = () => {
     loadTimesheet();
   }, [currentUser, authLoading, id, execute, isLecturer]);
 
-  // ── Redirect unauthenticated users ────────────────────────────────────────
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!currentUser) navigate('/login');
-  }, [currentUser, authLoading, navigate]);
-
   // ── Non-editable timesheets should not end up on the edit page — but if ──
   // someone navigates here for a DRAFT/REJECTED timesheet, send them to edit
   useEffect(() => {

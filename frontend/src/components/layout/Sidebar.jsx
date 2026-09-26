@@ -64,7 +64,7 @@ export default function Sidebar() {
 
       <div className="mt-auto px-stack-md space-y-stack-sm">
         {(role === "organiser" || role === "lecturer") && (
-          <button className="w-full flex items-center justify-center gap-stack-sm bg-urgent-orange text-white rounded-lg px-gutter py-stack-sm font-label-caps text-label-caps hover:opacity-90 transition-opacity">
+          <button className="w-full flex items-center justify-center gap-stack-sm bg-urgent-orange text-on-urgent-orange rounded-lg px-gutter py-stack-sm font-label-caps text-label-caps hover:opacity-90 transition-opacity">
             <span className="material-symbols-outlined">warning</span>
             Resolve Conflicts
           </button>

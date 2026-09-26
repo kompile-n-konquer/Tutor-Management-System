@@ -97,7 +97,7 @@ export default function TutorDashboard() {
 
                 <div className="font-data-mono text-data-mono text-on-surface-variant text-right pr-2 py-4 border-t border-outline-variant">14:00</div>
                 <div className="col-span-5 border-t border-outline-variant relative h-24">
-                  <div className="absolute top-2 left-[60%] w-[18%] bg-tertiary-fixed border border-tertiary rounded p-2 shadow-sm z-10 ring-2 ring-tertiary ring-offset-2">
+                  <div className="absolute top-2 left-[60%] w-[18%] bg-tertiary-fixed border border-tertiary rounded p-2 shadow-sm z-10 ring-2 ring-tertiary ring-offset-2 ring-offset-surface-container-lowest">
                     <p className="font-label-caps text-label-caps text-tertiary mb-1">COMP 201</p>
                     <p className="font-body-sm text-body-sm text-on-surface">Room 402</p>
                   </div>

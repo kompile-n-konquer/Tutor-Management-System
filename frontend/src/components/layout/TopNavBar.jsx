@@ -1,6 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import GlobalSearch from "../search/GlobalSearch";
 
 export default function TopNavBar({ title = "Tutor Management System", showSearch = true, avatarUrl }) {
+  const navigate = useNavigate();
+
   return (
     <header className="flex justify-between items-center h-16 px-gutter sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm">
       <div className="flex items-center gap-stack-md">
@@ -18,7 +21,13 @@ export default function TopNavBar({ title = "Tutor Management System", showSearc
         <button className="text-on-surface-variant hover:text-secondary hover:opacity-80 transition-colors p-unit rounded-full">
           <span className="material-symbols-outlined">help_outline</span>
         </button>
-        <div className="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden shrink-0 ml-stack-sm border border-outline-variant cursor-pointer hover:opacity-80 transition-opacity">
+        <button
+          type="button"
+          onClick={() => navigate("/profile")}
+          title="Profile"
+          aria-label="Open profile"
+          className="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden shrink-0 ml-stack-sm border border-outline-variant cursor-pointer hover:opacity-80 transition-opacity"
+        >
           {avatarUrl ? (
             <img alt="User avatar" className="w-full h-full object-cover" src={avatarUrl} />
           ) : (
@@ -26,7 +35,7 @@ export default function TopNavBar({ title = "Tutor Management System", showSearc
               <span className="material-symbols-outlined text-[18px]">person</span>
             </div>
           )}
-        </div>
+        </button>
       </div>
     </header>
   );

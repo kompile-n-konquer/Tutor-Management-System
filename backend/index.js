@@ -12,6 +12,7 @@ const applicationsRouter = require('./routes/applications');
 const settingsRouter = require('./routes/settings');
 const timesheetsRouter = require('./routes/timesheets');
 const eventsRouter = require('./routes/events');
+const swapsRouter = require('./routes/swaps');
 const onboardingRouter = require('./routes/onboarding');
 const publicRouter = require('./routes/public');
 
@@ -54,6 +55,7 @@ app.use('/api/applications', applicationsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/timesheets', timesheetsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/swaps', swapsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/public', publicRouter);
 

@@ -97,18 +97,30 @@
   --color-on-primary: #2e0052;
   --color-primary-container: #53329b;
   --color-on-primary-container: #e8ddff;
+  /* Fixed palettes (pale tints in light mode) flip to deep tinted surfaces
+     here, otherwise bg-*-fixed cards stay light under dark mode. Their light
+     on-*-fixed / -variant counterparts keep the contrast readable. */
+  --color-primary-fixed: #3a2d63;
+  --color-primary-fixed-dim: #513f88;
+  --color-on-primary-fixed: #e8ddff;
   --color-on-primary-fixed-variant: #b695ef;
 
   --color-secondary: #ffb877;
   --color-on-secondary: #4a2800;
   --color-secondary-container: #6b3d00;
   --color-on-secondary-container: #ffdcc3;
+  --color-secondary-fixed: #6b3d00;
+  --color-secondary-fixed-dim: #8a5418;
+  --color-on-secondary-fixed: #ffdcc3;
   --color-on-secondary-fixed-variant: #ffb77d;
 
   --color-tertiary: #ffb1c1;
   --color-on-tertiary: #65003a;
   --color-tertiary-container: #8c0050;
   --color-on-tertiary-container: #ffd8e5;
+  --color-tertiary-fixed: #8c0050;
+  --color-tertiary-fixed-dim: #a30060;
+  --color-on-tertiary-fixed: #ffd8e6;
   --color-on-tertiary-fixed-variant: #ffb0d0;
 
   --color-error: #ffb4ab;

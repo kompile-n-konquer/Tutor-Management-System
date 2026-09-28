@@ -174,18 +174,16 @@ async function sendNotification({
 
 /**
  * Assignment Added trigger. Expects `assignment` loaded with
- * course { courseCode, courseName } and tutor { user { id, firstName, lastName, email } }.
+ * course { courseCode, courseName } and user { id, firstName, lastName, email }.
  */
 async function notifyAssignmentAdded(assignment) {
-  const user = assignment?.tutor?.user;
+  const user = assignment?.user;
   const recipient = toRecipient(user);
   const email = assignmentAddedEmail({
     recipientName: recipient?.name ?? 'there',
     courseCode: assignment?.course?.courseCode,
     courseName: assignment?.course?.courseName,
-    allocatedHours: assignment?.allocatedHours,
     semester: assignment?.semester,
-    status: assignment?.status,
   });
   return sendNotification({
     eventType: EVENT_TYPES.ASSIGNMENT_ADDED,
@@ -202,7 +200,7 @@ async function notifyAssignmentAdded(assignment) {
  * as plain columns, so the audit record survives the deletion).
  */
 async function notifyAssignmentRemoved(assignment) {
-  const user = assignment?.tutor?.user;
+  const user = assignment?.user;
   const recipient = toRecipient(user);
   const email = assignmentRemovedEmail({
     recipientName: recipient?.name ?? 'there',
@@ -221,7 +219,7 @@ async function notifyAssignmentRemoved(assignment) {
 
 /**
  * Timesheet Approved trigger. Expects `timesheet` loaded with
- * tutor { user { id, firstName, lastName, email } }.
+ * user { id, firstName, lastName, email }.
  *
  * The submittedAt timestamp is used as the dedupe suffix so that a timesheet
  * which is rejected, fixed, resubmitted and then approved again notifies the
@@ -229,7 +227,7 @@ async function notifyAssignmentRemoved(assignment) {
  * same approval event can never notify twice.
  */
 async function notifyTimesheetApproved(timesheet) {
-  const user = timesheet?.tutor?.user;
+  const user = timesheet?.user;
   const recipient = toRecipient(user);
   const email = timesheetApprovedEmail({
     recipientName: recipient?.name ?? 'there',
@@ -252,7 +250,7 @@ async function notifyTimesheetApproved(timesheet) {
  * plus the recorded rejectionReason (if any), which is included in the email.
  */
 async function notifyTimesheetRejected(timesheet) {
-  const user = timesheet?.tutor?.user;
+  const user = timesheet?.user;
   const recipient = toRecipient(user);
   const email = timesheetRejectedEmail({
     recipientName: recipient?.name ?? 'there',

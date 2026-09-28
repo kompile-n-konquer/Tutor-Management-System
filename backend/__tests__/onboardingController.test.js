@@ -3,9 +3,7 @@ jest.mock('../prisma/client', () => {
   const mockTx = {
     roleApplication: { update: jest.fn(), create: jest.fn() },
     user: { update: jest.fn() },
-    tutor: { upsert: jest.fn() },
-    lecturer: { upsert: jest.fn() },
-    applicant: { create: jest.fn() },
+    application: { create: jest.fn() },
   };
 
   return {
@@ -17,10 +15,8 @@ jest.mock('../prisma/client', () => {
       update: jest.fn(),
     },
     user: { update: jest.fn() },
-    tutor: { upsert: jest.fn() },
-    lecturer: { upsert: jest.fn() },
     availability: { count: jest.fn(), findMany: jest.fn() },
-    applicant: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
+    application: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
     course: { findUnique: jest.fn(), findMany: jest.fn() },
     timeSlot: { count: jest.fn() },
     $transaction: jest.fn((fn) => fn(mockTx)),
@@ -170,7 +166,7 @@ describe('submitApplication', () => {
       { dayOfWeek: 3, timeSlotId: 4 },
       { dayOfWeek: 2, timeSlotId: 6 },
     ]);
-    prisma.applicant.findFirst.mockResolvedValue(null);
+    prisma.application.findFirst.mockResolvedValue(null);
     prisma.__tx.roleApplication.create.mockResolvedValue({
       id: 1,
       userId: 1,
@@ -180,7 +176,7 @@ describe('submitApplication', () => {
       maxHoursPerWeek: 10,
       user: { firstName: 'Alex', lastName: 'Mercer', email: 'alex@test.com' },
     });
-    prisma.__tx.applicant.create.mockResolvedValue({});
+    prisma.__tx.application.create.mockResolvedValue({});
 
     const req = mockReq({
       body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 78, hourlyRate: 150, maxHoursPerWeek: 10 },
@@ -202,8 +198,8 @@ describe('submitApplication', () => {
       }),
     );
 
-    // The per-course Applicant row is created alongside the role application
-    expect(prisma.__tx.applicant.create).toHaveBeenCalledWith(
+    // The per-course Application row is created alongside the role application
+    expect(prisma.__tx.application.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           userId: 1,
@@ -337,7 +333,7 @@ describe('submitApplication', () => {
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: 400, message: expect.stringContaining('clashes') }),
     );
-    expect(prisma.__tx.applicant.create).not.toHaveBeenCalled();
+    expect(prisma.__tx.application.create).not.toHaveBeenCalled();
   });
 
   test('returns 409 when the user has already applied to tutor the course', async () => {
@@ -353,7 +349,7 @@ describe('submitApplication', () => {
       slots: [],
     });
     prisma.availability.findMany.mockResolvedValue([]);
-    prisma.applicant.findFirst.mockResolvedValue({ id: 55, userId: 1, courseId: 1 });
+    prisma.application.findFirst.mockResolvedValue({ id: 55, userId: 1, courseId: 1 });
 
     const req = mockReq({
       body: { requestedRole: 'TUTOR', courseId: 1, courseMark: 78, maxHoursPerWeek: 10 },
@@ -367,7 +363,7 @@ describe('submitApplication', () => {
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: 409, message: expect.stringContaining('already applied') }),
     );
-    expect(prisma.__tx.applicant.create).not.toHaveBeenCalled();
+    expect(prisma.__tx.application.create).not.toHaveBeenCalled();
   });
 
   test('creates lecturer application successfully', async () => {
@@ -542,7 +538,7 @@ describe('reviewApplication', () => {
     );
   });
 
-  test('approves tutor application: updates role, creates tutor record', async () => {
+  test('approves tutor application: updates role to TUTOR', async () => {
     prisma.roleApplication.findUnique.mockResolvedValue({
       id: 1,
       userId: 5,
@@ -554,7 +550,6 @@ describe('reviewApplication', () => {
     });
     prisma.__tx.roleApplication.update.mockResolvedValue({});
     prisma.__tx.user.update.mockResolvedValue({});
-    prisma.__tx.tutor.upsert.mockResolvedValue({ id: 10, userId: 5 });
 
     const req = mockReq({
       user: { id: 99, role: 'ORGANISER' },
@@ -575,19 +570,6 @@ describe('reviewApplication', () => {
       }),
     );
 
-    // Verify tutor record was created
-    expect(prisma.__tx.tutor.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: 5 },
-        create: expect.objectContaining({
-          userId: 5,
-          hourlyRate: 150,
-          maxHoursPerWeek: 10,
-          status: 'ACTIVE',
-        }),
-      }),
-    );
-
     // Verify application status was updated
     expect(prisma.__tx.roleApplication.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -604,7 +586,7 @@ describe('reviewApplication', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('approves lecturer application: updates role, creates lecturer record', async () => {
+  test('approves lecturer application: updates role to LECTURER', async () => {
     prisma.roleApplication.findUnique.mockResolvedValue({
       id: 2,
       userId: 6,
@@ -617,7 +599,6 @@ describe('reviewApplication', () => {
     });
     prisma.__tx.roleApplication.update.mockResolvedValue({});
     prisma.__tx.user.update.mockResolvedValue({});
-    prisma.__tx.lecturer.upsert.mockResolvedValue({ id: 5, userId: 6 });
 
     const req = mockReq({
       user: { id: 99, role: 'ORGANISER' },
@@ -634,17 +615,6 @@ describe('reviewApplication', () => {
       expect.objectContaining({
         where: { id: 6 },
         data: expect.objectContaining({ role: 'LECTURER' }),
-      }),
-    );
-
-    expect(prisma.__tx.lecturer.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: 6 },
-        create: expect.objectContaining({
-          userId: 6,
-          department: 'CSAM',
-          officeLocation: 'Room 204',
-        }),
       }),
     );
 
@@ -665,7 +635,7 @@ describe('reviewApplication', () => {
       user: { id: 5 },
     });
     prisma.roleApplication.update.mockResolvedValue({});
-    prisma.applicant.updateMany.mockResolvedValue({ count: 1 });
+    prisma.application.updateMany.mockResolvedValue({ count: 1 });
 
     const req = mockReq({
       user: { id: 99, role: 'ORGANISER' },
@@ -689,7 +659,7 @@ describe('reviewApplication', () => {
     );
 
     // Rejected tutor applicants leave the per-course available pool
-    expect(prisma.applicant.updateMany).toHaveBeenCalledWith(
+    expect(prisma.application.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: 5, status: 'PENDING' },
         data: expect.objectContaining({ status: 'REJECTED' }),
@@ -721,24 +691,24 @@ describe('getTutorEligibleCourses', () => {
         courseCode: 'COMS1015',
         courseName: 'Intro to Programming',
         minimumMark: 65,
-        requiredTutors: 2,
+        tutorsRequired: 2,
         slots: [
           { dayOfWeek: 1, timeSlotId: 2 },
           { dayOfWeek: 3, timeSlotId: 4 },
         ],
-        lecturer: { user: { firstName: 'Sarah', lastName: 'Van Wyk' } },
+        user: { firstName: 'Sarah', lastName: 'Van Wyk' },
       },
       {
         id: 2,
         courseCode: 'MATH2002',
         courseName: 'Discrete Mathematics',
         minimumMark: 60,
-        requiredTutors: 1,
+        tutorsRequired: 1,
         slots: [
           { dayOfWeek: 1, timeSlotId: 2 },
           { dayOfWeek: 5, timeSlotId: 4 }, // not in availability → clash
         ],
-        lecturer: { user: { firstName: 'Sarah', lastName: 'Van Wyk' } },
+        user: { firstName: 'Sarah', lastName: 'Van Wyk' },
       },
     ]);
 
@@ -770,9 +740,9 @@ describe('getTutorEligibleCourses', () => {
         courseCode: 'COMS3055',
         courseName: 'Database Systems',
         minimumMark: 65,
-        requiredTutors: 4,
+        tutorsRequired: 4,
         slots: [],
-        lecturer: null,
+        user: null,
       },
     ]);
 
@@ -836,7 +806,7 @@ describe('getApplicantRank', () => {
       userId: 5,
       requestedRole: 'TUTOR',
     });
-    prisma.applicant.findMany.mockResolvedValue([
+    prisma.application.findMany.mockResolvedValue([
       {
         courseMark: 85,
         course: { courseCode: 'COMS1015', courseName: 'Intro to Programming', minimumMark: 65 },
@@ -886,7 +856,7 @@ describe('getPendingApplications', () => {
       },
     ]);
     prisma.availability.count.mockResolvedValue(10);
-    prisma.applicant.findMany.mockResolvedValue([
+    prisma.application.findMany.mockResolvedValue([
       {
         courseMark: 88,
         course: { courseCode: 'COMS1015', courseName: 'Intro to Programming' },

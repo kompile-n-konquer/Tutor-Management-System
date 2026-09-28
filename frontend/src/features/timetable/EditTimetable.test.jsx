@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import ThemeProvider from '../context/ThemeProvider.jsx';
 
 const { mockGet, mockPut, authState } = vi.hoisted(() => ({
   mockGet: vi.fn(),
@@ -23,13 +24,16 @@ const LOAD_DATA = {
 
 const renderEditTimetable = () =>
   render(
-    <MemoryRouter initialEntries={['/timetable/edit']}>
-      <Routes>
-        <Route path="/timetable/edit" element={<EditTimetable />} />
-        <Route path="/profile" element={<div>profile-page</div>} />
-        <Route path="/login" element={<div>login-page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    // The page chrome includes the theme toggle, so mount the real provider like the app does.
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/timetable/edit']}>
+        <Routes>
+          <Route path="/timetable/edit" element={<EditTimetable />} />
+          <Route path="/profile" element={<div>profile-page</div>} />
+          <Route path="/login" element={<div>login-page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </ThemeProvider>,
   );
 
 describe('EditTimetable — weekly availability editor', () => {

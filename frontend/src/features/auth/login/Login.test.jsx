@@ -91,6 +91,40 @@ describe('Login — email/password + Google sign-in', () => {
     expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
   });
 
+  test('does not navigate away when the profile lookup fails', async () => {
+    signInWithEmailAndPassword.mockResolvedValue({ user: { uid: 'user-1' } });
+    mockGet.mockResolvedValue({ status: 500, data: {} });
+    renderLogin();
+
+    submitLoginForm('tutor@wits.ac.za', 'password123');
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/me'));
+    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+    // The login form is still on screen.
+    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
+  });
+
+  test('does not navigate away when the profile has no role', async () => {
+    signInWithEmailAndPassword.mockResolvedValue({ user: { uid: 'user-1' } });
+    mockGet.mockResolvedValue({ status: 200, data: {} });
+    renderLogin();
+
+    submitLoginForm('tutor@wits.ac.za', 'password123');
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/me'));
+    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+  });
+
+  test('routes an unknown role to the tutor dashboard fallback', async () => {
+    signInWithEmailAndPassword.mockResolvedValue({ user: { uid: 'user-1' } });
+    mockGet.mockResolvedValue({ status: 200, data: { role: 'wizard' } });
+    renderLogin();
+
+    submitLoginForm('wizard@wits.ac.za', 'password123');
+
+    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+  });
+
   test('shows the mapped Firebase error when the credentials are wrong', async () => {
     signInWithEmailAndPassword.mockRejectedValue(
       new FirebaseError('auth/invalid-credential', 'raw'),

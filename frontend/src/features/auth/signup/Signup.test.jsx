@@ -4,10 +4,11 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 
-const { mockAuth, mockPost, mockGet } = vi.hoisted(() => ({
+const { mockAuth, mockPost, mockGet, mockRefreshRole } = vi.hoisted(() => ({
   mockAuth: { currentUser: null },
   mockPost: vi.fn(),
   mockGet: vi.fn(),
+  mockRefreshRole: vi.fn(),
 }));
 
 vi.mock('firebase/app', () => ({
@@ -25,6 +26,11 @@ vi.mock('firebase/auth', () => ({
 }));
 vi.mock('../../../utils/axiosInstance.js', () => ({
   default: { post: mockPost, get: mockGet },
+}));
+// Signup refreshes the auth context after the backend profile is created so the
+// sidebar role is up to date — stub the hook instead of wiring the real provider.
+vi.mock('../../../hooks/useAuth.js', () => ({
+  default: () => ({ refreshRole: mockRefreshRole }),
 }));
 
 import Signup from './Signup.jsx';
@@ -77,7 +83,7 @@ describe('Signup — Firebase account + backend profile creation', () => {
   test('creates the Firebase user and the backend profile, then navigates', async () => {
     createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-42' } });
     mockPost.mockResolvedValue({ status: 201 });
-    mockGet.mockResolvedValue({ status: 200, data: { role: 'tutor' } });
+    mockRefreshRole.mockResolvedValue({ role: 'tutor' });
     renderSignup();
 
     fillSignupForm();
@@ -99,6 +105,8 @@ describe('Signup — Firebase account + backend profile creation', () => {
         firebaseUid: 'uid-42',
       }),
     );
+    // The refreshed role decides the landing page — tutor maps to /tutor-dashboard.
+    expect(mockRefreshRole).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
   });
 

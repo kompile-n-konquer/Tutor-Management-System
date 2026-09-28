@@ -1,0 +1,226 @@
+---
+sidebar_position: 12
+title: Testing
+description: How TutorFlow is verified — the user feedback process, the automated test suites, CI enforcement, and the team's policy around tests
+---
+
+## Testing strategy at a glance
+
+TutorFlow is verified through complementary layers that catch different classes of problems. Automated tests prove the logic works; CI makes those tests impossible to skip; and human feedback — from real users, the client, and teammates — catches everything automation can't.
+
+| Layer                      | What it verifies                                                                 | Where it lives                                     |
+| -------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Backend automated tests    | API controller logic, validation rules, claim-hour rules, error handling         | `backend/__tests__/` — Jest                        |
+| Frontend automated tests   | Shared components, form validation, error-message mapping                        | Colocated `*.test.jsx` files — Vitest              |
+| CI gate                    | Both suites run on every pull request to `main`                                  | `.gitea/workflows/test.yml`                        |
+| User feedback form         | Real users' experiences — first round: 15 responses (September 2026)             | Google Form → responses sheet + archived PDF (below) |
+| Client meetings & demos    | Requirements alignment, live functional demonstrations                           | [Stakeholder Interaction Log](./stakeholder-interactions)   |
+| Peer code review           | Correctness of every change before it merges                                     | Two-approval PR policy                             |
+
+---
+
+## User feedback process
+
+### User experience feedback form
+
+The team collects structured feedback from users through a **Google Form** documenting their experiences with the application. Rather than relying on informal reports, every user who interacts with the app is directed to the form, and their responses are consolidated in a single Google Sheet that the whole team can review.
+
+The form asks each user about their most recent session, in five questions:
+
+1. **Walk me through the last thing you tried to do on the site** — what were you trying to accomplish, and did you manage to complete it without getting stuck or confused?
+2. **Was there any point where the site did something you didn't expect**, or didn't tell you clearly whether your action worked?
+3. **If you were showing a friend how to use this for the first time**, what would you have to explain to them that wasn't obvious from the interface alone?
+4. **On a scale of 1–5, how much did you trust the information the site gave you** (e.g. your hours remaining, your application status, whether your submission went through) — and what made you more or less confident either way?
+5. **If you could change one thing about this experience before we build the next version**, what would it be — and why that, over anything else?
+
+The feedback loop works as follows:
+
+1. **Collect** — users complete the feedback form after using the app, describing their experience, what worked, and what didn't.
+2. **Consolidate** — all responses accumulate in the linked Google Sheet below, giving the team one place to see every piece of feedback.
+3. **Review** — the team reviews the response sheet and identifies recurring problems, confusing flows, and requested features.
+4. **Act** — validated issues become work items on feature branches, land in pull requests with tests, and are demonstrated back to the client at sprint meetings — closing the loop.
+
+**Access the form:**
+
+[Open the user feedback form](https://forms.gle/YUQ5izwGdhK44JWV9)
+
+**All responses are collected in this sheet:**
+
+[Open the feedback responses sheet](https://docs.google.com/spreadsheets/d/1dR0Zjm33K4H9dFHzR67vC4q3cshSmrG80VnppzVAiRc/edit)
+
+<iframe
+  src="https://docs.google.com/spreadsheets/d/1dR0Zjm33K4H9dFHzR67vC4q3cshSmrG80VnppzVAiRc/preview"
+  width="100%"
+  height="480"
+  title="User feedback responses"
+/>
+
+### First round of responses — 15 users
+
+The first formal round of feedback was collected on **14 September 2026**: fifteen users — students, tutors, and lecturers — each described a real task they had just completed in the app. The complete, unedited responses are archived alongside this documentation — [download the PDF](pathname:///feedback/form-responses.pdf) or browse the [live response sheet](https://docs.google.com/spreadsheets/d/1dR0Zjm33K4H9dFHzR67vC4q3cshSmrG80VnppzVAiRc/edit) (also embedded above).
+
+**Trust ratings (1–5):**
+
+| Rating | Responses |
+| ------ | --------- |
+| 2 / 5  | 2         |
+| 3 / 5  | 7         |
+| 4 / 5  | 6         |
+
+The average trust score was **3.3 / 5**. No user rated the app 1 or 5 — nobody found it untrustworthy, but nobody found it flawless either. That matches the pattern in the individual responses: the underlying flows work, and the complaints concentrate on feedback and visibility rather than correctness.
+
+What each user reported:
+
+| #  | Task described                     | Trust | Key observation                                                                                   |
+| -- | ---------------------------------- | ----- | ------------------------------------------------------------------------------------------------- |
+| 1  | Approving a tutor application      | 3/5   | The Approve action was easy to miss and the list did not refresh — wanted a visible confirmation   |
+| 2  | Logging tutoring hours             | 4/5   | Smooth, with instant validation — wanted a larger status badge                                    |
+| 3  | Applying to tutor a course         | 2/5   | Availability format was unclear; a failed submit was silent; the pending status was invisible to the student |
+| 4  | Assigning a tutor to a course      | 3/5   | The clash warning was generic — wanted the exact conflicting slot, e.g. "clashes with Tuesday 14:00" |
+| 5  | Excusing from a session            | 4/5   | No confirmation, and unclear whether the lecturer had been notified                               |
+| 6  | Checking remaining claimable hours | 3/5   | No breakdown of approved versus pending hours                                                     |
+| 7  | Uploading a transcript             | 4/5   | No progress bar and accepted formats were not stated; the green checkmark was trusted             |
+| 8  | Batch-approving timesheets         | 4/5   | Select All behaved unexpectedly                                                                   |
+| 9  | Swapping a tutoring shift          | 3/5   | No in-app option — resorted to arranging the swap over email                                      |
+| 10 | Exporting payroll hours            | 4/5   | Export ran immediately, with no date-range or course filters first                                |
+| 11 | Editing a timesheet entry          | 3/5   | Changes did not appear in the UI until a hard refresh                                             |
+| 12 | Filtering applicants               | 4/5   | Applying one filter reset the others                                                              |
+| 13 | Recording a partial absence        | 3/5   | Only full-absence options were offered                                                            |
+| 14 | Checking an application's status   | 2/5   | "Under Consideration" gave no sense of progress — wanted a step timeline                          |
+| 15 | Setting up recurring course slots  | 3/5   | The cap displayed as 0; no warning about unsaved changes                                          |
+
+### What the responses said
+
+Grouped together, the fifteen responses form five clear themes:
+
+1. **Silent success** (responses 1, 3, 5, 11) — actions complete without any confirmation, so users re-check manually or assume they failed. This is the single most common complaint.
+2. **Status visibility** (responses 2, 3, 6, 14) — users cannot always see what state their work is in: whether an application is pending, which hours are approved, where a timesheet stands.
+3. **Warning specificity** (responses 4, 13) — when the app does push back, the message is generic; users want actionable detail, such as the exact clashing slot or a partial-absence option.
+4. **Missing affordances** (responses 8, 9, 10, 12, 15) — batch approval, shift swaps, export filters, filter persistence, and unsaved-change warnings do not exist yet.
+5. **What earns trust** (responses 2, 7) — users trusted the app most where feedback was immediate and visible: instant validation while logging hours, and the green checkmark after a transcript upload.
+
+### How the feedback maps to the implementation
+
+Every response was reviewed against the codebase. Much of what users asked for already exists in the backend — the gap is usually the last mile of surfacing it in the UI:
+
+| What users asked for | Where it stands | Where it lives |
+| -------------------- | --------------- | -------------- |
+| **Automatic notification when decisions happen** (1, 5) | **Implemented (by email).** Assigning or removing a tutor, and approving or rejecting a timesheet, each sends an email via Resend. Every attempt is audited in `EmailLog` with duplicate-send prevention, and a failed email never breaks the feature that triggered it. In-app confirmation toasts, and notifications for application decisions and session excuses, are not built yet. | `backend/email/notifier.js`, [Database Schema](./database-schema) |
+| **Make status visible** (2, 6) | **Partly implemented.** Timesheets carry colour-coded status badges (submitted / approved / rejected), and a rejected timesheet returns to editable with the recorded reason. An approved-versus-pending hours breakdown is not built yet. | `frontend/src/features/timesheets/Timesheets.jsx` |
+| **Where does my application stand?** (3, 14) | **Partly implemented.** Applications store status and timestamps; reviewers approve or reject with a stored rejection reason, and applicants can fetch their own applications and availability status. The step-by-step timeline is not built yet. | `backend/controllers/onboarding.js` |
+| **Tell me exactly what clashes** (4) | **Partly implemented.** Availability that clashes with a course's session slots is rejected server-side — this exact rule is under test — but the error does not yet name the conflicting slot. | `backend/__tests__/onboardingController.test.js` |
+| **Upload feedback** (7) | **Partly implemented.** The transcript is stored on the application record. Progress indication and format hints are not built yet. | `Application.transcriptPath` |
+| **Filtered export** (10) | **Partly implemented.** Each timesheet can be exported as a PDF. Date-range and course filters are not built yet. | `backend/routes/timesheets.js` |
+| **Correct hours cap** (15) | **The cap itself is real.** The monthly claimable-hours cap is set by organisers and enforced over any 31-day window — the sliding-window rule is unit-tested. The "cap displays as 0" bug is tracked for a fix. | `backend/utils/claimRules.js`, `backend/__tests__/claimRules.test.js` |
+| **Batch approve** (8), **shift swaps** (9), **partial absences** (13), **filter persistence** (12), **stale edit display** (11) | **Not yet implemented** — recorded as candidate work for upcoming sprints. | — |
+
+Each of these items now follows the same loop as any other change: it becomes a branch, arrives in a pull request **with tests**, is verified locally by two reviewers, and is demonstrated at the next sprint meeting.
+
+### Client meetings and sprint demos
+
+Feedback from the client is gathered in **recorded, timestamped meetings** — three in Sprint 1 alone (10 Aug, 17 Aug, 25 Aug), with decisions, rationale, and action items logged verbatim in the [Stakeholder Interaction Log](./stakeholder-interactions). The client also sets explicit demonstration requirements: Sprint 1 required a **functional login/sign-up flow shown live** at the sprint meeting, so working software — not screenshots — is what gets reviewed.
+
+The full process, with dated evidence of follow-through, is documented on the Stakeholder Interaction Log page.
+
+### Pull-request reviews as a feedback loop
+
+Every change is reviewed by teammates before it merges, and the review is substantive rather than cosmetic:
+
+- **Two approvals required** on every pull request, so at least two other members have read and vetted the change (mandated by the client to ensure equal participation across all six members).
+- **Local pull-and-test policy** — reviewers pull the branch locally and actually run it before approving, rather than reviewing only the diff on Gitea. This was escalated into a concrete policy at the 17 Aug client meeting after a real conflicting pull request exposed the gap.
+- **Stale or problematic PRs are closed and reopened fresh** rather than left inactive, so feedback stays actionable.
+
+---
+
+## Automated testing procedure
+
+### Backend — Jest (`backend/__tests__/`)
+
+The backend's controllers, utilities, and business rules are covered by **74 tests across 6 suites**, all runnable without a database:
+
+| Suite                          | Tests | What it covers                                                                                                                                                                                                                                                                              |
+| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onboardingController.test.js` | 28    | The tutor/lecturer application workflow end to end: role guards (403 for non-students), field validation (400s), duplicate and not-found cases (409/404), course marks below the course minimum, availability that clashes with a course's session slots, successful tutor and lecturer submissions, the review flow (approve updates the role and creates the tutor/lecturer record; reject stores the reason), organiser self-approval prevention, eligible-course filtering, applicant ranking, and enriched pending-application lists |
+| `allocationController.test.js` | 15    | The core allocation flow: available-tutor ranking (`courseMark` descending), course filtering, input validation (400s), missing applicants (404), double-assignment guard, the `requiredTutors` cap (409 when a course is already full), transactional creation of Tutor + TutorAssignment rows, status resets on unassignment, and that the email notifier fires on assignment — without ever hitting Resend or the `EmailLog` table |
+| `claimRules.test.js`           | 12    | The pure claim-hour rules: every slot rounds up to a whole hour (45 minutes counts as one hour, 90 as two), calendar-month arithmetic in UTC, the 31-day sliding-window check against the claimable-hours cap (blocked only when a single window exceeds it; exactly-at-cap is allowed), weekday mapping, and deriving a timesheet entry from a calendar event |
+| `catchAsync.test.js`           | 7     | The async error wrapper every controller depends on: passthrough of req/res/next, forwarding rejected errors (including Prisma errors and raw strings) to the global error handler, and direct `next(error)` calls |
+| `error.test.js`                | 9     | The global error pipeline: 404s for unknown routes (including the URL in the message), status-code and message propagation, 500/generic-message defaults, and the path/timestamp response shape |
+| `coursesController.test.js`    | 3     | Course listing shape (ordering, assigned-count aggregation, lecturer name resolution), null-lecturer handling, and empty results |
+
+**How the backend tests are written:**
+
+- **The Prisma client is fully mocked** with `jest.mock('../prisma/client')`, including a mocked `$transaction` whose inner client is exposed for assertions. Tests therefore run instantly and deterministically — no SQL Server, no seed data, no network — while still verifying that the *right* queries are issued with the *right* arguments.
+- **Outbound email is mocked, not sent.** The notifier module is mocked so tests assert that `notifyAssignmentAdded` / `notifyAssignmentRemoved` were invoked with the created or deleted assignment (and *not* invoked on failure paths) — keeping the suite hermetic: no Resend account, no `EmailLog` writes.
+- **`mockReq`/`mockRes` helpers** simulate Express request and response objects, letting each test exercise a controller exactly as Express would invoke it.
+- **A `flushMicrotasks` helper** settles the promise chain before assertions, accounting for the `catchAsync` wrapper's resolution semantics — a subtle timing behaviour the tests document explicitly.
+- **Both outcomes are asserted**: happy paths verify response bodies and status codes, and error paths verify that `next()` receives an error with the correct `statusCode` — so the contract between controllers and the global error handler is itself under test.
+
+### Frontend — Vitest + Testing Library (colocated with source)
+
+The frontend carries **58 tests across 4 suites**. Test files sit next to the code they test (e.g. `Button.jsx` / `Button.test.jsx`), so they're impossible to overlook when changing a component:
+
+| Suite                            | Tests | What it covers                                                                                                                                                   |
+| -------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getFirebaseErrorMessage.test.js`| 21    | Every Firebase auth error code the app can surface, grouped per flow (sign-up, sign-in, password reset, general), plus two invariant tests: every mapped message is a non-empty string, and **no message leaks internal error codes or stack traces** to users |
+| `validEmail.test.js`             | 20    | The email validator used by Login, Signup, and ForgotPassword: 8 valid formats (including real Wits addresses), 7 invalid formats, and the form-integration contract — the function's return value is what enables/disables submit buttons, so partially-typed emails must stay invalid |
+| `Button.test.jsx`                | 9     | The shared button component: rendering, loading state (which hides children and blocks clicks — preventing duplicate form submissions), disabled behaviour, `onClick` wiring, and attribute passthrough |
+| `Input.test.jsx`                 | 8     | The shared input component: label association (`htmlFor` matching), type/placeholder/value attributes, `onChange` wiring, and a controlled-input integration test replicating how Login and Signup actually use it |
+
+**How the frontend tests are written:**
+
+- **Vitest** is the runner, reusing the same `vite.config.js` as the app itself — one config for dev, build, and test.
+- **jsdom** provides a standards-compliant DOM, so React components render in full under Node.
+- **Testing Library** drives the philosophy: components are queried the way a user perceives them (`getByRole`, `getByLabelText`, `getByPlaceholderText`) and tests assert observable behaviour, not implementation details. If a test breaks, something a user would notice broke.
+- **`test.each`** tables make the validation suites read like specifications — each row pairs a human-readable description with the exact input that must pass or fail.
+- **Invariant tests** lock in product-level guarantees, such as "no error message exposes an internal Firebase code" — a check that protects users even as new error codes are added.
+
+### Continuous integration enforcement
+
+Automation only matters if it runs every time. The `.gitea/workflows/test.yml` pipeline runs on **every pull request to `main`**:
+
+1. Checks out the repository and sets up Node 20.
+2. Installs dependencies with `npm ci` (locked, reproducible installs).
+3. Runs the **frontend** suite (`npm run test` — Vitest).
+4. Runs the **backend** suite (`npm test` — Jest).
+
+Because `main` is locked and all changes arrive via pull request, no change can reach the mainline without both suites passing. A second pipeline (`sonarqube.yml`) layers static analysis on top, scanning frontend and backend sources on pushes and PRs for code smells, duplication, and maintainability regressions.
+
+---
+
+## Policy around tests
+
+The team's testing policy was set with the client and is recorded with timestamps in the Stakeholder Interaction Log:
+
+1. **Substantive tests only — trivial tests are rejected.** The client raised test-driven development directly at the 17 Aug meeting and questioned whether placeholder tests were being used to satisfy requirements. The team and client agreed: trivial or placeholder tests are insufficient, and **pull requests must include substantive tests tied to real functionality** (email validation was the cited example) before merge.
+2. **Tests are part of the definition of done for a change.** New behaviour arrives in the same PR as the tests that verify it — the suites above grew out of exactly this practice, with several tests documenting fixed regressions (e.g. the email validator's trim behaviour, the button's duplicate-submission guard).
+3. **Two approvals, locally verified.** A PR merges only after two teammates approve it, and reviewers must pull the branch and run it locally first — tests, build, and the app itself.
+4. **CI is the floor, not the ceiling.** Both automated suites must pass in CI on every PR, and SonarQube analysis guards code quality. Reviewers can still reject a change that passes CI but lacks meaningful coverage.
+
+---
+
+## Running the suites locally
+
+Backend (from `backend/`):
+
+```bash
+npm install          # also runs `prisma generate` via postinstall
+npm test             # run the Jest suite
+npm run test:coverage # run with a coverage report
+```
+
+Frontend (from `frontend/`):
+
+```bash
+npm install
+npm test             # run the Vitest suite once
+npm run test:watch   # re-run on file changes while developing
+npm run test:coverage # run with a V8 coverage report
+```
+
+Both suites are fully self-contained: the backend mocks the database, and the frontend renders into jsdom — neither requires Azure, SQL Server, or Firebase credentials to run.
+
+---
+
+## Current scope and how the suites grow
+
+The suites today concentrate on the parts of the system that are live and load-bearing: the authentication flow's building blocks (validation, shared components, error messaging), the allocation engine's validation and transaction logic, the claim-hour rules behind the timesheet workflow, the onboarding and application-review workflow, and the backend's error pipeline. As features move from the [Functional Requirements](./functional-requirements) page's "Pending" column to "Implemented", each arrives with its own tests under this policy — the inventory above is a floor that grows with the product.

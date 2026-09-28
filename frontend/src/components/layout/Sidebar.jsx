@@ -2,9 +2,10 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { getNavLinksForRole, FOOTER_LINKS } from "../../config/navConfig";
 import useAuth from "../../hooks/useAuth";
 
-export default function Sidebar({ role = "tutor" }) {
-  const { signOut } = useAuth();
+export default function Sidebar() {
+  const { signOut, role } = useAuth();
   const navigate = useNavigate();
+
   const links = getNavLinksForRole(role);
 
   const handleNavigate = async (label, url) => {
@@ -41,7 +42,7 @@ export default function Sidebar({ role = "tutor" }) {
               [
                 "flex items-center gap-stack-md px-gutter py-stack-sm rounded-lg transition-colors group",
                 isActive
-                  ? "bg-primary-container text-on-primary-container font-semibold scale-[0.98] transition-transform duration-150"
+                  ? "bg-primary-container text-on-primary font-semibold scale-[0.98] transition-transform duration-150"
                   : "text-on-surface-variant hover:bg-surface-variant font-medium",
               ].join(" ")
             }
@@ -63,7 +64,7 @@ export default function Sidebar({ role = "tutor" }) {
 
       <div className="mt-auto px-stack-md space-y-stack-sm">
         {(role === "organiser" || role === "lecturer") && (
-          <button className="w-full flex items-center justify-center gap-stack-sm bg-urgent-orange text-white rounded-lg px-gutter py-stack-sm font-label-caps text-label-caps hover:opacity-90 transition-opacity">
+          <button className="w-full flex items-center justify-center gap-stack-sm bg-urgent-orange text-on-urgent-orange rounded-lg px-gutter py-stack-sm font-label-caps text-label-caps hover:opacity-90 transition-opacity">
             <span className="material-symbols-outlined">warning</span>
             Resolve Conflicts
           </button>

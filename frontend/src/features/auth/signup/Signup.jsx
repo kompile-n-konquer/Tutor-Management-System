@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import useAsync from "../../../hooks/useAsync.js";
+import useAuth from "../../../hooks/useAuth.js";
 import Input from "../../../components/input/Input.jsx";
 import isValidEmail from "../../../utils/validEmail.js";
 import ErrorMessage from "../../../components/error-message/ErrorMessage.jsx";
@@ -14,6 +15,7 @@ import { ROLE_HOME_ROUTE } from "../../../constants/roles.js";
 
 const Signup = () => {
   const navigate = useNavigate();
+  const { refreshRole } = useAuth();
   const { setError, execute, isLoading, error } = useAsync();
   const [data, setData] = useState({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "" });
 
@@ -31,19 +33,14 @@ const Signup = () => {
       };
       const apiResponse = await execute(() => api.post("/users", extraData));
 
-      if (apiResponse.status === 201) {
-        await redirectToRoleHome();
+      if (apiResponse?.status === 201) {
+        // Refresh the auth context so the sidebar picks up the new role
+        const profile = await refreshRole();
+        const role = profile?.role?.toLowerCase() || 'student';
+        navigate(ROLE_HOME_ROUTE[role] || '/volunteer');
       }
     }
   };
-
-  async function redirectToRoleHome() {
-    const meResponse = await execute(() => api.get('/users/me'));
-    if (meResponse?.status === 200 && meResponse.data.role) {
-      const role = meResponse.data.role.toLowerCase();
-      navigate(ROLE_HOME_ROUTE[role] || '/tutor-dashboard');
-    }
-  }
 
   const handleChange = (event, name) => {
     setError("");

@@ -3,23 +3,29 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 
-const { mockSignOut } = vi.hoisted(() => ({ mockSignOut: vi.fn() }));
-
-// Sidebar only needs the useAuth hook; mocking the module keeps Firebase out of this test.
-vi.mock('../../hooks/useAuth.js', () => ({
-  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: mockSignOut }),
+const { mockSignOut, mockAuthState } = vi.hoisted(() => ({
+  mockSignOut: vi.fn(),
+  mockAuthState: { role: 'tutor' },
 }));
 
-const renderSidebar = (role) =>
-  render(
+// Sidebar reads its links straight from useAuth(); mock the hook so the suite
+// stays Firebase-free and each case can set the signed-in user's role.
+vi.mock('../../hooks/useAuth.js', () => ({
+  default: () => ({ currentUser: { uid: 'u1' }, role: mockAuthState.role, loading: false, signOut: mockSignOut }),
+}));
+
+const renderSidebar = (role = 'tutor') => {
+  mockAuthState.role = role;
+  return render(
     <MemoryRouter initialEntries={['/current']}>
       <Routes>
-        <Route path="/current" element={<Sidebar role={role} />} />
+        <Route path="/current" element={<Sidebar />} />
         <Route path="/" element={<div>home-page</div>} />
         <Route path="/settings" element={<div>settings-page</div>} />
       </Routes>
     </MemoryRouter>,
   );
+};
 
 describe('Sidebar — role-aware navigation rail', () => {
   test('defaults to the tutor navigation when no role is given', () => {
@@ -30,11 +36,10 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.queryByText('Allocation Board')).not.toBeInTheDocument();
   });
 
-  test('organisers still see the conflict-resolution button', () => {
+  test('organisers see the board links and the conflict-resolution button', () => {
     renderSidebar('organiser');
 
-    // main's nav reshuffle (PR #52) moved the board to the tutor role, so the
-    // organiser rail now only carries the role-specific conflict button.
+    expect(screen.getByText('Organiser Board')).toBeInTheDocument();
     expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
@@ -44,10 +49,11 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
   });
 
-  test('students see no primary links — Profile moved to the tutor role', () => {
+  test('students see the volunteer and onboarding links, and no tutor-only links', () => {
     renderSidebar('student');
 
-    expect(screen.queryByText('Profile')).not.toBeInTheDocument();
+    expect(screen.getByText('Volunteer View')).toBeInTheDocument();
+    expect(screen.getByText('Become a Tutor/Lecturer')).toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 

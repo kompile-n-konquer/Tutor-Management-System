@@ -15,9 +15,9 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
-      - name: Run frontend tests
+      - name: Run frontend tests with coverage gates
         working-directory: frontend
-        run: npm run test
+        run: npm run test:coverage
 
   test-backend:
     runs-on: ubuntu-latest
@@ -29,6 +29,6 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: npm ci
-      - name: Run backend tests
+      - name: Run backend tests with coverage gates
         working-directory: backend
-        run: npm test
+        run: npm run test:coverage

@@ -1,4 +1,4 @@
-const authenticateFirebaseToken = require('../middleware/auth');
+const { authenticateFirebaseToken, verifyFirebaseTokenOnly } = require('../middleware/auth');
 const getFirebaseAdmin = require('../firebase/admin');
 const prisma = require('../prisma/client');
 
@@ -7,9 +7,6 @@ const prisma = require('../prisma/client');
 jest.mock('../firebase/admin', () => jest.fn());
 jest.mock('../prisma/client', () => ({
   user: { findUnique: jest.fn() },
-}));
-jest.mock('../utils/roles', () => ({
-  normaliseRole: (role) => role?.toLowerCase() || null,
 }));
 
 describe('authenticateFirebaseToken middleware', () => {
@@ -73,15 +70,57 @@ describe('authenticateFirebaseToken middleware', () => {
     await authenticateFirebaseToken(req, res, next);
 
     expect(verifyIdToken).toHaveBeenCalledWith('valid-token');
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { firebaseUid: 'firebase-uid-1' } });
     expect(req.user).toEqual({
       ...decodedToken,
       id: 42,
       email: 'tutor@wits.ac.za',
-      role: 'tutor',
+      // normaliseRole() uppercases the stored role before attaching it.
+      role: 'TUTOR',
     });
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith(); // no error
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('401s when no User row exists for the verified Firebase account', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    verifyIdToken.mockResolvedValue({ uid: 'ghost-uid', email: 'ghost@wits.ac.za' });
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    await authenticateFirebaseToken(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'User not found' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('403s when the stored role is not one of the known roles', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    verifyIdToken.mockResolvedValue({ uid: 'firebase-uid-1', email: 'tutor@wits.ac.za' });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 42,
+      email: 'tutor@wits.ac.za',
+      role: 'WIZARD',
+    });
+
+    await authenticateFirebaseToken(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ error: 'User role is not recognised' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('401s when the database lookup itself fails', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    verifyIdToken.mockResolvedValue({ uid: 'firebase-uid-1', email: 'tutor@wits.ac.za' });
+    prisma.user.findUnique.mockRejectedValue(new Error('Connection lost'));
+
+    await authenticateFirebaseToken(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid Firebase ID token' });
+    expect(next).not.toHaveBeenCalled();
   });
 
   test('401s with a specific message when the Firebase ID token has expired', async () => {
@@ -105,6 +144,26 @@ describe('authenticateFirebaseToken middleware', () => {
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid Firebase ID token' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('verifyFirebaseTokenOnly attaches the raw Firebase identity without a database lookup', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    verifyIdToken.mockResolvedValue({ uid: 'firebase-uid-1', email: 'newuser@wits.ac.za' });
+
+    await verifyFirebaseTokenOnly(req, res, next);
+
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(req.firebaseUser).toEqual({ uid: 'firebase-uid-1', email: 'newuser@wits.ac.za' });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('verifyFirebaseTokenOnly 401s on a missing header without calling next()', async () => {
+    await verifyFirebaseTokenOnly(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Missing or malformed Authorization header' });
     expect(next).not.toHaveBeenCalled();
   });
 });

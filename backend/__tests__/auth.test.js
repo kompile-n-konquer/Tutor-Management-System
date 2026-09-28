@@ -35,25 +35,81 @@ describe('auth controller', () => {
   });
 
   describe('createUser', () => {
+    // Signup is guarded by verifyFirebaseTokenOnly, which attaches req.firebaseUser.
+    const firebaseUser = { uid: 'uid-3', email: 'lerato@wits.ac.za' };
+
     test('creates a user with the STUDENT role and returns 201', async () => {
       const created = { id: 3, firstName: 'Lerato', role: 'STUDENT' };
       prisma.user.create.mockResolvedValue(created);
       req.body = { firstName: 'Lerato', lastName: 'Mokoena', email: 'lerato@wits.ac.za', firebaseUid: 'uid-3' };
+      req.firebaseUser = firebaseUser;
 
       await createUser(req, res, next);
 
-      expect(prisma.user.create).toHaveBeenCalledWith({
-        data: {
-          firstName: 'Lerato',
-          lastName: 'Mokoena',
-          email: 'lerato@wits.ac.za',
-          firebaseUid: 'uid-3',
-          role: 'STUDENT',
-        },
-      });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            firstName: 'Lerato',
+            lastName: 'Mokoena',
+            email: 'lerato@wits.ac.za',
+            firebaseUid: 'uid-3',
+            role: 'STUDENT',
+          },
+        }),
+      );
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(created);
       expect(next).not.toHaveBeenCalled();
+    });
+
+    test('403s when the verified token does not match the firebaseUid being registered', async () => {
+      req.body = { firstName: 'Lerato', lastName: 'Mokoena', email: 'lerato@wits.ac.za', firebaseUid: 'someone-elses-uid' };
+      req.firebaseUser = firebaseUser;
+
+      await createUser(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0].statusCode).toBe(403);
+      expect(next.mock.calls[0][0].message).toBe('The Firebase ID token does not match the user being created');
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    test('403s when there is no verified Firebase identity on the request', async () => {
+      req.body = { firstName: 'Lerato', lastName: 'Mokoena', email: 'lerato@wits.ac.za', firebaseUid: 'uid-3' };
+
+      await createUser(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0].statusCode).toBe(403);
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    test('403s when the body email does not match the Firebase account email', async () => {
+      req.body = { firstName: 'Lerato', lastName: 'Mokoena', email: 'impostor@wits.ac.za', firebaseUid: 'uid-3' };
+      req.firebaseUser = firebaseUser;
+
+      await createUser(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0].statusCode).toBe(403);
+      expect(next.mock.calls[0][0].message).toBe('The email does not match the Firebase account');
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    test('409s when the email or Firebase account is already registered', async () => {
+      const duplicate = new Error('Unique constraint failed');
+      duplicate.code = 'P2002';
+      prisma.user.create.mockRejectedValue(duplicate);
+      req.body = { firstName: 'Lerato', lastName: 'Mokoena', email: 'lerato@wits.ac.za', firebaseUid: 'uid-3' };
+      req.firebaseUser = firebaseUser;
+
+      await createUser(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0].statusCode).toBe(409);
+      expect(next.mock.calls[0][0].message).toBe(
+        'A user with this email or Firebase account already exists',
+      );
     });
 
     test.each(['firstName', 'lastName', 'email', 'firebaseUid'])(

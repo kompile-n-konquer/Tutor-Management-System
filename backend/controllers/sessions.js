@@ -42,17 +42,18 @@ exports.getUnassignedSessions = catchAsync(async (req, res, next) => {
 exports.getMySessions = catchAsync(async (req, res, next) => {
   const requestingUser = await prisma.user.findUnique({
     where: { firebaseUid: req.user.user_id },
-    include: { tutor: true },
   });
   if (!requestingUser) {
     return next(createHttpError(404, 'User not found. Please check if the user exists'));
   }
-  if (!requestingUser.tutor) {
+  // Role strings are validated in application code because SQL Server has no Prisma enums.
+  if (requestingUser.role !== 'TUTOR') {
     return next(createHttpError(403, 'Only tutors can view their assigned sessions'));
   }
 
   const sessions = await prisma.session.findMany({
-    where: { assignment: { tutorId: requestingUser.tutor.id } },
+    // Tutors are linked to courses through TutorAssignment.userId (the Tutor model was folded into User).
+    where: { assignment: { userId: requestingUser.id } },
     include: {
       assignment: {
         include: {
@@ -84,12 +85,11 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
 
   const requestingUser = await prisma.user.findUnique({
     where: { firebaseUid: req.user.user_id },
-    include: { tutor: true },
   });
   if (!requestingUser) {
     return next(createHttpError(404, 'User not found. Please check if the user exists'));
   }
-  if (!requestingUser.tutor) {
+  if (requestingUser.role !== 'TUTOR') {
     return next(createHttpError(403, 'Only tutors can excuse themselves from a session'));
   }
 
@@ -103,7 +103,7 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
   if (session.status !== 'SCHEDULED') {
     return next(createHttpError(409, 'This session has already been excused or has a pending volunteer'));
   }
-  if (session.assignment.tutorId !== requestingUser.tutor.id) {
+  if (session.assignment.userId !== requestingUser.id) {
     return next(createHttpError(403, 'You can only excuse yourself from your own sessions'));
   }
 

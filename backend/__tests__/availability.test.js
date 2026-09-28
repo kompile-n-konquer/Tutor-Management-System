@@ -1,5 +1,6 @@
 const { getAvailability, updateAvailability } = require('../controllers/availability');
 const prisma = require('../prisma/client');
+const getLockedSlots = require('../utils/availabilityLocks');
 
 jest.mock('../prisma/client', () => ({
   user: { findUnique: jest.fn() },
@@ -7,6 +8,8 @@ jest.mock('../prisma/client', () => ({
   availability: { findMany: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
   $transaction: jest.fn(),
 }));
+// Slots locked by a submitted application — mocked so tests control them per case.
+jest.mock('../utils/availabilityLocks', () => jest.fn());
 
 describe('availability controller', () => {
   let req, res, next;
@@ -22,14 +25,17 @@ describe('availability controller', () => {
       { id: 1, startMinute: 480, endMinute: 525 },
       { id: 2, startMinute: 540, endMinute: 585 },
     ]);
+    getLockedSlots.mockResolvedValue([]);
   });
 
   describe('getAvailability', () => {
-    test('returns the time-slot catalogue and the users availability entries', async () => {
+    test('returns the time-slot catalogue, the users availability entries and locked slots', async () => {
       const timeSlots = [{ id: 1, startMinute: 480, endMinute: 525 }];
       const availability = [{ dayOfWeek: 1, timeSlotId: 1 }];
+      const lockedSlots = [{ dayOfWeek: 2, timeSlotId: 2 }];
       prisma.timeSlot.findMany.mockResolvedValue(timeSlots);
       prisma.availability.findMany.mockResolvedValue(availability);
+      getLockedSlots.mockResolvedValue(lockedSlots);
 
       await getAvailability(req, res, next);
 
@@ -37,8 +43,9 @@ describe('availability controller', () => {
         where: { userId: 7 },
         select: { dayOfWeek: true, timeSlotId: true },
       });
+      expect(getLockedSlots).toHaveBeenCalledWith(7);
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({ timeSlots, availability });
+      expect(res.json).toHaveBeenCalledWith({ timeSlots, availability, lockedSlots });
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -136,6 +143,32 @@ describe('availability controller', () => {
       expect(prisma.availability.deleteMany).not.toHaveBeenCalled();
       expect(prisma.availability.createMany).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    test('400s when the submitted set drops a slot locked by a submitted application', async () => {
+      getLockedSlots.mockResolvedValue([{ dayOfWeek: 2, timeSlotId: 2 }]);
+      req.body = { availability: [{ dayOfWeek: 0, timeSlotId: 1 }] };
+
+      await updateAvailability(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0].statusCode).toBe(400);
+      expect(next.mock.calls[0][0].message).toBe(
+        'Availability for slots locked by a submitted application cannot be removed. Keep the locked slots selected.'
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    test('keeps locked slots that are still selected', async () => {
+      getLockedSlots.mockResolvedValue([{ dayOfWeek: 2, timeSlotId: 2 }]);
+      req.body = { availability: [{ dayOfWeek: 2, timeSlotId: 2 }] };
+      prisma.availability.findMany.mockResolvedValue([{ dayOfWeek: 2, timeSlotId: 2 }]);
+
+      await updateAvailability(req, res, next);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import ThemeProvider from '../context/ThemeProvider.jsx';
 
 const { mockGet, mockPost } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPost: vi.fn() }));
 
@@ -24,9 +25,12 @@ const makeSession = (overrides = {}) => ({
 
 const renderVolunteerView = () =>
   render(
-    <MemoryRouter>
-      <VolunteerView />
-    </MemoryRouter>,
+    // The page chrome includes the theme toggle, so mount the real provider like the app does.
+    <ThemeProvider>
+      <MemoryRouter>
+        <VolunteerView />
+      </MemoryRouter>
+    </ThemeProvider>,
   );
 
 describe('VolunteerView — student view of unassigned sessions (#37)', () => {

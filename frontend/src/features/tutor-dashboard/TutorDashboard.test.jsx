@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import ThemeProvider from '../context/ThemeProvider.jsx';
 
 const { mockGet, mockPatch } = vi.hoisted(() => ({ mockGet: vi.fn(), mockPatch: vi.fn() }));
 
@@ -33,9 +34,12 @@ const makeSession = (overrides = {}) => ({
 
 const renderDashboard = () =>
   render(
-    <MemoryRouter>
-      <TutorDashboard />
-    </MemoryRouter>,
+    // The page chrome includes the theme toggle, so mount the real provider like the app does.
+    <ThemeProvider>
+      <MemoryRouter>
+        <TutorDashboard />
+      </MemoryRouter>
+    </ThemeProvider>,
   );
 
 describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {

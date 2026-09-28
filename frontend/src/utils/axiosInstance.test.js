@@ -58,4 +58,16 @@ describe('axiosInstance — API client with Firebase auth attached', () => {
     expect(config.headers.Authorization).toBeUndefined();
     expect(result).toBe(config);
   });
+
+  test('keeps an Authorization header that is already set', async () => {
+    authState.currentUser = { getIdToken: vi.fn(async () => 'fresh-token') };
+
+    const config = { headers: { Authorization: 'Bearer existing-token' } };
+    const result = await interceptor()(config);
+
+    // The interceptor must not overwrite a caller-provided header.
+    expect(authState.currentUser.getIdToken).not.toHaveBeenCalled();
+    expect(config.headers.Authorization).toBe('Bearer existing-token');
+    expect(result).toBe(config);
+  });
 });

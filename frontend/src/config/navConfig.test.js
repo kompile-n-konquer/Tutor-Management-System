@@ -2,31 +2,58 @@ import { describe, test, expect } from 'vitest';
 import { NAV_LINKS, FOOTER_LINKS, getNavLinksForRole } from './navConfig.js';
 
 describe('navConfig — sidebar link source of truth', () => {
-  test('tutors see the dashboard, organiser pages, volunteering, timesheets and timetable', () => {
+  test('tutors see the dashboard, events, applications, volunteering, timesheets and timetable', () => {
     const labels = getNavLinksForRole('tutor').map((link) => link.label);
     expect(labels).toEqual([
       'Tutor Dashboard',
-      'Organiser Board',
-      'Analytics',
+      'Events',
+      'Applications',
       'Volunteer View',
-      'Profile',
       'Timesheets',
       'Timetable',
     ]);
   });
 
-  test('organisers currently get no primary links — their board moved under the tutor role', () => {
-    // main's nav reshuffle (PR #52) left the organiser role without primary
-    // links; their tools live at /organiser under roles: ["tutor"] instead.
-    expect(getNavLinksForRole('organiser')).toEqual([]);
+  test('lecturers see courses, events, timesheets and the lecturer view', () => {
+    const labels = getNavLinksForRole('lecturer').map((link) => link.label);
+    expect(labels).toEqual(['Courses', 'Events', 'Timesheets', 'Lecturer View']);
   });
 
-  test('students currently get no primary links — Profile moved to the tutor role', () => {
-    expect(getNavLinksForRole('student')).toEqual([]);
+  test('organisers see courses, events, their board, application review, analytics and timesheets', () => {
+    const labels = getNavLinksForRole('organiser').map((link) => link.label);
+    // Order follows NAV_LINKS: timesheets sits between events and the board.
+    expect(labels).toEqual([
+      'Courses',
+      'Events',
+      'Timesheets',
+      'Organiser Board',
+      'Applications',
+      'Analytics',
+    ]);
   });
 
-  test('returns an empty list for an unknown role', () => {
+  test('students see applications, volunteering, their timetable and onboarding', () => {
+    const labels = getNavLinksForRole('student').map((link) => link.label);
+    expect(labels).toEqual([
+      'Applications',
+      'Volunteer View',
+      'Timetable',
+      'Become a Tutor/Lecturer',
+    ]);
+  });
+
+  test('admins only see the admin view', () => {
+    const labels = getNavLinksForRole('admin').map((link) => link.label);
+    expect(labels).toEqual(['Admin View']);
+  });
+
+  test('returns an empty list for a missing or unknown role', () => {
+    expect(getNavLinksForRole()).toEqual([]);
     expect(getNavLinksForRole('auditor')).toEqual([]);
+  });
+
+  test('role matching is case-insensitive', () => {
+    expect(getNavLinksForRole('TUTOR')).toEqual(getNavLinksForRole('tutor'));
   });
 
   test('every nav link declares a route, icon, label and its roles', () => {

@@ -27,12 +27,14 @@ describe('routes wiring', () => {
     ]);
   });
 
-  test('user routes keep listing/creation public and deletion behind auth', () => {
+  test('auth routes wire the right middleware per endpoint', () => {
     expect(routeTable(authRouter)).toEqual([
-      { path: '/', methods: ['get'], handlers: 1 }, // public listing
-      { path: '/', methods: ['post'], handlers: 1 }, // public signup
+      { path: '/', methods: ['get'], handlers: 3 }, // auth + organiser/admin gate + controller
       { path: '/me', methods: ['get'], handlers: 2 }, // auth + controller
       { path: '/verify-role', methods: ['get'], handlers: 2 }, // auth + controller
+      { path: '/:firebaseUid', methods: ['get'], handlers: 2 }, // auth + controller
+      { path: '/', methods: ['post'], handlers: 2 }, // token-only verification + signup controller
+      { path: '/', methods: ['put'], handlers: 2 }, // auth + controller
       { path: '/', methods: ['delete'], handlers: 2 }, // auth + controller
     ]);
   });

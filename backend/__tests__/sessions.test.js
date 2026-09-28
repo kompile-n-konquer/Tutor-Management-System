@@ -21,11 +21,9 @@ const expectHttpError = (next, statusCode, message) => {
   expect(error.message).toBe(message);
 };
 
-const makeTutorUser = (tutorId) => ({
-  id: 5,
-  role: 'TUTOR',
-  tutor: tutorId === null ? null : { id: tutorId },
-});
+// The requesting user for tutor-only endpoints. main's role-based refactor keeps
+// the role on User — the Tutor relation no longer exists.
+const makeTutorUser = () => ({ id: 5, role: 'TUTOR' });
 
 describe('sessions controller — excuse + volunteer feature (#37)', () => {
   let req, res, next, tx;
@@ -76,14 +74,14 @@ describe('sessions controller — excuse + volunteer feature (#37)', () => {
 
   describe('getMySessions', () => {
     test('returns the signed-in tutor sessions', async () => {
-      prisma.user.findUnique.mockResolvedValue(makeTutorUser(9));
+      prisma.user.findUnique.mockResolvedValue(makeTutorUser());
       const sessions = [{ id: 1 }, { id: 2 }];
       prisma.session.findMany.mockResolvedValue(sessions);
 
       await getMySessions(req, res, next);
 
       expect(prisma.session.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { assignment: { tutorId: 9 } } }),
+        expect.objectContaining({ where: { assignment: { userId: 5 } } }),
       );
       expect(res.json).toHaveBeenCalledWith(sessions);
       expect(next).not.toHaveBeenCalled();
@@ -98,7 +96,7 @@ describe('sessions controller — excuse + volunteer feature (#37)', () => {
     });
 
     test('403s when the requesting user is not a tutor', async () => {
-      prisma.user.findUnique.mockResolvedValue(makeTutorUser(null));
+      prisma.user.findUnique.mockResolvedValue({ id: 5, role: 'STUDENT' });
 
       await getMySessions(req, res, next);
 
@@ -110,12 +108,12 @@ describe('sessions controller — excuse + volunteer feature (#37)', () => {
     const makeSession = (overrides = {}) => ({
       id: 1,
       status: 'SCHEDULED',
-      assignment: { tutorId: 9 },
+      assignment: { userId: 5 },
       ...overrides,
     });
 
     beforeEach(() => {
-      prisma.user.findUnique.mockResolvedValue(makeTutorUser(9));
+      prisma.user.findUnique.mockResolvedValue(makeTutorUser());
       prisma.session.findUnique.mockResolvedValue(makeSession());
     });
 
@@ -173,7 +171,7 @@ describe('sessions controller — excuse + volunteer feature (#37)', () => {
     });
 
     test('403s when the requesting user is not a tutor', async () => {
-      prisma.user.findUnique.mockResolvedValue(makeTutorUser(null));
+      prisma.user.findUnique.mockResolvedValue({ id: 5, role: 'STUDENT' });
       req.params.id = '1';
       req.body = { reason: 'Sick' };
 
@@ -203,7 +201,7 @@ describe('sessions controller — excuse + volunteer feature (#37)', () => {
     });
 
     test('403s when the session belongs to a different tutor', async () => {
-      prisma.session.findUnique.mockResolvedValue(makeSession({ assignment: { tutorId: 777 } }));
+      prisma.session.findUnique.mockResolvedValue(makeSession({ assignment: { userId: 777 } }));
       req.params.id = '1';
       req.body = { reason: 'Sick' };
 

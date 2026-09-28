@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import ThemeProvider from '../context/ThemeProvider.jsx';
 import Placeholder from './Placeholder.jsx';
 
 vi.mock('../../hooks/useAuth.js', () => ({
@@ -17,7 +18,9 @@ describe('Placeholder — unbuilt backlog screens', () => {
   test('renders the default label with the backlog note', () => {
     render(
       <MemoryRouter>
-        <Placeholder />
+        <ThemeProvider>
+          <Placeholder />
+        </ThemeProvider>
       </MemoryRouter>,
     );
 
@@ -30,7 +33,9 @@ describe('Placeholder — unbuilt backlog screens', () => {
   test('accepts a custom label through to the layout', () => {
     render(
       <MemoryRouter>
-        <Placeholder label="Unique Screen Label" />
+        <ThemeProvider>
+          <Placeholder label="Unique Screen Label" />
+        </ThemeProvider>
       </MemoryRouter>,
     );
 

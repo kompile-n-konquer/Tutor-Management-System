@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import ThemeProvider from '../../features/context/ThemeProvider.jsx';
 import AppLayout from './AppLayout.jsx';
 
 vi.mock('../../hooks/useAuth.js', () => ({
@@ -16,15 +17,18 @@ vi.mock('../../utils/axiosInstance.js', () => ({
 describe('AppLayout — shared chrome for authenticated pages', () => {
   test('renders the sidebar, top bar and the page content', () => {
     render(
-      <MemoryRouter>
-        {/* A title that is not also a sidebar link, so the query stays unique. */}
-        <AppLayout role="tutor" title="My Page Title" showSearch={true}>
-          <div>page-content</div>
-        </AppLayout>
-      </MemoryRouter>,
+      // The top bar's theme toggle needs the theme context, like in the app.
+      <ThemeProvider>
+        <MemoryRouter>
+          {/* A title that is not also a sidebar link, so the query stays unique. */}
+          <AppLayout title="My Page Title" showSearch={true}>
+            <div>page-content</div>
+          </AppLayout>
+        </MemoryRouter>
+      </ThemeProvider>,
     );
 
-    // Sidebar rendered with the tutor role.
+    // Sidebar rendered with the role from useAuth (mocked as tutor above).
     expect(screen.getByText('Tutor Dashboard')).toBeInTheDocument();
     // TopNavBar rendered with the title prop.
     expect(screen.getByText('My Page Title')).toBeInTheDocument();

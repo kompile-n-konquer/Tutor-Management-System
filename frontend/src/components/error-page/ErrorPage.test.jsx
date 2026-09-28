@@ -40,10 +40,21 @@ describe('ErrorPage — router error boundary', () => {
   });
 
   test('falls back to a generic message when the error carries no text', () => {
+    // A thrown error with a non-404 status and no text — still a crash page.
+    mockError.current = { status: 500 };
+
+    renderErrorPage();
+
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('An unexpected error occurred.')).toBeInTheDocument();
+  });
+
+  test('renders the 404 page for the catch-all route (no route error at all)', () => {
     mockError.current = undefined;
 
     renderErrorPage();
 
-    expect(screen.getByText('An unexpected error occurred.')).toBeInTheDocument();
+    expect(screen.getByText('Page not found')).toBeInTheDocument();
+    expect(screen.getByText('The page you are looking for does not exist.')).toBeInTheDocument();
   });
 });

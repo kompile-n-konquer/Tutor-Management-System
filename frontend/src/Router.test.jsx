@@ -33,12 +33,31 @@ describe('Router — application route table', () => {
       'tutor-dashboard',
       'volunteer',
       'profile',
+      'profile/edit',
       'timetable/edit',
+      'applications',
       'timesheets',
       'settings',
+      'courses',
+      'events',
+      'lecturer-view',
+      'admin-view',
+      'onboarding',
+      'onboarding/tutor-application',
+      'onboarding/lecturer-application',
+      'application-review',
+      '*', // catch-all renders the error page
     ]);
-    // Every route must render an element.
-    children.forEach((route) => expect(route.element).toBeDefined());
+    // Every leaf route must render an element; container routes (courses,
+    // events, applications, timesheets) render their children through <Outlet>.
+    children.forEach((route) => {
+      if (route.children) {
+        expect(route.children.length).toBeGreaterThan(0);
+        route.children.forEach((child) => expect(child.element).toBeDefined());
+      } else {
+        expect(route.element).toBeDefined();
+      }
+    });
     // The landing page is the index route.
     expect(children[0].index).toBe(true);
   });

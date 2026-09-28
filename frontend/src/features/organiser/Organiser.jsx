@@ -512,6 +512,20 @@ export default function Organiser() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm">
+            {coursesLoading &&
+              [0, 1, 2].map((card) => (
+                <div
+                  key={card}
+                  className="animate-pulse p-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest"
+                >
+                  <div className="flex justify-between items-start mb-stack-sm">
+                    <div className="h-5 w-24 rounded bg-surface-container-high" />
+                    <div className="h-5 w-12 rounded bg-surface-container-high/60" />
+                  </div>
+                  <div className="h-4 w-40 rounded bg-surface-container-high/60 mb-stack-sm" />
+                  <div className="h-1.5 w-full rounded-full bg-surface-container-high/60" />
+                </div>
+              ))}
             {courses.map((c) => {
               const isActive = c.id === selectedCourse;
               const allocatedCount = c.assignedCount ?? (isActive ? allocatedTutors.length : 0);
@@ -578,11 +592,18 @@ export default function Organiser() {
             </div>
           </div>
           {loading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
-                <p className="font-body-sm text-on-surface-variant mt-stack-sm">Loading available tutors...</p>
-              </div>
+            <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg" aria-hidden="true">
+              {[0, 1].map((pool) => (
+                <div key={pool} className="flex-1 min-w-0 space-y-stack-sm">
+                  <div className="animate-pulse h-4 w-40 rounded bg-surface-container-high" />
+                  {[0, 1, 2, 3].map((row) => (
+                    <div
+                      key={row}
+                      className="animate-pulse h-14 rounded-lg bg-surface-container-low border border-surface-variant"
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : fetchError ? (
             <div className="flex-1 flex items-center justify-center">

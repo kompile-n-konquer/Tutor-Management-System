@@ -15,6 +15,7 @@ const timesheetsRouter = require('./routes/timesheets');
 const eventsRouter = require('./routes/events');
 const onboardingRouter = require('./routes/onboarding');
 const publicRouter = require('./routes/public');
+const analyticsRouter = require('./routes/analytics');
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/timesheets', timesheetsRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/public', publicRouter);
+app.use('/api/analytics', analyticsRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

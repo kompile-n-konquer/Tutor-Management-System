@@ -27,7 +27,9 @@ const sessionState = (session) => {
   }
 };
 
-function CourseSection({ course }) {
+function CourseSection({ course, onDecided }) {
+  const [decidingSessionId, setDecidingSessionId] = useState(null);
+  const [decisionError, setDecisionError] = useState("");
   const today = startOfToday().getTime();
   // Events are the schedule: each one derives a session for every assigned
   // tutor from the course's slots on that weekday. Session rows only exist
@@ -36,6 +38,27 @@ function CourseSection({ course }) {
   const followUps = course.sessions.filter(
     (session) => new Date(session.date).getTime() >= today
   );
+
+  // Approve/reject a pending cover request; the parent refetches so the
+  // session state and tutor lists reflect the decision immediately.
+  const handleDecision = async (sessionId, decision) => {
+    setDecidingSessionId(sessionId);
+    setDecisionError("");
+    try {
+      const response = await api.patch(`/sessions/${sessionId}/volunteer`, { decision });
+      if (response.status !== 200) {
+        setDecisionError(
+          response.data?.message || "Could not update the cover request. Please try again later."
+        );
+        return;
+      }
+      await onDecided?.();
+    } catch {
+      setDecisionError("Could not update the cover request. Please try again later.");
+    } finally {
+      setDecidingSessionId(null);
+    }
+  };
 
   return (
     <section
@@ -46,10 +69,10 @@ function CourseSection({ course }) {
         <span className="font-data-mono text-data-mono font-semibold text-primary">
           {course.courseCode}
         </span>
-        <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0">
+        <span className="font-body-md text-body-md text-on-surface flex-1 min-w-[12rem] break-words">
           {course.courseName}
         </span>
-        <span className="font-body-sm text-body-sm text-on-surface-variant">
+        <span className="font-body-sm text-body-sm text-on-surface-variant min-w-0 break-words">
           {course.tutors.length === 0
             ? "No tutors assigned yet"
             : `${course.tutors.length} tutor${course.tutors.length === 1 ? "" : "s"}: ${course.tutors
@@ -89,7 +112,7 @@ function CourseSection({ course }) {
                       {formatSessionDate(event.date)}
                     </span>
                     {event.times.length > 0 ? (
-                      <span className="flex flex-wrap gap-1">
+                      <span className="flex flex-wrap gap-1 min-w-0">
                         {event.times.map((time, index) => (
                           <span
                             key={`${event.id}-${index}`}
@@ -102,7 +125,7 @@ function CourseSection({ course }) {
                     ) : (
                       <span className="text-outline text-sm">No timeslot on this weekday</span>
                     )}
-                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0 capitalize">
+                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-[12rem] break-words capitalize">
                       {event.description}
                     </span>
                   </Link>
@@ -137,7 +160,7 @@ function CourseSection({ course }) {
                     <span className="font-data-mono text-data-mono text-on-surface-variant w-32 shrink-0">
                       {formatSessionTimeRange(session)}
                     </span>
-                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0">
+                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-[8rem] break-words">
                       {session.tutorName ?? "Unassigned tutor"}
                     </span>
                     <span
@@ -157,7 +180,7 @@ function CourseSection({ course }) {
                         </span>
                         <button
                           type="button"
-                          onClick={() => onDecision(session.id, "APPROVED")}
+                          onClick={() => handleDecision(session.id, "APPROVED")}
                           disabled={decidingSessionId !== null}
                           className="cursor-pointer bg-primary text-on-primary rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -165,12 +188,17 @@ function CourseSection({ course }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDecision(session.id, "REJECTED")}
+                          onClick={() => handleDecision(session.id, "REJECTED")}
                           disabled={decidingSessionId !== null}
                           className="cursor-pointer border border-outline-variant text-on-surface-variant rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-surface-variant transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {decidingSessionId === session.id ? "Working…" : "Reject"}
                         </button>
+                        {decisionError && (
+                          <span className="basis-full font-body-sm text-body-sm text-urgent-orange">
+                            {decisionError}
+                          </span>
+                        )}
                       </span>
                     )}
                   </li>
@@ -232,9 +260,32 @@ export default function LecturerView() {
         )}
 
         {isLoading ? (
-          <div className="animate-pulse space-y-gutter">
-            <div className="h-40 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
-            <div className="h-40 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
+          <div className="space-y-gutter" aria-hidden="true">
+            {[0, 1].map((card) => (
+              <div
+                key={card}
+                className="animate-pulse bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+              >
+                <div className="flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-lg py-stack-md border-b border-outline-variant">
+                  <div className="h-4 w-20 rounded bg-surface-container-high" />
+                  <div className="h-4 w-44 rounded bg-surface-container-high" />
+                  <div className="h-4 w-28 rounded bg-surface-container-high" />
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="p-stack-lg space-y-stack-md lg:border-r border-outline-variant/60">
+                    <div className="h-4 w-32 rounded bg-surface-container-high" />
+                    <div className="h-5 rounded bg-surface-container-high/60" />
+                    <div className="h-5 rounded bg-surface-container-high/60" />
+                    <div className="h-5 rounded bg-surface-container-high/60" />
+                  </div>
+                  <div className="p-stack-lg bg-surface-container-low space-y-stack-md">
+                    <div className="h-4 w-36 rounded bg-surface-container-high" />
+                    <div className="h-5 rounded bg-surface-container-high/60" />
+                    <div className="h-5 rounded bg-surface-container-high/60" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : courses.length === 0 ? (
           <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
@@ -249,7 +300,7 @@ export default function LecturerView() {
         ) : (
           <div className="space-y-gutter">
             {courses.map((course) => (
-              <CourseSection key={course.id} course={course} />
+              <CourseSection key={course.id} course={course} onDecided={fetchLecturerCourses} />
             ))}
           </div>
         )}

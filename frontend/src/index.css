@@ -86,7 +86,22 @@
   --color-urgent-orange: #ff8c00;
   --color-on-urgent-orange: #ffffff;
 
+  /* Sidebar — mapped onto the M3 palette with var() indirection so the
+     navigation shell follows whatever theme <html> activates (light, dark,
+     high-contrast, colour-vision) and re-resolves instantly on a switch.
+     The floating-panel + contrasting-active-pill layout stays the same in
+     every theme; only the palette moves. */
+  --color-sidebar-surface: var(--color-surface-container-lowest);
+  --color-sidebar-surface-hover: var(--color-surface-container);
+  --color-sidebar-active: var(--color-primary);
+  --color-on-sidebar: var(--color-on-surface);
+  --color-on-sidebar-muted: var(--color-on-surface-variant);
+  --color-on-sidebar-active: var(--color-on-primary);
+  --color-sidebar-logo: var(--color-primary);
+  --color-on-sidebar-logo: var(--color-on-primary);
+
   --shadow-bento: 0px 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow-sidebar: 0px 8px 24px rgba(15, 23, 42, 0.12);
 }
 
 /* Dark mode — light text and accents on deep neutral surfaces. */
@@ -159,6 +174,15 @@
   --color-on-urgent-orange: #3d2000;
 
   --shadow-bento: 0px 4px 20px rgba(0, 0, 0, 0.55);
+
+  /* The sidebar keeps its floating-panel look on the dark palette: a raised
+     container surface, a light active pill and the brighter primary-container
+     as the brand circle. */
+  --color-sidebar-surface: var(--color-surface-container);
+  --color-sidebar-surface-hover: var(--color-surface-container-high);
+  --color-sidebar-logo: var(--color-primary-container);
+  --color-on-sidebar-logo: var(--color-on-primary-container);
+  --shadow-sidebar: 0px 8px 24px rgba(2, 6, 23, 0.55);
 }
 
 /* High contrast (light base) — near-black text, harder borders, deeper accents. */
@@ -245,6 +269,21 @@
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: theme("colors.outline-variant");
+  border-radius: theme("borderRadius.full");
+}
+
+/* The sidebar carries its own scrollbar tint derived from the sidebar palette
+   (custom-scrollbar follows the page palette, which can vanish against the
+   panel in some themes). */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: theme("colors.on-sidebar-muted");
   border-radius: theme("borderRadius.full");
 }
 

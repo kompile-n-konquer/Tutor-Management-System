@@ -64,6 +64,16 @@ module.exports = {
         "on-urgent-orange": "var(--color-on-urgent-orange)",
         success: "var(--color-success)",
         "error-container-hover": "var(--color-error-container-hover)",
+        // Sidebar — the floating navigation panel; values live in src/index.css
+        // and follow the active theme via var() indirection to the M3 palette.
+        "sidebar-surface": "var(--color-sidebar-surface)",
+        "sidebar-surface-hover": "var(--color-sidebar-surface-hover)",
+        "sidebar-active": "var(--color-sidebar-active)",
+        "on-sidebar": "var(--color-on-sidebar)",
+        "on-sidebar-muted": "var(--color-on-sidebar-muted)",
+        "on-sidebar-active": "var(--color-on-sidebar-active)",
+        "sidebar-logo": "var(--color-sidebar-logo)",
+        "on-sidebar-logo": "var(--color-on-sidebar-logo)",
       },
       borderRadius: {
         DEFAULT: "0.125rem",
@@ -75,6 +85,8 @@ module.exports = {
         // Card elevation — defined as a variable so dark mode deepens it
         // (see --shadow-bento in src/index.css).
         bento: "var(--shadow-bento)",
+        // Elevation for the floating dark sidebar panel.
+        sidebar: "var(--shadow-sidebar)",
       },
       spacing: {
         "stack-lg": "24px",
@@ -82,7 +94,12 @@ module.exports = {
         "container-max": "1440px",
         unit: "4px",
         "stack-sm": "8px",
-        "sidebar-width": "280px",
+        // Sidebar geometry — the panel floats 12px off the page edges, so the
+        // content margins below include that inset plus a 12px gutter.
+        "sidebar-width": "260px",
+        "sidebar-rail": "76px",
+        "sidebar-ml": "284px",
+        "sidebar-ml-rail": "100px",
         "margin-page": "2rem",
         "stack-md": "16px",
       },

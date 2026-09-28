@@ -300,17 +300,6 @@ export default function TutorDashboard() {
           <h1 className="font-display text-display text-on-surface">
             {firstName ? `${firstName}'s tutoring schedule` : "Your tutoring schedule"}
           </h1>
-          {!isLoading && !error && courses.length > 0 && (
-            <p className="font-body-lg text-body-lg text-on-surface-variant mt-unit">
-              {courses.length === 1
-                ? `Tutoring ${courseCodes[0]}`
-                : `Tutoring ${courseCodes.join(" and ")}`}
-              {" · "}
-              {upcomingCount === 0
-                ? "no sessions scheduled yet"
-                : `${upcomingCount} upcoming session${upcomingCount === 1 ? "" : "s"}, ${sessionsToLead} for you to lead`}
-            </p>
-          )}
         </header>
 
         {error && (
@@ -320,10 +309,21 @@ export default function TutorDashboard() {
         )}
 
         {isLoading ? (
-          <div className="animate-pulse space-y-gutter">
-            <div className="h-24 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
-            <div className="h-16 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
-            <div className="h-16 bg-surface-container-low border border-outline-variant/40 rounded-xl" />
+          <div className="space-y-gutter" aria-hidden="true">
+            {[0, 1].map((card) => (
+              <div
+                key={card}
+                className="animate-pulse bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+              >
+                <div className="px-stack-lg py-stack-md border-b border-outline-variant/60">
+                  <div className="h-4 w-44 rounded bg-surface-container-high" />
+                </div>
+                <div className="px-stack-lg py-stack-md space-y-stack-md">
+                  <div className="h-4 rounded bg-surface-container-high/60" />
+                  <div className="h-4 rounded bg-surface-container-high/60" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : courses.length === 0 ? (
           <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">

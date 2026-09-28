@@ -71,7 +71,19 @@ export default function VolunteerView() {
         )}
 
         {isLoading ? (
-          <p className="font-body-md text-on-surface-variant">Loading available sessions…</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter" aria-hidden="true">
+            {[0, 1, 2, 3].map((card) => (
+              <div
+                key={card}
+                className="animate-pulse p-stack-md border border-surface-variant rounded-lg bg-surface-container-low space-y-stack-sm"
+              >
+                <div className="h-5 w-48 rounded bg-surface-container-high" />
+                <div className="h-4 w-40 rounded bg-surface-container-high/60" />
+                <div className="h-4 w-32 rounded bg-surface-container-high/60" />
+                <div className="h-10 rounded bg-surface-container-high/60 mt-stack-md" />
+              </div>
+            ))}
+          </div>
         ) : sessions.length === 0 ? (
           <p className="font-body-md text-on-surface-variant">No sessions currently need a volunteer. Check back later.</p>
         ) : (

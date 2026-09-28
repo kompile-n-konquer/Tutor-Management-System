@@ -129,7 +129,7 @@ export default function Profile() {
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
 
   return (
-    <AppLayout title="Settings" showSearch={false}>
+    <AppLayout title="Profile" showSearch={false}>
       <div className="p-gutter md:p-margin-page">
         <div className="mb-stack-lg flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -371,46 +371,6 @@ export default function Profile() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
-                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-4">
-                  Notifications
-                </h3>
-                <div className="space-y-4">
-                  {[
-                    ['New Allocation Requests', true],
-                    ['Schedule Changes', true],
-                    ['Timesheet Reminders', false],
-                  ].map(([label, checked]) => (
-                    <label key={label} className="flex items-center justify-between cursor-pointer">
-                      <span className="font-body-md text-on-surface">{label}</span>
-                      <div className="relative">
-                        <input defaultChecked={checked} className="sr-only peer" type="checkbox" />
-                        <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
-                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-4">Security</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-body-md text-on-surface">Two-Factor Authentication</p>
-                      <p className="font-body-sm text-outline">Enabled via University SSO</p>
-                    </div>
-                    <span className="material-symbols-outlined text-trust-blue">check_circle</span>
-                  </div>
-                  <div className="pt-4 border-t border-outline-variant/30">
-                    <button className="w-full py-2 border border-outline text-on-surface rounded-lg font-label-caps text-label-caps hover:bg-surface-container transition-colors">
-                      Manage Connected Devices
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

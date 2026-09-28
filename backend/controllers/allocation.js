@@ -1,6 +1,8 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const { notifyAssignmentAdded, notifyAssignmentRemoved } = require('../email/notifier');
+const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
+const { slotHours } = require('../utils/claimRules');
 
 /**
  * GET /api/allocation/available-tutors
@@ -329,4 +331,225 @@ exports.removeTutor = catchAsync(async (req, res, next) => {
   notifyAssignmentRemoved(assignment).catch(() => {});
 
   res.status(204).end();
+});
+
+// ── Auto-Assign ──────────────────────────────────────────────────────────────
+
+// Weekly hours a tutor can claim on a course — same round-up rule as the
+// opportunity serializer in applications.js (every slot counts as at least
+// one full hour).
+const weeklyClaimableHours = (courseSlots) =>
+  courseSlots.reduce(
+    (total, slot) => total + slotHours(slot.timeSlot.startMinute, slot.timeSlot.endMinute),
+    0,
+  );
+
+/**
+ * POST /api/allocation/auto-assign
+ *
+ * Fill a course's remaining tutor slots in one click: the top-ranked
+ * available applicants (highest courseMark first — the same order as the
+ * "Available Tutors" pool) are assigned until the course's tutorsRequired
+ * cap is reached. Each candidate is re-validated at allocation time —
+ * minimum mark, the organiser-set claimable-hours cap and timetable clashes
+ * with their other assigned courses. Candidates who fail a check are skipped
+ * with a reason instead of blocking the whole run.
+ *
+ * Body:
+ *   courseId – (required) the course to staff
+ *   semester – (optional) semester label, e.g. "2026-S2"
+ */
+exports.autoAssignTutors = catchAsync(async (req, res, next) => {
+  const { courseId, semester } = req.body;
+
+  if (!courseId || !Number.isInteger(Number(courseId))) {
+    const error = new Error('A valid integer courseId is required');
+    error.statusCode = 400;
+    return next(error);
+  }
+  const parsedCourseId = Number(courseId);
+
+  const course = await prisma.course.findUnique({
+    where: { id: parsedCourseId },
+    select: {
+      id: true,
+      courseCode: true,
+      courseName: true,
+      minimumMark: true,
+      tutorsRequired: true,
+      slots: { include: { timeSlot: true } },
+    },
+  });
+
+  if (!course) {
+    const error = new Error('Course not found');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // ── Enforce the course's tutorsRequired cap ──────────────────────────
+  const assignedCount = await prisma.tutorAssignment.count({
+    where: { courseId: course.id },
+  });
+  const remaining = Math.max(0, course.tutorsRequired - assignedCount);
+
+  if (remaining === 0) {
+    const error = new Error(
+      `Maximum number of required tutors (${course.tutorsRequired}) has already been reached for ${course.courseCode} - ${course.courseName}`,
+    );
+    error.statusCode = 409;
+    return next(error);
+  }
+
+  // ── Ranked applicants — same filters and order as the available pool ─
+  const applications = await prisma.application.findMany({
+    where: { courseId: course.id, status: { not: 'REJECTED' } },
+    orderBy: [{ courseMark: 'desc' }, { id: 'asc' }],
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, email: true } },
+    },
+  });
+
+  // Applicants who already hold an assignment for this course are not
+  // candidates — they are already in the "Assigned Tutors" list.
+  const alreadyAssigned = new Set(
+    (
+      await prisma.tutorAssignment.findMany({
+        where: { courseId: course.id },
+        select: { userId: true },
+      })
+    ).map((assignment) => assignment.userId),
+  );
+  const candidates = applications.filter((application) => !alreadyAssigned.has(application.userId));
+
+  // ── Everything the re-validation needs, in one round trip ────────────
+  const candidateIds = candidates.map((application) => application.userId);
+  const [otherAssignments, maxClaimableHours] = await Promise.all([
+    candidateIds.length > 0
+      ? prisma.tutorAssignment.findMany({
+          where: { userId: { in: candidateIds }, courseId: { not: course.id } },
+          select: {
+            userId: true,
+            course: {
+              select: {
+                courseCode: true,
+                slots: { select: { dayOfWeek: true, timeSlotId: true, timeSlot: true } },
+              },
+            },
+          },
+        })
+      : [],
+    getTutorMonthlyClaimableHours(),
+  ]);
+
+  const assignmentsByUser = new Map();
+  otherAssignments.forEach((assignment) => {
+    const list = assignmentsByUser.get(assignment.userId) ?? [];
+    list.push(assignment);
+    assignmentsByUser.set(assignment.userId, list);
+  });
+
+  const courseHours = weeklyClaimableHours(course.slots);
+  const courseSlotKeys = new Set(
+    course.slots.map((slot) => `${slot.dayOfWeek}-${slot.timeSlotId}`),
+  );
+
+  // ── Pick the strongest candidates that still pass every check ────────
+  const selected = [];
+  const skipped = [];
+
+  for (const application of candidates) {
+    if (selected.length >= remaining) break;
+
+    const name = `${application.user.firstName} ${application.user.lastName}`;
+
+    if (application.courseMark < course.minimumMark) {
+      skipped.push({
+        applicantId: application.id,
+        name,
+        reason: `Mark ${application.courseMark} is below the course minimum of ${course.minimumMark}`,
+      });
+      continue;
+    }
+
+    const userAssignments = assignmentsByUser.get(application.userId) ?? [];
+    const assignedHours = userAssignments.reduce(
+      (total, assignment) => total + weeklyClaimableHours(assignment.course.slots),
+      0,
+    );
+
+    if (maxClaimableHours !== null && assignedHours + courseHours > maxClaimableHours) {
+      skipped.push({
+        applicantId: application.id,
+        name,
+        reason: `Would reach ${assignedHours + courseHours}h, above the ${maxClaimableHours}h claimable-hours cap`,
+      });
+      continue;
+    }
+
+    const clashingAssignment = userAssignments.find((assignment) =>
+      assignment.course.slots.some((slot) => courseSlotKeys.has(`${slot.dayOfWeek}-${slot.timeSlotId}`)),
+    );
+    if (clashingAssignment) {
+      skipped.push({
+        applicantId: application.id,
+        name,
+        reason: `Timetable clash with already assigned ${clashingAssignment.course.courseCode}`,
+      });
+      continue;
+    }
+
+    selected.push(application);
+  }
+
+  // ── Create the assignments, upgrade roles and mark applications ──────
+  const createdAssignments = await prisma.$transaction(async (tx) => {
+    const created = [];
+    for (const application of selected) {
+      await tx.user.update({
+        where: { id: application.userId },
+        data: { role: 'TUTOR' },
+      });
+
+      const assignment = await tx.tutorAssignment.create({
+        data: {
+          userId: application.userId,
+          courseId: course.id,
+          semester: semester ?? '',
+        },
+        include: {
+          course: { select: { courseCode: true, courseName: true } },
+          user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+      });
+
+      await tx.application.update({
+        where: { id: application.id },
+        data: { status: 'ASSIGNED', reviewedAt: new Date() },
+      });
+
+      created.push(assignment);
+    }
+    return created;
+  });
+
+  // Fire-and-forget: notify every newly assigned tutor.
+  createdAssignments.forEach((assignment) => {
+    notifyAssignmentAdded(assignment).catch(() => {});
+  });
+
+  res.status(200).json({
+    courseId: course.id,
+    courseCode: course.courseCode,
+    courseName: course.courseName,
+    assigned: createdAssignments.map((assignment, index) => ({
+      assignmentId: assignment.id,
+      applicantId: selected[index].id,
+      userId: assignment.userId,
+      name: `${assignment.user.firstName} ${assignment.user.lastName}`,
+      courseMark: selected[index].courseMark,
+    })),
+    skipped,
+    remaining: remaining - createdAssignments.length,
+  });
 });

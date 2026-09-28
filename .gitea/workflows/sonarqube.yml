@@ -6,7 +6,7 @@ on:
 
 jobs:
   sonarqube:
-    runs-on: sonarqube-runner
+    runs-on: Mo-sonarqube-runner
 
     steps:
       - name: Checkout repository

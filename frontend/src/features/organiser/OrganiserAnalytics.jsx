@@ -45,7 +45,7 @@ function getApprovedHoursByTutor(timesheets) {
 
 function StatCard({ icon, label, value, accent = "text-primary", subtext }) {
   return (
-    <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+    <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-bento">
       <div className="flex items-center gap-stack-sm mb-stack-sm">
         <span className="material-symbols-outlined text-secondary">{icon}</span>
         <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">{label}</span>
@@ -127,7 +127,7 @@ export default function OrganiserAnalytics() {
         </div>
 
         {/* Hours per course */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] mb-stack-lg">
+        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
           <div className="p-stack-lg border-b border-outline-variant">
             <h3 className="font-headline-md text-headline-md text-on-surface">Hours per Course</h3>
             <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
@@ -169,7 +169,7 @@ export default function OrganiserAnalytics() {
         </div>
 
         {/* Spend vs budget */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] mb-stack-lg">
+        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
           <div className="p-stack-lg border-b border-outline-variant">
             <h3 className="font-headline-md text-headline-md text-on-surface">Spend vs Budget</h3>
             <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
@@ -250,7 +250,7 @@ export default function OrganiserAnalytics() {
         </div>
 
         {/* Workload spread */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento">
           <div className="p-stack-lg border-b border-outline-variant">
             <h3 className="font-headline-md text-headline-md text-on-surface">Workload Spread</h3>
             <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">

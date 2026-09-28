@@ -9,9 +9,10 @@ const {
   getLecturerSessions,
   excuseSession,
   volunteerForSession,
+  decideVolunteerRequest,
 } = require('../controllers/sessions');
 
-// Sessions that a tutor excused themselves from and are open for student volunteers.
+// Excused sessions open for cover, filtered to courses where the signed-in tutor's mark qualifies.
 router.get('/unassigned', authenticateFirebaseToken, getUnassignedSessions);
 // The signed-in tutor's own sessions — events on their assigned courses
 // merged with their excuse / volunteer lifecycle rows, never another
@@ -24,7 +25,9 @@ router.get('/volunteered', authenticateFirebaseToken, getMyVolunteeredSessions);
 router.get('/lecturer', authenticateFirebaseToken, requireRole('LECTURER'), getLecturerSessions);
 // A tutor excuses themselves from a session, returning it to the unassigned state.
 router.patch('/:id/excuse', authenticateFirebaseToken, excuseSession);
-// A student volunteers for an unassigned session, creating a pending assignment.
+// A qualifying tutor requests cover for an unassigned session (goes PENDING for the lecturer).
 router.post('/:id/volunteer', authenticateFirebaseToken, volunteerForSession);
+// The course's lecturer approves or rejects a pending cover request.
+router.patch('/:id/volunteer', authenticateFirebaseToken, requireRole('LECTURER'), decideVolunteerRequest);
 
 module.exports = router;

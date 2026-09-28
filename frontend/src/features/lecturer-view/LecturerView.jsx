@@ -21,7 +21,7 @@ const sessionState = (session) => {
         label: "Excused — needs volunteer",
       };
     case "PENDING":
-      return { chip: "bg-trust-blue/10 text-trust-blue", label: "Volunteer pending" };
+      return { chip: "bg-trust-blue/10 text-trust-blue", label: "Cover requested" };
     default:
       return { chip: "bg-surface-variant text-on-surface-variant", label: "Scheduled" };
   }
@@ -148,6 +148,29 @@ function CourseSection({ course }) {
                     {session.excuseReason && (
                       <span className="font-body-sm text-body-sm text-outline italic basis-full">
                         “{session.excuseReason}”
+                      </span>
+                    )}
+                    {session.volunteerRequest?.status === "PENDING" && (
+                      <span className="basis-full flex flex-wrap items-center gap-x-stack-md gap-y-unit pt-unit">
+                        <span className="font-body-sm text-body-sm text-on-surface">
+                          Cover requested by {session.volunteerRequest.volunteerName ?? "a tutor"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onDecision(session.id, "APPROVED")}
+                          disabled={decidingSessionId !== null}
+                          className="cursor-pointer bg-primary text-on-primary rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {decidingSessionId === session.id ? "Working…" : "Approve cover"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDecision(session.id, "REJECTED")}
+                          disabled={decidingSessionId !== null}
+                          className="cursor-pointer border border-outline-variant text-on-surface-variant rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-surface-variant transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {decidingSessionId === session.id ? "Working…" : "Reject"}
+                        </button>
                       </span>
                     )}
                   </li>

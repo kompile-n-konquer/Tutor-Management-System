@@ -131,7 +131,7 @@ const EventDetails = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
               {/* Event details — left column */}
               <div className="lg:col-span-4">
-                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
                   <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                     <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                       Event Details
@@ -186,7 +186,7 @@ const EventDetails = () => {
 
               {/* Tutoring slots — right column */}
               <div className="lg:col-span-8">
-                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
                   <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                     <div>
                       <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">

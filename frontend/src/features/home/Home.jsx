@@ -58,11 +58,11 @@ export default function Landing() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-stack-lg">
               {[
-                { icon: "hub", eyebrow: "For Organisers", title: "Seamless Allocation", body: "Real-time conflict resolution and smart tutor matching. Ensure complete coverage without the administrative headache.", bg: "bg-primary-fixed", fg: "text-primary-container" },
-                { icon: "calendar_clock", eyebrow: "For Tutors", title: "Your Schedule, Simplified", body: "Manage timesheets, track hours, and stay on top of your sessions with intuitive calendar integrations.", bg: "bg-secondary-fixed", fg: "text-secondary-container" },
-                { icon: "school", eyebrow: "For Students", title: "Volunteer & Grow", body: "Find overflow opportunities, build your academic portfolio, and engage deeper with course material.", bg: "bg-tertiary-fixed", fg: "text-tertiary-container" },
+                { icon: "hub", eyebrow: "For Organisers", title: "Seamless Allocation", body: "Real-time conflict resolution and smart tutor matching. Ensure complete coverage without the administrative headache.", bg: "bg-primary-fixed", fg: "text-on-primary-fixed" },
+                { icon: "calendar_clock", eyebrow: "For Tutors", title: "Your Schedule, Simplified", body: "Manage timesheets, track hours, and stay on top of your sessions with intuitive calendar integrations.", bg: "bg-secondary-fixed", fg: "text-on-secondary-fixed" },
+                { icon: "school", eyebrow: "For Students", title: "Volunteer & Grow", body: "Find overflow opportunities, build your academic portfolio, and engage deeper with course material.", bg: "bg-tertiary-fixed", fg: "text-on-tertiary-fixed" },
               ].map((card) => (
-                <div key={card.title} className="bg-surface-container-lowest p-8 rounded-xl border border-surface-variant shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_12px_32px_rgba(75,0,130,0.08)] transition-all duration-300 group flex flex-col h-full">
+                <div key={card.title} className="bg-surface-container-lowest p-8 rounded-xl border border-surface-variant shadow-bento hover:shadow-[0px_12px_32px_rgba(75,0,130,0.08)] transition-all duration-300 group flex flex-col h-full">
                   <div className={`w-14 h-14 ${card.bg} rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                     <span className={`material-symbols-outlined ${card.fg} text-3xl`}>{card.icon}</span>
                   </div>

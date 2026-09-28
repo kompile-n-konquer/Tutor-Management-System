@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 const STATUS_STYLES = {
   DRAFT: 'bg-surface-variant text-on-surface-variant',
   SUBMITTED: 'bg-trust-blue/10 text-trust-blue',
-  APPROVED: 'bg-green-600/10 text-green-700',
+  APPROVED: 'bg-success/10 text-success',
   REJECTED: 'bg-error/10 text-error',
 };
 

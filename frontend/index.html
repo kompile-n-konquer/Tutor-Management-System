@@ -5,6 +5,33 @@
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>TutorFlow</title>
+        <script>
+            // Applies the saved theme before React mounts so the first paint is
+            // already themed (no flash of the light theme). Mirrors the class
+            // logic in src/features/context/ThemeProvider.jsx — keep in sync.
+            (function () {
+                try {
+                    var stored = JSON.parse(localStorage.getItem("tutorflow-theme"));
+                    var prefersDark =
+                        window.matchMedia &&
+                        window.matchMedia("(prefers-color-scheme: dark)").matches;
+                    var isDark =
+                        stored &&
+                        (stored.colorMode === "dark" ||
+                            (stored.colorMode === "system" && prefersDark));
+                    var root = document.documentElement;
+                    if (isDark) root.classList.add("dark");
+                    if (stored && stored.highContrast) root.classList.add("high-contrast");
+                    var cbModes = ["protanopia", "deuteranopia", "tritanopia"];
+                    if (stored && cbModes.indexOf(stored.colourBlindMode) !== -1) {
+                        root.classList.add("theme-" + stored.colourBlindMode);
+                    }
+                    root.style.colorScheme = isDark ? "dark" : "light";
+                } catch (e) {
+                    /* corrupt or missing storage — the provider applies defaults */
+                }
+            })();
+        </script>
     </head>
     <body>
         <div id="root"></div>

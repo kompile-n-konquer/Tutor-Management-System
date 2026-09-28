@@ -1,32 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout.jsx";
-import Button from "../../components/button/Button.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
+import { minutesToLabel } from "../../components/slot-grid/SlotGrid.jsx";
 import api from "../../utils/axiosInstance.js";
-import {
-  formatSessionDate,
-  formatSessionTimeRange,
-  formatTimeRange,
-} from "../../utils/formatSession.js";
-
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+import { formatSessionDate, formatSessionTimeRange } from "../../utils/formatSession.js";
 
 const startOfToday = () => {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   return date;
 };
-
-const todayISO = () => {
-  const now = new Date();
-  const pad = (value) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-};
-
-const slotLabel = (slot) =>
-  `${DAY_NAMES[slot.dayOfWeek] ?? "Day"} · ${formatTimeRange(slot.timeSlot)}${
-    slot.venue ? ` · ${slot.venue}` : ""
-  }${slot.sessionType ? ` · ${slot.sessionType}` : ""}`;
 
 // Chip + copy for the session states a lecturer cares about.
 const sessionState = (session) => {
@@ -43,12 +27,15 @@ const sessionState = (session) => {
   }
 };
 
-function CourseSection({ course, form, onFormChange, onSchedule, isSubmitting, formError }) {
+function CourseSection({ course }) {
   const today = startOfToday().getTime();
-  const upcoming = course.sessions.filter(
+  // Events are the schedule: each one derives a session for every assigned
+  // tutor from the course's slots on that weekday. Session rows only exist
+  // once a tutor excuses themselves or a student volunteers — those are the
+  // follow-ups on the right.
+  const followUps = course.sessions.filter(
     (session) => new Date(session.date).getTime() >= today
   );
-  const canSchedule = course.slots.length > 0 && course.tutors.length > 0;
 
   return (
     <section
@@ -72,18 +59,72 @@ function CourseSection({ course, form, onFormChange, onSchedule, isSubmitting, f
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Scheduled sessions */}
+        {/* Upcoming events — the course's tutoring schedule */}
         <div className="p-stack-lg lg:border-r border-outline-variant/60">
-          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
-            Scheduled sessions
-          </h3>
-          {upcoming.length === 0 ? (
+          <div className="flex items-baseline justify-between gap-stack-md mb-stack-md">
+            <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+              Upcoming events
+            </h3>
+            <Link
+              to="/events/add"
+              className="font-label-caps text-label-caps text-primary underline-offset-2 hover:underline"
+            >
+              Add event
+            </Link>
+          </div>
+          {course.events.length === 0 ? (
             <p className="font-body-md text-body-md text-on-surface-variant">
-              Nothing scheduled yet. Sessions you add appear on every assigned tutor's dashboard.
+              No upcoming events. Every event you add becomes a session on each assigned tutor's
+              dashboard.
             </p>
           ) : (
             <ul className="divide-y divide-outline-variant/50">
-              {upcoming.map((session) => {
+              {course.events.map((event) => (
+                <li key={event.id}>
+                  <Link
+                    to={`/events/${event.id}`}
+                    className="flex flex-wrap items-baseline gap-x-stack-md gap-y-unit py-stack-sm hover:bg-surface-container-low transition-colors"
+                  >
+                    <span className="font-data-mono text-data-mono text-on-surface w-24 shrink-0">
+                      {formatSessionDate(event.date)}
+                    </span>
+                    {event.times.length > 0 ? (
+                      <span className="flex flex-wrap gap-1">
+                        {event.times.map((time, index) => (
+                          <span
+                            key={`${event.id}-${index}`}
+                            className="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-data-mono"
+                          >
+                            {minutesToLabel(time.startMinute)}-{minutesToLabel(time.endMinute)}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-outline text-sm">No timeslot on this weekday</span>
+                    )}
+                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-0 capitalize">
+                      {event.description}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Session follow-ups — the excuse / volunteer lifecycle */}
+        <div className="p-stack-lg bg-surface-container-low">
+          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
+            Session follow-ups
+          </h3>
+          {followUps.length === 0 ? (
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              No follow-ups. Sessions appear here once a tutor excuses themselves or a student
+              volunteers to cover one.
+            </p>
+          ) : (
+            <ul className="divide-y divide-outline-variant/50">
+              {followUps.map((session) => {
                 const state = sessionState(session);
                 return (
                   <li
@@ -115,83 +156,6 @@ function CourseSection({ course, form, onFormChange, onSchedule, isSubmitting, f
             </ul>
           )}
         </div>
-
-        {/* Schedule form */}
-        <div className="p-stack-lg bg-surface-container-low">
-          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
-            Schedule a session
-          </h3>
-          {!canSchedule ? (
-            <p className="font-body-sm text-body-sm text-on-surface-variant">
-              {course.slots.length === 0
-                ? "This course has no weekly time slots yet — sessions are scheduled against the course timetable."
-                : "Once the organiser assigns a tutor to this course, you can schedule sessions for them."}
-            </p>
-          ) : (
-            <form
-              onSubmit={(event) => onSchedule(event, course)}
-              className="space-y-stack-md"
-            >
-              <label className="block">
-                <span className="font-label-caps text-label-caps text-on-surface-variant block mb-unit">
-                  Weekly slot
-                </span>
-                <select
-                  value={form.courseSlotId}
-                  onChange={(event) =>
-                    onFormChange(course.id, "courseSlotId", event.target.value)
-                  }
-                  className="w-full border border-surface-variant rounded-DEFAULT p-stack-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-primary"
-                >
-                  {course.slots.map((slot) => (
-                    <option key={slot.id} value={slot.id}>
-                      {slotLabel(slot)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="font-label-caps text-label-caps text-on-surface-variant block mb-unit">
-                  Tutor
-                </span>
-                <select
-                  value={form.assignmentId}
-                  onChange={(event) =>
-                    onFormChange(course.id, "assignmentId", event.target.value)
-                  }
-                  className="w-full border border-surface-variant rounded-DEFAULT p-stack-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-primary"
-                >
-                  {course.tutors.map((tutor) => (
-                    <option key={tutor.assignmentId} value={tutor.assignmentId}>
-                      {tutor.name} ({tutor.allocatedHours}h)
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="font-label-caps text-label-caps text-on-surface-variant block mb-unit">
-                  Date
-                </span>
-                <input
-                  type="date"
-                  value={form.date}
-                  min={todayISO()}
-                  required
-                  onChange={(event) => onFormChange(course.id, "date", event.target.value)}
-                  className="w-full border border-surface-variant rounded-DEFAULT p-stack-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-primary"
-                />
-              </label>
-
-              {formError && <ErrorMessage>{formError}</ErrorMessage>}
-
-              <Button type="submit" loading={isSubmitting}>
-                Schedule session
-              </Button>
-            </form>
-          )}
-        </div>
       </div>
     </section>
   );
@@ -201,9 +165,6 @@ export default function LecturerView() {
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [forms, setForms] = useState({});
-  const [formErrors, setFormErrors] = useState({});
-  const [submittingCourseId, setSubmittingCourseId] = useState(null);
 
   const fetchLecturerCourses = useCallback(async () => {
     try {
@@ -214,19 +175,7 @@ export default function LecturerView() {
         );
         return;
       }
-      const loadedCourses = response.data?.courses ?? [];
-      setCourses(loadedCourses);
-      setForms((previous) => {
-        const next = {};
-        for (const course of loadedCourses) {
-          next[course.id] = previous[course.id] ?? {
-            courseSlotId: course.slots[0]?.id ?? "",
-            assignmentId: course.tutors[0]?.assignmentId ?? "",
-            date: "",
-          };
-        }
-        return next;
-      });
+      setCourses(response.data?.courses ?? []);
       setError("");
     } catch {
       setError("Could not load your courses. Please try again later.");
@@ -242,67 +191,14 @@ export default function LecturerView() {
     })();
   }, [fetchLecturerCourses]);
 
-  const handleFormChange = (courseId, field, value) => {
-    setForms((previous) => ({
-      ...previous,
-      [courseId]: { ...previous[courseId], [field]: value },
-    }));
-    setFormErrors((previous) => ({ ...previous, [courseId]: "" }));
-  };
-
-  const handleSchedule = async (event, course) => {
-    event.preventDefault();
-    const form = forms[course.id] ?? {};
-
-    if (!form.courseSlotId || !form.assignmentId || !form.date) {
-      setFormErrors((previous) => ({
-        ...previous,
-        [course.id]: "Choose a weekly slot, a tutor and a date.",
-      }));
-      return;
-    }
-
-    setSubmittingCourseId(course.id);
-    setFormErrors((previous) => ({ ...previous, [course.id]: "" }));
-
-    try {
-      const response = await api.post("/sessions", {
-        assignmentId: Number(form.assignmentId),
-        courseSlotId: Number(form.courseSlotId),
-        date: form.date,
-      });
-      if (response.status !== 201) {
-        setFormErrors((previous) => ({
-          ...previous,
-          [course.id]:
-            response.data?.message || "Could not schedule the session. Please try again.",
-        }));
-        return;
-      }
-      // The new session lands in the list after the refetch.
-      setForms((previous) => ({
-        ...previous,
-        [course.id]: { ...previous[course.id], date: "" },
-      }));
-      await fetchLecturerCourses();
-    } catch {
-      setFormErrors((previous) => ({
-        ...previous,
-        [course.id]: "Could not schedule the session. Please try again.",
-      }));
-    } finally {
-      setSubmittingCourseId(null);
-    }
-  };
-
   return (
     <AppLayout title="Lecturer View">
       <div className="p-margin-page max-w-container-max mx-auto w-full">
         <header className="mb-stack-lg">
           <h1 className="font-display text-display text-on-surface">Your courses &amp; sessions</h1>
           <p className="font-body-lg text-body-lg text-on-surface-variant mt-unit">
-            Schedule tutoring sessions against your course timetable — every session appears on the
-            dashboards of the tutors assigned to that course.
+            Every event you add becomes a session for each tutor assigned to that course — their
+            dashboards update automatically.
           </p>
         </header>
 
@@ -330,15 +226,7 @@ export default function LecturerView() {
         ) : (
           <div className="space-y-gutter">
             {courses.map((course) => (
-              <CourseSection
-                key={course.id}
-                course={course}
-                form={forms[course.id] ?? { courseSlotId: "", assignmentId: "", date: "" }}
-                onFormChange={handleFormChange}
-                onSchedule={handleSchedule}
-                isSubmitting={submittingCourseId === course.id}
-                formError={formErrors[course.id]}
-              />
+              <CourseSection key={course.id} course={course} />
             ))}
           </div>
         )}

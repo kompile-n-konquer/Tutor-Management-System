@@ -16,7 +16,7 @@ const TUTOR_ONBOARDING_STEPS = [
   },
   {
     title: "Your session ledger",
-    body: "Sessions your lecturer scheduled for your courses, grouped by day. Rows edged in purple are the ones you lead.",
+    body: "Sessions derived from your courses' events, grouped by day — only your own sessions appear here.",
   },
   {
     title: "Can't make a session?",
@@ -54,13 +54,11 @@ const dayHeading = (value) => {
 const sessionSlotMeta = (session) =>
   [session.courseSlot?.venue, session.courseSlot?.sessionType].filter(Boolean).join(" · ");
 
-// SCHEDULED sessions carry no state chip — ownership (You lead / Led by X) is
-// their status. Only excused and volunteered sessions get a chip.
+// SCHEDULED sessions carry no state chip — the "You lead" line is their status.
+// Only excused and volunteered sessions get a chip.
 const stateChipFor = (session) => {
   if (session.status === "UNASSIGNED") {
-    return session.isMine
-      ? { className: "bg-urgent-orange/10 text-urgent-orange", label: "Excused — awaiting volunteer" }
-      : { className: "bg-urgent-orange/10 text-urgent-orange", label: "Cover needed" };
+    return { className: "bg-urgent-orange/10 text-urgent-orange", label: "Excused — awaiting volunteer" };
   }
   if (session.status === "PENDING") {
     return { className: "bg-trust-blue/10 text-trust-blue", label: "Volunteer pending" };
@@ -73,11 +71,7 @@ function SessionRow({ session, isExcusing, onExcuse, onCancel, onSubmit, isSubmi
   const slotMeta = sessionSlotMeta(session);
 
   return (
-    <li
-      className={`border-l-[3px] ${
-        session.isMine ? "border-primary bg-surface-container-lowest" : "border-transparent bg-surface-container-lowest"
-      }`}
-    >
+    <li className="border-l-[3px] border-primary bg-surface-container-lowest">
       <div className="flex flex-wrap items-start gap-x-stack-md gap-y-unit px-stack-md py-stack-md">
         <div className="w-28 shrink-0">
           <p className="font-data-mono text-data-mono text-on-surface">
@@ -97,16 +91,11 @@ function SessionRow({ session, isExcusing, onExcuse, onCancel, onSubmit, isSubmi
           </p>
 
           <div className="mt-unit flex flex-wrap items-center gap-x-stack-sm gap-y-unit">
-            {session.status === "SCHEDULED" &&
-              (session.isMine ? (
-                <span className="bg-primary/10 text-primary px-2 py-0.5 rounded font-label-caps text-label-caps">
-                  You lead
-                </span>
-              ) : (
-                <span className="font-body-sm text-body-sm text-on-surface-variant">
-                  Led by {session.ledBy ?? "another tutor"}
-                </span>
-              ))}
+            {session.status === "SCHEDULED" && (
+              <span className="bg-primary/10 text-primary px-2 py-0.5 rounded font-label-caps text-label-caps">
+                You lead
+              </span>
+            )}
 
             {chip && (
               <span className={`${chip.className} px-2 py-0.5 rounded font-label-caps text-label-caps`}>
@@ -122,7 +111,7 @@ function SessionRow({ session, isExcusing, onExcuse, onCancel, onSubmit, isSubmi
           </div>
         </div>
 
-        {session.isMine && session.status === "SCHEDULED" && !isExcusing && (
+        {session.status === "SCHEDULED" && !isExcusing && (
           <button
             type="button"
             onClick={() => onExcuse(session.id)}
@@ -193,7 +182,9 @@ export default function TutorDashboard() {
         return;
       }
       setCourses(response.data?.courses ?? []);
-      setSessions(response.data?.sessions ?? []);
+      // The API scopes this feed to the tutor's own sessions; the filter keeps
+      // that invariant in the component so no foreign row can ever render.
+      setSessions((response.data?.sessions ?? []).filter((session) => session.isMine));
       setMaxHoursPerWeek(response.data?.maxHoursPerWeek ?? null);
       setWeekScheduledHours(response.data?.weekScheduledHours ?? 0);
       setError("");
@@ -252,8 +243,8 @@ export default function TutorDashboard() {
   };
 
   // ── Derived schedule data ──────────────────────────────────────────
-  // Sessions the API returns are already scoped to the tutor's assigned
-  // courses and sorted by date; everything below is presentation.
+  // Sessions the API returns are already scoped to the tutor's own sessions
+  // and sorted by date; everything below is presentation.
   const todayStart = startOfDay(new Date()).getTime();
 
   const upcomingGroups = useMemo(() => {
@@ -273,12 +264,12 @@ export default function TutorDashboard() {
 
   const upcomingCount = upcomingGroups.reduce((sum, group) => sum + group.sessions.length, 0);
   const sessionsToLead = upcomingGroups.reduce(
-    (sum, group) => sum + group.sessions.filter((s) => s.isMine && s.status === "SCHEDULED").length,
+    (sum, group) => sum + group.sessions.filter((s) => s.status === "SCHEDULED").length,
     0
   );
   const nextSessionToLead = upcomingGroups
     .flatMap((group) => group.sessions)
-    .find((session) => session.isMine && session.status === "SCHEDULED");
+    .find((session) => session.status === "SCHEDULED");
   const nextSessionMeta = nextSessionToLead ? sessionSlotMeta(nextSessionToLead) : null;
   const coverNeededCount = upcomingGroups
     .flatMap((group) => group.sessions)
@@ -341,8 +332,8 @@ export default function TutorDashboard() {
             </h2>
             <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl">
               You are not currently assigned to tutor any courses. Once the organiser assigns you to
-              a course you applied for, its details and every session the lecturer schedules for it
-              will appear here.
+              a course you applied for, its details and every session derived from its events will
+              appear here.
             </p>
           </section>
         ) : (
@@ -377,7 +368,7 @@ export default function TutorDashboard() {
             </section>
 
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-gutter items-start">
-              {/* ── The session ledger: every upcoming session for the tutor's courses ── */}
+              {/* ── The session ledger: every upcoming session assigned to this tutor ── */}
               <section
                 aria-label="Upcoming sessions"
                 className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
@@ -399,8 +390,8 @@ export default function TutorDashboard() {
                       No sessions scheduled yet for {courseCodes.join(" or ")}.
                     </p>
                     <p className="font-body-sm text-body-sm text-outline mt-unit">
-                      Your lecturer schedules course sessions — they will appear here as soon as
-                      they are on the timetable.
+                      Your lecturer posts events for your courses — every event becomes a session here
+                      as soon as it is on the timetable.
                     </p>
                   </div>
                 ) : (
@@ -465,8 +456,8 @@ export default function TutorDashboard() {
                     </>
                   ) : (
                     <p className="font-body-md text-body-md text-on-surface-variant">
-                      No sessions for you to lead right now. When your lecturer schedules one for
-                      you, it shows up here.
+                      No sessions for you to lead right now. When your lecturer posts an event for one
+                      of your courses, it shows up here.
                     </p>
                   )}
                 </section>
@@ -511,8 +502,8 @@ export default function TutorDashboard() {
                       Cover needed
                     </h2>
                     <p className="font-body-md text-body-md text-on-surface mb-stack-md">
-                      {coverNeededCount} excused session{coverNeededCount === 1 ? "" : "s"} for your
-                      course{courses.length === 1 ? "" : "s"} still need a tutor.
+                      You excused {coverNeededCount} session{coverNeededCount === 1 ? "" : "s"} that
+                      still need{coverNeededCount === 1 ? "s" : ""} a volunteer.
                     </p>
                     <Link
                       to="/volunteer"

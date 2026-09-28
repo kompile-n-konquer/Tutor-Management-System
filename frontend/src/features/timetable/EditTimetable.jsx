@@ -284,14 +284,14 @@ const EditTimetable = () => {
 
             <div className="space-y-unit">
               {sessions.map((session) => {
+                // /sessions/mine only carries this tutor's own sessions — the
+                // chip never has to describe another tutor's row.
                 const chip =
                   session.status === 'UNASSIGNED'
-                    ? { cls: 'bg-urgent-orange/10 text-urgent-orange', label: session.isMine ? 'Excused' : 'Cover needed' }
+                    ? { cls: 'bg-urgent-orange/10 text-urgent-orange', label: 'Excused' }
                     : session.status === 'PENDING'
                       ? { cls: 'bg-trust-blue/10 text-trust-blue', label: 'Volunteer pending' }
-                      : session.isMine
-                        ? { cls: 'bg-primary/10 text-primary', label: 'You lead' }
-                        : { cls: null, label: `Led by ${session.ledBy ?? 'another tutor'}` };
+                      : { cls: 'bg-primary/10 text-primary', label: 'You lead' };
 
                 return (
                   <div
@@ -312,15 +312,9 @@ const EditTimetable = () => {
                         {session.courseSlot.venue}
                       </span>
                     )}
-                    {chip.cls ? (
-                      <span className={`${chip.cls} px-2 py-0.5 rounded font-label-caps text-label-caps`}>
-                        {chip.label}
-                      </span>
-                    ) : (
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">
-                        {chip.label}
-                      </span>
-                    )}
+                    <span className={`${chip.cls} px-2 py-0.5 rounded font-label-caps text-label-caps`}>
+                      {chip.label}
+                    </span>
                     {session.excuseReason && (
                       <span className="w-full font-body-sm text-body-sm text-on-surface-variant italic mt-0.5">
                         “{session.excuseReason}”

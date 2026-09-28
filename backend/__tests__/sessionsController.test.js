@@ -5,6 +5,7 @@ jest.mock('../prisma/client', () => ({
   course: { findMany: jest.fn() },
   courseSlot: { findUnique: jest.fn() },
   session: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
+  event: { findMany: jest.fn(), findFirst: jest.fn() },
   roleApplication: { findFirst: jest.fn() },
 }));
 
@@ -12,7 +13,6 @@ const prisma = require('../prisma/client');
 const {
   getMySessions,
   getLecturerSessions,
-  scheduleSession,
   excuseSession,
 } = require('../controllers/sessions');
 
@@ -83,7 +83,7 @@ describe('getMySessions', () => {
     expect(prisma.session.findMany).not.toHaveBeenCalled();
   });
 
-  test('scopes sessions to the courses the tutor is actively assigned to, not just their own assignments', async () => {
+  test('scopes sessions to the tutor\'s own assignments, never another tutor\'s rows', async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.roleApplication.findFirst.mockResolvedValue(null);
     prisma.tutorAssignment.findMany.mockResolvedValue([
@@ -98,6 +98,7 @@ describe('getMySessions', () => {
         },
       },
     ]);
+    prisma.event.findMany.mockResolvedValue([]);
     prisma.session.findMany.mockResolvedValue([]);
 
     const req = mockReq();
@@ -107,14 +108,15 @@ describe('getMySessions', () => {
     await getMySessions(req, res, next);
     await flushMicrotasks();
 
-    // The session query must filter by the tutor's course assignments —
-    // every session whose assignment's course has an ACTIVE assignment
-    // for this tutor, which is the course-level scoping the dashboard needs.
-    expect(prisma.session.findMany.mock.calls[0][0].where).toEqual({
-      assignment: {
-        course: { assignments: { some: { userId: 1 } } },
-      },
-    });
+    // The session query must filter by the tutor's OWN assignment — a session
+    // on another tutor's assignment is their copy of the occurrence and must
+    // never leak onto this dashboard. The date window keeps the feed to the
+    // current week onwards.
+    expect(prisma.session.findMany.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({
+        assignment: { userId: 1 },
+      }),
+    );
 
     // The tutor's own assignments drive the courses list.
     expect(prisma.tutorAssignment.findMany).toHaveBeenCalledWith(
@@ -139,10 +141,11 @@ describe('getMySessions', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('marks own sessions with isMine and names the tutor leading each session', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+  test('returns only the tutor\'s own sessions — a foreign row returned by the database is dropped', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR', firstName: 'Thabo', lastName: 'Demotutor' });
     prisma.roleApplication.findFirst.mockResolvedValue(null);
     prisma.tutorAssignment.findMany.mockResolvedValue([]);
+    prisma.event.findMany.mockResolvedValue([]);
     prisma.session.findMany.mockResolvedValue([
       {
         id: 21,
@@ -191,17 +194,12 @@ describe('getMySessions', () => {
     await getMySessions(req, res, next);
     await flushMicrotasks();
 
+    // Session 22 sits on another tutor's assignment (a parallel tutorial
+    // group): even though the mock returns it, the merge guard keeps it out
+    // of the response entirely — only the tutor's own session 21 remains.
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessions: [
-          expect.objectContaining({ id: 21, isMine: true, ledBy: 'Thabo Demotutor' }),
-          expect.objectContaining({
-            id: 22,
-            isMine: false,
-            ledBy: 'Alex Mercer',
-            excuseReason: 'Medical appointment',
-          }),
-        ],
+        sessions: [expect.objectContaining({ id: 21, isMine: true, ledBy: 'Thabo Demotutor' })],
       }),
     );
     expect(next).not.toHaveBeenCalled();
@@ -222,6 +220,8 @@ describe('getMySessions', () => {
         },
       },
     ]);
+
+    prisma.event.findMany.mockResolvedValue([]);
 
     // Anchor the teaching week on next Monday — the same weekday logic the
     // seed uses — so the test is date-independent.
@@ -300,6 +300,8 @@ describe('getMySessions', () => {
       },
     ]);
 
+    prisma.event.findMany.mockResolvedValue([]);
+
     // Anchor on the current Monday-to-Sunday week so the test is
     // date-independent whichever day it runs.
     const thisMonday = new Date();
@@ -357,6 +359,213 @@ describe('getMySessions', () => {
     );
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('derives upcoming sessions from the course events, one occurrence per matching weekday slot', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR', firstName: 'Thabo', lastName: 'Demotutor' });
+    prisma.roleApplication.findFirst.mockResolvedValue({ maxHoursPerWeek: 10 });
+    prisma.tutorAssignment.findMany.mockResolvedValue([
+      {
+        id: 11,
+        semester: '2026-S2',
+        course: {
+          id: 100,
+          courseCode: 'COMS1015',
+          courseName: 'Introduction to Programming',
+          user: { firstName: 'Sarah', lastName: 'Van Wyk' },
+        },
+      },
+    ]);
+
+    // Anchor on next Monday so the test is date-independent.
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+    const nextWednesday = new Date(nextMonday.getTime() + 2 * 24 * 60 * 60 * 1000);
+    const nextSaturday = new Date(nextMonday.getTime() + 5 * 24 * 60 * 60 * 1000);
+    const mondayISO = nextMonday.toISOString().slice(0, 10);
+
+    const courseSlots = [
+      {
+        id: 31,
+        dayOfWeek: 0,
+        venue: 'Lab 2',
+        sessionType: 'Tutorial',
+        timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+      },
+      {
+        id: 32,
+        dayOfWeek: 2,
+        venue: 'CB 24',
+        sessionType: 'Lab',
+        timeSlot: { id: 4, startMinute: 600, endMinute: 690 },
+      },
+    ];
+
+    // The lecturer's events are the schedule: Monday and Wednesday generate
+    // occurrences; Saturday is a weekend, so it cannot.
+    const eventCourse = {
+      id: 100,
+      courseCode: 'COMS1015',
+      courseName: 'Introduction to Programming',
+      slots: courseSlots,
+    };
+    prisma.event.findMany.mockResolvedValue([
+      { id: 41, date: nextMonday, description: 'tutoring', course: eventCourse },
+      { id: 42, date: nextWednesday, description: 'tutoring', course: eventCourse },
+      { id: 43, date: nextSaturday, description: 'tutoring', course: eventCourse },
+    ]);
+
+    // The tutor already excused themselves from Wednesday's occurrence — the
+    // real UNASSIGNED row supersedes the virtual one for that slot.
+    prisma.session.findMany.mockResolvedValue([
+      {
+        id: 24,
+        date: nextWednesday,
+        status: 'UNASSIGNED',
+        excuseReason: 'Medical appointment',
+        // Prisma rows carry the scalar FK alongside the included relation —
+        // the dedup key is built from it.
+        courseSlotId: 32,
+        assignment: {
+          userId: 1,
+          courseId: 100,
+          course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+          user: { firstName: 'Thabo', lastName: 'Demotutor' },
+        },
+        courseSlot: courseSlots[1],
+      },
+    ]);
+
+    const currentWeekStart = new Date();
+    currentWeekStart.setUTCHours(0, 0, 0, 0);
+    currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() - ((currentWeekStart.getUTCDay() + 6) % 7));
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    // The events query scopes to the tutor's assigned courses from the start
+    // of the current teaching week onwards.
+    expect(prisma.event.findMany.mock.calls[0][0].where).toEqual({
+      course: { assignments: { some: { userId: 1 } } },
+      date: { gte: currentWeekStart },
+    });
+
+    const sessions = res.json.mock.calls[0][0].sessions;
+    // Monday's occurrence is virtual (id e{courseSlotId}-{date}); Wednesday's
+    // is the real excused row; Saturday generated nothing.
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0]).toEqual(
+      expect.objectContaining({
+        id: `e31-${mondayISO}`,
+        status: 'SCHEDULED',
+        isMine: true,
+        ledBy: 'Thabo Demotutor',
+        course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        courseSlot: expect.objectContaining({ id: 31, dayOfWeek: 0 }),
+      }),
+    );
+    expect(sessions[1]).toEqual(
+      expect.objectContaining({
+        id: 24,
+        status: 'UNASSIGNED',
+        excuseReason: 'Medical appointment',
+        isMine: true,
+      }),
+    );
+
+    // The virtual Monday occurrence drives the course's allocated hours —
+    // the event's slot is 08:00–09:30, so 1.5 hours.
+    expect(res.json.mock.calls[0][0].courses[0]).toEqual(
+      expect.objectContaining({ courseCode: 'COMS1015', allocatedHours: 1.5 }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('never leaks another tutor\'s real session for the same event onto the dashboard', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR', firstName: 'Thabo', lastName: 'Demotutor' });
+    prisma.roleApplication.findFirst.mockResolvedValue(null);
+    prisma.tutorAssignment.findMany.mockResolvedValue([]);
+
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+
+    prisma.event.findMany.mockResolvedValue([
+      {
+        id: 41,
+        date: nextMonday,
+        description: 'tutoring',
+        course: {
+          id: 100,
+          courseCode: 'COMS1015',
+          courseName: 'Introduction to Programming',
+          slots: [
+            {
+              id: 31,
+              dayOfWeek: 0,
+              venue: 'Lab 2',
+              sessionType: 'Tutorial',
+              timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+            },
+          ],
+        },
+      },
+    ]);
+    // A parallel tutorial group: another tutor's real session for the same
+    // event occurrence, on their own assignment. It must neither appear in
+    // the response nor supersede this tutor's virtual occurrence.
+    prisma.session.findMany.mockResolvedValue([
+      {
+        id: 25,
+        date: nextMonday,
+        status: 'SCHEDULED',
+        excuseReason: null,
+        courseSlotId: 31,
+        assignment: {
+          userId: 9,
+          courseId: 100,
+          course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        },
+        courseSlot: {
+          id: 31,
+          dayOfWeek: 0,
+          venue: 'Lab 2',
+          sessionType: 'Tutorial',
+          timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+        },
+      },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    // Only the tutor's own virtual occurrence remains — the other tutor's
+    // row is filtered out before it can reach (or supersede) the ledger.
+    const sessions = res.json.mock.calls[0][0].sessions;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toEqual(
+      expect.objectContaining({
+        id: `e31-${nextMonday.toISOString().slice(0, 10)}`,
+        status: 'SCHEDULED',
+        isMine: true,
+        ledBy: 'Thabo Demotutor',
+      }),
+    );
+    expect(sessions.find((s) => s.id === 25)).toBeUndefined();
+    expect(next).not.toHaveBeenCalled();
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -379,8 +588,9 @@ describe('getLecturerSessions', () => {
     expect(prisma.course.findMany).not.toHaveBeenCalled();
   });
 
-  test('returns only the courses owned by the lecturer with slots, tutors and flattened sessions', async () => {
+  test('returns only the courses owned by the lecturer with slots, tutors, events and flattened sessions', async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'LECTURER' });
+    prisma.event.findMany.mockResolvedValue([]);
     prisma.course.findMany.mockResolvedValue([
       {
         id: 100,
@@ -438,6 +648,7 @@ describe('getLecturerSessions', () => {
           courseCode: 'COMS1015',
           slots: [expect.objectContaining({ id: 31, dayOfWeek: 1 })],
           tutors: [expect.objectContaining({ assignmentId: 11, name: 'Thabo Demotutor' })],
+          events: [],
           sessions: [
             expect.objectContaining({ id: 21, assignmentId: 11, tutorName: 'Thabo Demotutor' }),
           ],
@@ -446,181 +657,86 @@ describe('getLecturerSessions', () => {
     });
     expect(next).not.toHaveBeenCalled();
   });
-});
 
-// ════════════════════════════════════════════════════════════════════════
-// scheduleSession — lecturers scheduling sessions for their courses
-// ════════════════════════════════════════════════════════════════════════
-describe('scheduleSession', () => {
-  function lecturerUser() {
-    return { id: 2, role: 'LECTURER' };
-  }
-
-  function validBody() {
-    return { assignmentId: 11, courseSlotId: 31, date: '2026-09-21' };
-  }
-
-  function ownAssignment() {
-    return {
-      id: 11,
-      userId: 7,
-      courseId: 100,
-      course: { id: 100, courseCode: 'COMS1015', courseName: 'Introduction to Programming', userId: 2 },
-    };
-  }
-
-  test('returns 400 when assignmentId or courseSlotId is not a valid integer', async () => {
-    const req = mockReq({ body: { assignmentId: 'abc', courseSlotId: 31, date: '2026-09-21' } });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('valid integers') }),
-    );
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
-  });
-
-  test('returns 400 when the date is missing or invalid', async () => {
-    const req = mockReq({ body: { assignmentId: 11, courseSlotId: 31, date: 'not-a-date' } });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('valid session date') }),
-    );
-  });
-
-  test('returns 403 when the requesting user is not a lecturer', async () => {
-    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
-
-    const req = mockReq({ body: validBody() });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403 }),
-    );
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('returns 404 when the tutor assignment does not exist', async () => {
-    prisma.user.findUnique.mockResolvedValue(lecturerUser());
-    prisma.tutorAssignment.findUnique.mockResolvedValue(null);
-
-    const req = mockReq({ body: validBody() });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 404, message: expect.stringContaining('Tutor assignment not found') }),
-    );
-  });
-
-  test('returns 403 when the course belongs to a different lecturer', async () => {
-    prisma.user.findUnique.mockResolvedValue(lecturerUser());
-    const foreignAssignment = ownAssignment();
-    foreignAssignment.course = { ...foreignAssignment.course, userId: 999 };
-    prisma.tutorAssignment.findUnique.mockResolvedValue(foreignAssignment);
-
-    const req = mockReq({ body: validBody() });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 403, message: expect.stringContaining('your own courses') }),
-    );
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('returns 400 when the course slot belongs to a different course', async () => {
-    prisma.user.findUnique.mockResolvedValue(lecturerUser());
-    prisma.tutorAssignment.findUnique.mockResolvedValue(ownAssignment());
-    prisma.courseSlot.findUnique.mockResolvedValue({ id: 31, courseId: 200 });
-
-    const req = mockReq({ body: validBody() });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('does not belong to this course') }),
-    );
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('returns 409 when the same tutor, slot and date already has a session', async () => {
-    prisma.user.findUnique.mockResolvedValue(lecturerUser());
-    prisma.tutorAssignment.findUnique.mockResolvedValue(ownAssignment());
-    prisma.courseSlot.findUnique.mockResolvedValue({ id: 31, courseId: 100 });
-    prisma.session.findFirst.mockResolvedValue({ id: 99 });
-
-    const req = mockReq({ body: validBody() });
-    const res = mockRes();
-    const next = jest.fn();
-
-    await scheduleSession(req, res, next);
-    await flushMicrotasks();
-
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 409, message: expect.stringContaining('already scheduled') }),
-    );
-    expect(prisma.session.create).not.toHaveBeenCalled();
-  });
-
-  test('creates a SCHEDULED session for the tutor assignment and returns 201', async () => {
-    prisma.user.findUnique.mockResolvedValue(lecturerUser());
-    prisma.tutorAssignment.findUnique.mockResolvedValue(ownAssignment());
-    prisma.courseSlot.findUnique.mockResolvedValue({ id: 31, courseId: 100 });
-    prisma.session.findFirst.mockResolvedValue(null);
-
-    const createdSession = {
-      id: 21,
-      date: new Date('2026-09-21T00:00:00.000Z'),
-      status: 'SCHEDULED',
-      assignment: {
-        course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
-        user: { firstName: 'Thabo', lastName: 'Demotutor' },
+  test('groups the upcoming events per course with times derived from the weekday slots', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'LECTURER' });
+    prisma.course.findMany.mockResolvedValue([
+      {
+        id: 100,
+        courseCode: 'COMS1015',
+        courseName: 'Introduction to Programming',
+        slots: [
+          {
+            id: 31,
+            dayOfWeek: 0,
+            venue: 'Lab 2',
+            sessionType: 'Tutorial',
+            timeSlot: { startMinute: 480, endMinute: 570 },
+          },
+        ],
+        assignments: [],
       },
-      courseSlot: { timeSlot: { startMinute: 480, endMinute: 570 } },
-    };
-    prisma.session.create.mockResolvedValue(createdSession);
+    ]);
 
-    const req = mockReq({ body: validBody() });
+    // Anchored on next Monday / Wednesday so the test is date-independent.
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+    const nextWednesday = new Date(nextMonday.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    prisma.event.findMany.mockResolvedValue([
+      // The Monday event derives the 08:00–09:30 slot; the course has no
+      // Wednesday slots, so the Wednesday event derives no times.
+      {
+        id: 51,
+        date: nextMonday,
+        description: 'Intro tutoring',
+        course: {
+          id: 100,
+          slots: [{ id: 31, dayOfWeek: 0, timeSlot: { startMinute: 480, endMinute: 570 } }],
+        },
+      },
+      {
+        id: 52,
+        date: nextWednesday,
+        description: 'Midweek catch-up',
+        course: { id: 100, slots: [] },
+      },
+    ]);
+
+    const req = mockReq();
     const res = mockRes();
     const next = jest.fn();
 
-    await scheduleSession(req, res, next);
+    await getLecturerSessions(req, res, next);
     await flushMicrotasks();
 
-    expect(prisma.session.create).toHaveBeenCalledWith(
+    // Events are fetched for the lecturer's own courses from today onwards.
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    expect(prisma.event.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: {
-          assignmentId: 11,
-          courseSlotId: 31,
-          date: new Date('2026-09-21T00:00:00.000Z'),
-          status: 'SCHEDULED',
-        },
+        where: { course: { userId: 1 }, date: { gte: todayStart } },
       }),
     );
-    expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith(createdSession);
+
+    expect(res.json).toHaveBeenCalledWith({
+      courses: [
+        expect.objectContaining({
+          id: 100,
+          events: [
+            expect.objectContaining({
+              id: 51,
+              description: 'Intro tutoring',
+              times: [{ startMinute: 480, endMinute: 570 }],
+            }),
+            expect.objectContaining({ id: 52, times: [] }),
+          ],
+        }),
+      ],
+    });
     expect(next).not.toHaveBeenCalled();
   });
 });
@@ -698,9 +814,16 @@ describe('excuseSession', () => {
   });
 
   test('marks the session UNASSIGNED with the trimmed reason', async () => {
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+
     prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.session.findUnique.mockResolvedValue({
       id: 21,
+      date: nextMonday,
       status: 'SCHEDULED',
       assignment: { userId: 1 },
     });
@@ -719,5 +842,123 @@ describe('excuseSession', () => {
     });
     expect(res.json).toHaveBeenCalledWith({ id: 21, status: 'UNASSIGNED' });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  test('materializes a virtual event occurrence as an UNASSIGNED session', async () => {
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+    const mondayISO = nextMonday.toISOString().slice(0, 10);
+
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.courseSlot.findUnique.mockResolvedValue({
+      id: 31,
+      dayOfWeek: 0,
+      course: { id: 100 },
+    });
+    prisma.event.findFirst.mockResolvedValue({ id: 41, courseId: 100, date: nextMonday });
+    prisma.tutorAssignment.findFirst.mockResolvedValue({ id: 11, userId: 1, courseId: 100 });
+    prisma.session.findFirst.mockResolvedValue(null);
+    prisma.session.create.mockResolvedValue({ id: 24, status: 'UNASSIGNED' });
+
+    const req = mockReq({ params: { id: `e31-${mondayISO}` }, body: { reason: '  Medical appointment  ' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await excuseSession(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.session.create).toHaveBeenCalledWith({
+      data: {
+        assignmentId: 11,
+        courseSlotId: 31,
+        date: new Date(`${mondayISO}T00:00:00.000Z`),
+        status: 'UNASSIGNED',
+        excuseReason: 'Medical appointment',
+      },
+    });
+    expect(res.json).toHaveBeenCalledWith({ id: 24, status: 'UNASSIGNED' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 for a virtual id with no event on that date', async () => {
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+    const mondayISO = nextMonday.toISOString().slice(0, 10);
+
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.courseSlot.findUnique.mockResolvedValue({
+      id: 31,
+      dayOfWeek: 0,
+      course: { id: 100 },
+    });
+    prisma.event.findFirst.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: `e31-${mondayISO}` }, body: { reason: 'Medical appointment' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await excuseSession(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: expect.stringContaining('Session not found') }),
+    );
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the virtual occurrence has already taken place', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+
+    const req = mockReq({ params: { id: 'e31-2020-01-06' }, body: { reason: 'Medical appointment' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await excuseSession(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has already taken place' }),
+    );
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the virtual occurrence was already excused', async () => {
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+    const mondayISO = nextMonday.toISOString().slice(0, 10);
+
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.courseSlot.findUnique.mockResolvedValue({
+      id: 31,
+      dayOfWeek: 0,
+      course: { id: 100 },
+    });
+    prisma.event.findFirst.mockResolvedValue({ id: 41, courseId: 100, date: nextMonday });
+    prisma.tutorAssignment.findFirst.mockResolvedValue({ id: 11, userId: 1, courseId: 100 });
+    prisma.session.findFirst.mockResolvedValue({ id: 24, status: 'UNASSIGNED' });
+
+    const req = mockReq({ params: { id: `e31-${mondayISO}` }, body: { reason: 'Medical appointment' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await excuseSession(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 409,
+        message: 'This session has already been excused or has a pending volunteer',
+      }),
+    );
+    expect(prisma.session.create).not.toHaveBeenCalled();
   });
 });

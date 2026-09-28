@@ -66,7 +66,7 @@ export default function OnboardingHub() {
         {/* ── Role option cards ─────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
           {/* Become a Tutor */}
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-stack-sm mb-stack-md">
                 <span className="material-symbols-outlined text-3xl text-primary">assignment_ind</span>
@@ -109,7 +109,7 @@ export default function OnboardingHub() {
           </div>
 
           {/* Become a Lecturer */}
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-stack-sm mb-stack-md">
                 <span className="material-symbols-outlined text-3xl text-secondary">school</span>
@@ -137,7 +137,7 @@ export default function OnboardingHub() {
 
         {/* ── Application history ───────────────────────────────────── */}
         {applications.length > 0 && (
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md">Your Applications</h3>
             <div className="space-y-stack-sm">
               {applications.map((app) => (

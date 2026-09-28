@@ -1,6 +1,7 @@
 import AppLayout from "../../components/layout/AppLayout";
 import OnboardingWalkthrough from "../../components/onboarding/OnboardingWalkthrough";
 import { useFirstVisit } from "../../hooks/useFirstVisit";
+import useAuth from "../../hooks/useAuth";
 
 const TUTOR_ONBOARDING_STEPS = [
   { title: "Welcome to your Tutor Dashboard", body: "This is where you'll see upcoming sessions, hours logged, and quick actions every time you log in." },
@@ -11,6 +12,8 @@ const TUTOR_ONBOARDING_STEPS = [
 
 export default function TutorDashboard() {
   const { isFirstVisit, markSeen } = useFirstVisit("tutor-dashboard");
+  const { userProfile } = useAuth();
+  const firstName = userProfile?.firstName;
 
   return (
     <AppLayout title="Tutor Management System">
@@ -18,14 +21,14 @@ export default function TutorDashboard() {
 
       <div className="p-margin-page max-w-container-max mx-auto w-full">
         <div className="mb-stack-lg">
-          <h2 className="font-display text-display text-primary mb-unit">Welcome back, Alex!</h2>
+          <h2 className="font-display text-display text-primary mb-unit">Welcome back{firstName ? `, ${firstName}` : ""}!</h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant">
             Here's a quick overview of your tutoring schedule and progress this week.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-stack-lg mb-stack-lg">
-          <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] relative overflow-hidden">
+          <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-bento relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary-fixed to-transparent opacity-30 z-0" />
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-stack-md">
@@ -41,7 +44,7 @@ export default function TutorDashboard() {
             </div>
           </div>
 
-          <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+          <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-bento flex flex-col justify-between">
             <div className="flex justify-between items-start mb-stack-md">
               <span className="font-label-caps text-label-caps text-secondary tracking-widest uppercase">Hours Logged this Week</span>
               <span className="material-symbols-outlined text-secondary">trending_up</span>
@@ -60,7 +63,7 @@ export default function TutorDashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
-          <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-full">
+          <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento flex flex-col h-full">
             <div className="p-stack-lg border-b border-outline-variant flex justify-between items-center">
               <div>
                 <h3 className="font-headline-md text-headline-md text-on-surface">Weekly Schedule</h3>
@@ -97,7 +100,7 @@ export default function TutorDashboard() {
 
                 <div className="font-data-mono text-data-mono text-on-surface-variant text-right pr-2 py-4 border-t border-outline-variant">14:00</div>
                 <div className="col-span-5 border-t border-outline-variant relative h-24">
-                  <div className="absolute top-2 left-[60%] w-[18%] bg-tertiary-fixed border border-tertiary rounded p-2 shadow-sm z-10 ring-2 ring-tertiary ring-offset-2">
+                  <div className="absolute top-2 left-[60%] w-[18%] bg-tertiary-fixed border border-tertiary rounded p-2 shadow-sm z-10 ring-2 ring-tertiary ring-offset-2 ring-offset-surface-container-lowest">
                     <p className="font-label-caps text-label-caps text-tertiary mb-1">COMP 201</p>
                     <p className="font-body-sm text-body-sm text-on-surface">Room 402</p>
                   </div>
@@ -107,10 +110,10 @@ export default function TutorDashboard() {
           </div>
 
           <div className="space-y-stack-lg">
-            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-bento">
               <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md">Quick Actions</h3>
               <div className="space-y-stack-sm">
-                <button className="w-full flex items-center justify-between p-stack-sm bg-error-container text-on-error-container hover:bg-[#ffb4ab] transition-colors rounded-lg border border-error">
+                <button className="w-full flex items-center justify-between p-stack-sm bg-error-container text-on-error-container hover:bg-error-container-hover transition-colors rounded-lg border border-error">
                   <span className="font-body-md text-body-md font-semibold">Excuse from Session</span>
                   <span className="material-symbols-outlined">event_busy</span>
                 </button>
@@ -121,7 +124,7 @@ export default function TutorDashboard() {
               </div>
             </div>
 
-            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-stack-lg shadow-bento">
               <h3 className="font-headline-md text-headline-md text-on-surface mb-unit">Submit Timesheet</h3>
               <p className="font-body-sm text-body-sm text-on-surface-variant mb-stack-md">
                 Review your logged hours for this pay period before submitting.

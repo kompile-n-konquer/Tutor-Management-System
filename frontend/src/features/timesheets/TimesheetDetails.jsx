@@ -227,7 +227,7 @@ const TimesheetDetails = () => {
             {isLecturer && isSubmitted && (
               <div className="flex">
                 <Button
-                  className="min-w-32 max-h-8 mr-3 bg-primary text-white"
+                  className="min-w-32 max-h-8 mr-3 bg-primary text-on-primary"
                   onClick={handleApproveTimesheet}
                   disabled={!canApprove}
                 >
@@ -314,7 +314,7 @@ const TimesheetDetails = () => {
                 </button>
                 <button
                   onClick={handleRejectTimesheet}
-                  className="cursor-pointer bg-error text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90"
+                  className="cursor-pointer bg-error text-on-error px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90"
                 >
                   Reject
                 </button>

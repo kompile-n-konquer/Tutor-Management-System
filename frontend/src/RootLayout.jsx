@@ -1,17 +1,19 @@
 import { Outlet } from "react-router-dom";
 import AuthProvider from "./features/context/AuthProvider";
+import ThemeProvider from "./features/context/ThemeProvider";
 import ForbiddenGate from "./components/auth/ForbiddenGate.jsx";
 
 const RootLayout = () => {
   return (
-    <AuthProvider>
-      <ForbiddenGate>
+    <ThemeProvider>
+      <AuthProvider>
+        <ForbiddenGate>
         <main>
           <Outlet />
         </main>
       </ForbiddenGate>
-    </AuthProvider>
-    
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

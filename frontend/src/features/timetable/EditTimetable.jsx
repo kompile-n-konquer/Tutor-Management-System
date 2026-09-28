@@ -164,7 +164,7 @@ const EditTimetable = () => {
         {loadError && <ErrorMessage>{loadError}</ErrorMessage>}
         {saveError && <ErrorMessage>{saveError}</ErrorMessage>}
 
-        <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
           <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
             <div>
               <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">

@@ -83,7 +83,7 @@ export default function EditProfile() {
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
         <form onSubmit={handleSubmit} className="space-y-gutter">
-          <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] space-y-stack-md">
+          <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento space-y-stack-md">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-stack-md">
               <Input
                 labelText="First Name"

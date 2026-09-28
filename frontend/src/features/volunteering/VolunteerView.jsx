@@ -17,7 +17,7 @@ export default function VolunteerView() {
               </div>
               <p className="font-body-sm text-on-surface-variant">Assist first-year computer science students during exam preparation sessions.</p>
             </div>
-            <button className="mt-stack-md bg-primary text-white py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
+            <button className="mt-stack-md bg-primary text-on-primary py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
               Apply to Volunteer
             </button>
           </div>

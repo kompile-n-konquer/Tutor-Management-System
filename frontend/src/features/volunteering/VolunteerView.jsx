@@ -9,12 +9,14 @@ export default function VolunteerView() {
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [volunteeringId, setVolunteeringId] = useState(null);
 
   useEffect(() => {
     const fetchUnassignedSessions = async () => {
       try {
-        // The endpoint only returns sessions whose tutor excused themselves.
+        // The endpoint only returns excused sessions for courses where this
+        // tutor's own application mark meets the course minimum.
         const response = await api.get("/sessions/unassigned");
         if (response.status !== 200) {
           setError(response.data?.message || "Could not load volunteer opportunities. Please try again later.");
@@ -34,6 +36,7 @@ export default function VolunteerView() {
   const handleVolunteer = async (sessionId) => {
     setVolunteeringId(sessionId);
     setError("");
+    setSuccessMessage("");
 
     try {
       const response = await api.post(`/sessions/${sessionId}/volunteer`);
@@ -41,8 +44,9 @@ export default function VolunteerView() {
         setError(response.data?.message || "Could not submit your volunteer request. Please try again later.");
         return;
       }
-      // The session now has a pending volunteer, so it is no longer unassigned.
+      // The session now waits on the lecturer's decision, so it leaves the open pool.
       setSessions((previousSessions) => previousSessions.filter((session) => session.id !== sessionId));
+      setSuccessMessage("Your cover request was sent to the lecturer for approval.");
     } catch {
       setError("Could not submit your volunteer request. Please try again later.");
     } finally {
@@ -56,10 +60,15 @@ export default function VolunteerView() {
       <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-surface-variant shadow-sm">
         <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-unit">Volunteer Opportunities</h2>
         <p className="font-body-sm text-on-surface-variant mb-stack-md">
-          Sessions whose tutor excused themselves and still need cover. Volunteering submits a request for approval — it does not assign the session to you straight away.
+          Sessions whose tutor excused themselves and that you are qualified to cover. You only see courses where your application mark meets the course minimum. Volunteering sends a cover request to the lecturer — once approved, the session is assigned to you.
         </p>
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
+        {successMessage && (
+          <p className="font-body-sm text-primary bg-primary-fixed rounded-lg px-stack-sm py-unit mb-stack-md">
+            {successMessage}
+          </p>
+        )}
 
         {isLoading ? (
           <p className="font-body-md text-on-surface-variant">Loading available sessions…</p>
@@ -87,6 +96,11 @@ export default function VolunteerView() {
                     <p className="font-body-sm text-on-surface-variant font-data-mono">
                       {formatSessionDate(session.date)} · {formatSessionTimeRange(session)}
                     </p>
+                    {course && (
+                      <p className="font-body-sm text-on-surface-variant font-data-mono mt-unit">
+                        Your mark: {session.myCourseMark} · Course minimum: {course.minimumMark}
+                      </p>
+                    )}
                   </div>
                   <div className="mt-stack-md">
                     <Button

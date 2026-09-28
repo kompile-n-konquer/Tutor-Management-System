@@ -37,13 +37,13 @@ const sessionState = (session) => {
         label: "Excused — needs volunteer",
       };
     case "PENDING":
-      return { chip: "bg-trust-blue/10 text-trust-blue", label: "Volunteer pending" };
+      return { chip: "bg-trust-blue/10 text-trust-blue", label: "Cover requested" };
     default:
       return { chip: "bg-surface-variant text-on-surface-variant", label: "Scheduled" };
   }
 };
 
-function CourseSection({ course, form, onFormChange, onSchedule, isSubmitting, formError }) {
+function CourseSection({ course, form, onFormChange, onSchedule, isSubmitting, formError, onDecision, decidingSessionId }) {
   const today = startOfToday().getTime();
   const upcoming = course.sessions.filter(
     (session) => new Date(session.date).getTime() >= today
@@ -107,6 +107,29 @@ function CourseSection({ course, form, onFormChange, onSchedule, isSubmitting, f
                     {session.excuseReason && (
                       <span className="font-body-sm text-body-sm text-outline italic basis-full">
                         “{session.excuseReason}”
+                      </span>
+                    )}
+                    {session.volunteerRequest?.status === "PENDING" && (
+                      <span className="basis-full flex flex-wrap items-center gap-x-stack-md gap-y-unit pt-unit">
+                        <span className="font-body-sm text-body-sm text-on-surface">
+                          Cover requested by {session.volunteerRequest.volunteerName ?? "a tutor"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onDecision(session.id, "APPROVED")}
+                          disabled={decidingSessionId !== null}
+                          className="cursor-pointer bg-primary text-on-primary rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {decidingSessionId === session.id ? "Working…" : "Approve cover"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDecision(session.id, "REJECTED")}
+                          disabled={decidingSessionId !== null}
+                          className="cursor-pointer border border-outline-variant text-on-surface-variant rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-surface-variant transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {decidingSessionId === session.id ? "Working…" : "Reject"}
+                        </button>
                       </span>
                     )}
                   </li>
@@ -204,6 +227,7 @@ export default function LecturerView() {
   const [forms, setForms] = useState({});
   const [formErrors, setFormErrors] = useState({});
   const [submittingCourseId, setSubmittingCourseId] = useState(null);
+  const [decidingSessionId, setDecidingSessionId] = useState(null);
 
   const fetchLecturerCourses = useCallback(async () => {
     try {
@@ -295,6 +319,25 @@ export default function LecturerView() {
     }
   };
 
+  const handleVolunteerDecision = async (sessionId, decision) => {
+    setDecidingSessionId(sessionId);
+    setError("");
+
+    try {
+      const response = await api.patch(`/sessions/${sessionId}/volunteer`, { decision });
+      if (response.status !== 200) {
+        setError(response.data?.message || "Could not update the cover request. Please try again.");
+        return;
+      }
+      // Approval re-assigns the session and rejection reopens it — refetch for both.
+      await fetchLecturerCourses();
+    } catch {
+      setError("Could not update the cover request. Please try again.");
+    } finally {
+      setDecidingSessionId(null);
+    }
+  };
+
   return (
     <AppLayout title="Lecturer View">
       <div className="p-margin-page max-w-container-max mx-auto w-full">
@@ -338,6 +381,8 @@ export default function LecturerView() {
                 onSchedule={handleSchedule}
                 isSubmitting={submittingCourseId === course.id}
                 formError={formErrors[course.id]}
+                onDecision={handleVolunteerDecision}
+                decidingSessionId={decidingSessionId}
               />
             ))}
           </div>

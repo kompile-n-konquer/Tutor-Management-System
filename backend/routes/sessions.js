@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authenticateFirebaseToken = require('../middleware/auth');
+const { authenticateFirebaseToken } = require('../middleware/auth');
 const { requireRole } = require('../utils/roles');
 const {
   getUnassignedSessions,
@@ -10,9 +10,10 @@ const {
   scheduleSession,
   excuseSession,
   volunteerForSession,
+  decideVolunteerRequest,
 } = require('../controllers/sessions');
 
-// Sessions that a tutor excused themselves from and are open for student volunteers.
+// Excused sessions open for cover, filtered to courses where the signed-in tutor's mark qualifies.
 router.get('/unassigned', authenticateFirebaseToken, getUnassignedSessions);
 // Every session scheduled for the signed-in tutor's assigned courses, used by the tutor dashboard.
 router.get('/mine', authenticateFirebaseToken, getMySessions);
@@ -24,7 +25,9 @@ router.get('/lecturer', authenticateFirebaseToken, requireRole('LECTURER'), getL
 router.post('/', authenticateFirebaseToken, requireRole('LECTURER'), scheduleSession);
 // A tutor excuses themselves from a session, returning it to the unassigned state.
 router.patch('/:id/excuse', authenticateFirebaseToken, excuseSession);
-// A student volunteers for an unassigned session, creating a pending assignment.
+// A qualifying tutor requests cover for an unassigned session (goes PENDING for the lecturer).
 router.post('/:id/volunteer', authenticateFirebaseToken, volunteerForSession);
+// The course's lecturer approves or rejects a pending cover request.
+router.patch('/:id/volunteer', authenticateFirebaseToken, requireRole('LECTURER'), decideVolunteerRequest);
 
 module.exports = router;

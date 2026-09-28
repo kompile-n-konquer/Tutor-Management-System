@@ -3,8 +3,15 @@ const catchAsync = require('../utils/catchAsync');
 
 // Session lifecycle:
 //   SCHEDULED  — assigned to a tutor through their TutorAssignment
-//   UNASSIGNED — the tutor excused themselves, the session is open for volunteers
-//   PENDING    — a student volunteered and is awaiting approval (see SessionVolunteer)
+//   UNASSIGNED — the tutor excused themselves, the session is open for cover
+//   PENDING    — a qualifying tutor requested cover and the course's lecturer
+//                has not decided yet (see SessionVolunteer)
+//
+// Cover rules: any tutor (other than the one who excused themselves) whose own
+// application mark for the course meets the course's minimumMark may request a
+// session. The lecturer approves or rejects; approval re-points the session at
+// the volunteer's TutorAssignment for the course, so they take the excusing
+// tutor's place on it.
 //
 // A session's course is derivable without any extra join table: every Session
 // belongs to a TutorAssignment (tutor ↔ course) and a CourseSlot (course's
@@ -34,12 +41,43 @@ const sessionHours = (session) => {
 };
 
 exports.getUnassignedSessions = catchAsync(async (req, res, next) => {
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+  if (requestingUser.role !== 'TUTOR') {
+    return next(createHttpError(403, 'Only tutors can volunteer for excused sessions'));
+  }
+
+  // A tutor may only cover courses where their own application mark meets the
+  // course's minimum mark — the same bar used when applying to tutor a course.
+  const myApplications = await prisma.application.findMany({
+    where: { userId: requestingUser.id, status: { not: 'REJECTED' } },
+    include: { course: { select: { id: true, minimumMark: true } } },
+  });
+  const myMarkByCourse = new Map(
+    myApplications
+      .filter((application) => application.courseMark >= application.course.minimumMark)
+      .map((application) => [application.courseId, application.courseMark]),
+  );
+
+  if (myMarkByCourse.size === 0) {
+    return res.json([]);
+  }
+
   const sessions = await prisma.session.findMany({
-    where: { status: 'UNASSIGNED' },
+    where: {
+      status: 'UNASSIGNED',
+      courseSlot: { courseId: { in: [...myMarkByCourse.keys()] } },
+      // The tutor who excused themselves cannot cover their own session.
+      assignment: { userId: { not: requestingUser.id } },
+    },
     include: {
       assignment: {
         include: {
-          course: { select: { courseCode: true, courseName: true } },
+          course: { select: { courseCode: true, courseName: true, minimumMark: true } },
         },
       },
       courseSlot: {
@@ -51,7 +89,13 @@ exports.getUnassignedSessions = catchAsync(async (req, res, next) => {
     orderBy: [{ date: 'asc' }],
   });
 
-  res.json(sessions);
+  // myCourseMark lets the page show why each session is open to this tutor.
+  res.json(
+    sessions.map((session) => ({
+      ...session,
+      myCourseMark: myMarkByCourse.get(session.assignment.courseId) ?? null,
+    })),
+  );
 });
 
 exports.getMySessions = catchAsync(async (req, res, next) => {
@@ -260,7 +304,12 @@ exports.getLecturerSessions = catchAsync(async (req, res, next) => {
         include: {
           user: { select: { firstName: true, lastName: true } },
           sessions: {
-            include: { courseSlot: { include: { timeSlot: true } } },
+            include: {
+              courseSlot: { include: { timeSlot: true } },
+              volunteerRequest: {
+                include: { user: { select: { firstName: true, lastName: true } } },
+              },
+            },
             orderBy: [{ date: 'asc' }, { id: 'asc' }],
           },
         },
@@ -281,6 +330,16 @@ exports.getLecturerSessions = catchAsync(async (req, res, next) => {
           assignmentId: assignment.id,
           tutorName: assignment.user
             ? `${assignment.user.firstName} ${assignment.user.lastName}`
+            : null,
+          volunteerRequest: session.volunteerRequest
+            ? {
+                id: session.volunteerRequest.id,
+                status: session.volunteerRequest.status,
+                userId: session.volunteerRequest.userId,
+                volunteerName: session.volunteerRequest.user
+                  ? `${session.volunteerRequest.user.firstName} ${session.volunteerRequest.user.lastName}`
+                  : null,
+              }
             : null,
           courseSlot: {
             id: session.courseSlot.id,
@@ -507,38 +566,160 @@ exports.volunteerForSession = catchAsync(async (req, res, next) => {
   if (!requestingUser) {
     return next(createHttpError(404, 'User not found. Please check if the user exists'));
   }
-  if (requestingUser.role !== 'STUDENT') {
-    return next(createHttpError(403, 'Only students can volunteer for unassigned sessions'));
+  if (requestingUser.role !== 'TUTOR') {
+    return next(createHttpError(403, 'Only tutors can volunteer for excused sessions'));
   }
 
   try {
-    // The volunteer record and the session status flip happen atomically, and the
-    // unique constraint on SessionVolunteer.sessionId stops two students from
-    // volunteering for the same session.
-    const volunteerAssignment = await prisma.$transaction(async (tx) => {
-      const session = await tx.session.findUnique({ where: { id: sessionId } });
+    // The request record and the session status flip happen atomically. The
+    // unique constraint on SessionVolunteer.sessionId keeps a single request
+    // per session while it is open (or awaiting the lecturer's decision).
+    const volunteerRequest = await prisma.$transaction(async (tx) => {
+      const session = await tx.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          assignment: { select: { userId: true } },
+          courseSlot: { include: { course: { select: { id: true, minimumMark: true } } } },
+        },
+      });
       if (!session) {
         throw createHttpError(404, 'Session not found. Please check if the session exists');
       }
       if (session.status !== 'UNASSIGNED') {
         throw createHttpError(409, 'This session is no longer available for volunteering');
       }
+      if (session.assignment.userId === requestingUser.id) {
+        throw createHttpError(403, 'You excused this session — another tutor must cover it');
+      }
 
-      // PENDING on purpose: volunteering must never confirm the assignment directly.
-      const createdVolunteerAssignment = await tx.sessionVolunteer.create({
-        data: { sessionId, userId: requestingUser.id, status: 'PENDING' },
+      const course = session.courseSlot.course;
+
+      // The volunteer's own application mark for the course must meet the
+      // course minimum — the same bar the course uses for its tutors.
+      const myApplication = await tx.application.findFirst({
+        where: { userId: requestingUser.id, courseId: course.id, status: { not: 'REJECTED' } },
+        orderBy: { courseMark: 'desc' },
       });
+      if (!myApplication || myApplication.courseMark < course.minimumMark) {
+        throw createHttpError(403, 'Your course mark does not meet the minimum for this course');
+      }
+
+      const existingRequest = await tx.sessionVolunteer.findUnique({ where: { sessionId } });
+      if (existingRequest && existingRequest.status !== 'REJECTED') {
+        throw createHttpError(409, 'Another tutor has already volunteered for this session');
+      }
+
+      // PENDING on purpose: the lecturer decides before the session changes hands.
+      const request = existingRequest
+        ? await tx.sessionVolunteer.update({
+            where: { sessionId },
+            data: { userId: requestingUser.id, status: 'PENDING', createdAt: new Date() },
+          })
+        : await tx.sessionVolunteer.create({
+            data: { sessionId, userId: requestingUser.id, status: 'PENDING' },
+          });
+
       await tx.session.update({ where: { id: sessionId }, data: { status: 'PENDING' } });
 
-      return createdVolunteerAssignment;
+      return request;
     });
 
-    res.status(201).json(volunteerAssignment);
+    res.status(201).json(volunteerRequest);
   } catch (error) {
-    // P2002 is the unique-constraint failure raised when another student beat us to it.
+    // P2002 is the unique-constraint failure raised when another tutor beat us to it.
     if (error.code === 'P2002') {
-      return next(createHttpError(409, 'Another student has already volunteered for this session'));
+      return next(createHttpError(409, 'Another tutor has already volunteered for this session'));
     }
     throw error;
   }
+});
+
+// The course's lecturer decides on a PENDING cover request. Approval re-points
+// the session at the volunteer's TutorAssignment (created for the course when
+// they never had one), so the volunteer takes the excusing tutor's place.
+exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
+  const sessionId = parseSessionId(req.params.id);
+  if (!sessionId) {
+    return next(createHttpError(400, 'Invalid session id'));
+  }
+
+  const { decision } = req.body || {};
+  if (decision !== 'APPROVED' && decision !== 'REJECTED') {
+    return next(createHttpError(400, 'decision must be APPROVED or REJECTED'));
+  }
+
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+  if (requestingUser.role !== 'LECTURER') {
+    return next(createHttpError(403, 'Only lecturers can decide on volunteer requests'));
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const session = await tx.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        assignment: { select: { semester: true } },
+        courseSlot: { include: { course: { select: { id: true, userId: true } } } },
+        volunteerRequest: true,
+      },
+    });
+    if (!session) {
+      throw createHttpError(404, 'Session not found. Please check if the session exists');
+    }
+    if (session.courseSlot.course.userId !== requestingUser.id) {
+      throw createHttpError(403, 'You can only decide on requests for your own courses');
+    }
+    if (
+      session.status !== 'PENDING' ||
+      !session.volunteerRequest ||
+      session.volunteerRequest.status !== 'PENDING'
+    ) {
+      throw createHttpError(409, 'This session has no volunteer request awaiting a decision');
+    }
+
+    if (decision === 'REJECTED') {
+      // The rejected record stays for history; the session returns to the open
+      // pool, and the next volunteer replaces the record (see volunteerForSession).
+      await tx.sessionVolunteer.update({
+        where: { sessionId },
+        data: { status: 'REJECTED' },
+      });
+      const updatedSession = await tx.session.update({
+        where: { id: sessionId },
+        data: { status: 'UNASSIGNED' },
+      });
+      return { decision, session: updatedSession };
+    }
+
+    // Approved: the volunteer takes over the session through their assignment
+    // for the course — created on the spot when they are not yet its tutor.
+    let coverAssignment = await tx.tutorAssignment.findFirst({
+      where: { userId: session.volunteerRequest.userId, courseId: session.courseSlot.course.id },
+    });
+    if (!coverAssignment) {
+      coverAssignment = await tx.tutorAssignment.create({
+        data: {
+          userId: session.volunteerRequest.userId,
+          courseId: session.courseSlot.course.id,
+          semester: session.assignment.semester,
+        },
+      });
+    }
+
+    await tx.sessionVolunteer.update({
+      where: { sessionId },
+      data: { status: 'APPROVED' },
+    });
+    const updatedSession = await tx.session.update({
+      where: { id: sessionId },
+      data: { assignmentId: coverAssignment.id, status: 'SCHEDULED' },
+    });
+    return { decision, session: updatedSession, assignmentId: coverAssignment.id };
+  });
+
+  res.json(result);
 });

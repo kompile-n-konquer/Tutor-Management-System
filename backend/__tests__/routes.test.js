@@ -6,6 +6,7 @@ jest.mock('../firebase/admin', () => jest.fn());
 const sessionsRouter = require('../routes/sessions');
 const authRouter = require('../routes/auth');
 const availabilityRouter = require('../routes/availability');
+const timesheetsRouter = require('../routes/timesheets');
 
 // Flattens an express Router into [{ path, methods, handlers }] entries.
 const routeTable = (router) =>
@@ -43,6 +44,23 @@ describe('routes wiring', () => {
     expect(routeTable(availabilityRouter)).toEqual([
       { path: '/', methods: ['get'], handlers: 2 },
       { path: '/', methods: ['put'], handlers: 2 },
+    ]);
+  });
+
+  test('timesheet routes expose the full workflow behind auth', () => {
+    expect(routeTable(timesheetsRouter)).toEqual([
+      // Literal paths must be registered before /:id so they are not shadowed.
+      { path: '/', methods: ['get'], handlers: 2 },
+      { path: '/pending-review', methods: ['get'], handlers: 2 },
+      { path: '/supervisors', methods: ['get'], handlers: 2 },
+      { path: '/', methods: ['post'], handlers: 2 },
+      { path: '/:id', methods: ['get'], handlers: 2 },
+      { path: '/:id', methods: ['put'], handlers: 2 },
+      { path: '/:id', methods: ['delete'], handlers: 2 },
+      { path: '/:id/submit', methods: ['post'], handlers: 2 },
+      { path: '/:id/entries/:entryId/approve', methods: ['put'], handlers: 2 },
+      { path: '/:id/reject', methods: ['put'], handlers: 2 },
+      { path: '/:id/export', methods: ['get'], handlers: 2 },
     ]);
   });
 });

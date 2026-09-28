@@ -3,6 +3,10 @@ jest.mock('../prisma/client', () => ({
   user: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
 }));
 
+// Factory mock — the real module must never load (firebase-admin ships ESM-only
+// deps like jose that Jest cannot parse), so we replace it with a bare jest.fn().
+jest.mock('../firebase/admin', () => jest.fn());
+
 const prisma = require('../prisma/client');
 const { getAllUsers, getUser, getUserMe, createUser } = require('../controllers/auth');
 

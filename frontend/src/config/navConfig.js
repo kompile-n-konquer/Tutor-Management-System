@@ -8,7 +8,6 @@ export const NAV_LINKS = [
   { to: "/events", icon: "calendar_today", label: "Events", roles: ["tutor", "lecturer", "organiser"] },
   { to: "/applications", icon: "workspace_premium", label: "Applications", roles: ["student", "tutor"] },
   { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor"] },
-  { to: "/profile", icon: "account_circle", label: "Profile", roles: ["organiser", "tutor", "student", "lecturer"] },
   { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["organiser", "tutor", "lecturer"] },
   { to: "/timetable/edit", icon: "calendar_month", label: "Timetable", roles: ["tutor", "student"]  },
 

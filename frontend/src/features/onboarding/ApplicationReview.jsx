@@ -343,7 +343,7 @@ export default function ApplicationReview() {
                       <button
                         onClick={() => handleReview(detail.id, "APPROVE")}
                         disabled={isActing}
-                        className="bg-trust-blue text-white px-6 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-unit"
+                        className="bg-trust-blue text-on-trust-blue px-6 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-unit"
                       >
                         <span className="material-symbols-outlined text-[18px]">check_circle</span>
                         {isActing ? "Processing..." : "Approve"}

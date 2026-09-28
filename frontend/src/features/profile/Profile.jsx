@@ -148,7 +148,7 @@ export default function Profile() {
             </p>
           </div>
           <div className="flex gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1E90FF]/10 text-[#1E90FF] font-label-caps text-label-caps border border-[#1E90FF]/20">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-trust-blue/10 text-trust-blue font-label-caps text-label-caps border border-trust-blue/20">
               <span className="material-symbols-outlined text-[16px]">verified</span> {roleLabel}
             </span>
           </div>
@@ -156,7 +156,7 @@ export default function Profile() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
           <div className="lg:col-span-4 space-y-gutter">
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
               <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">Personal Info</h3>
                 <button
@@ -189,7 +189,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
               <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">Academic History</h3>
                 <span className="material-symbols-outlined text-outline text-[20px]">school</span>
@@ -209,7 +209,7 @@ export default function Profile() {
                   <div
                     key={c.code}
                     className={`flex justify-between items-center p-2 hover:bg-surface-container-low rounded-lg transition-colors ${
-                      c.active ? 'border-l-4 border-[#FF8C00] bg-[#FF8C00]/5' : ''
+                      c.active ? 'border-l-4 border-urgent-orange bg-urgent-orange/5' : ''
                     }`}
                   >
                     <div>
@@ -218,7 +218,7 @@ export default function Profile() {
                     </div>
                     <div className="text-right">
                       <p
-                        className={`font-data-mono text-data-mono font-bold ${c.active ? 'text-[#FF8C00]' : 'text-primary'}`}
+                        className={`font-data-mono text-data-mono font-bold ${c.active ? 'text-urgent-orange' : 'text-primary'}`}
                       >
                         {c.grade}
                       </p>
@@ -237,7 +237,7 @@ export default function Profile() {
           </div>
 
           <div className="lg:col-span-8 space-y-gutter">
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
               <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <div>
                   <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
@@ -249,7 +249,7 @@ export default function Profile() {
                 </div>
                 <button
                   onClick={() => navigate('/timetable/edit')}
-                  className="px-4 py-1.5 border border-[#1E90FF] text-[#1E90FF] rounded-lg font-label-caps text-label-caps hover:bg-[#1E90FF]/5 transition-colors cursor-pointer"
+                  className="px-4 py-1.5 border border-trust-blue text-trust-blue rounded-lg font-label-caps text-label-caps hover:bg-trust-blue/5 transition-colors cursor-pointer"
                 >
                   Edit Timetable
                 </button>
@@ -380,7 +380,7 @@ export default function Profile() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-4">
                   Notifications
                 </h3>
@@ -394,14 +394,14 @@ export default function Profile() {
                       <span className="font-body-md text-on-surface">{label}</span>
                       <div className="relative">
                         <input defaultChecked={checked} className="sr-only peer" type="checkbox" />
-                        <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
+                        <div className="w-11 h-6 bg-surface-container-high rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-outline-variant after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
                       </div>
                     </label>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-4">Security</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -409,7 +409,7 @@ export default function Profile() {
                       <p className="font-body-md text-on-surface">Two-Factor Authentication</p>
                       <p className="font-body-sm text-outline">Enabled via University SSO</p>
                     </div>
-                    <span className="material-symbols-outlined text-[#1E90FF]">check_circle</span>
+                    <span className="material-symbols-outlined text-trust-blue">check_circle</span>
                   </div>
                   <div className="pt-4 border-t border-outline-variant/30">
                     <button className="w-full py-2 border border-outline text-on-surface rounded-lg font-label-caps text-label-caps hover:bg-surface-container transition-colors">

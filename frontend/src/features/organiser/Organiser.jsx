@@ -74,13 +74,13 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart,
       } ${isMutating ? "opacity-50 pointer-events-none" : ""}`}
     >
       {tutor.clash && (
-        <div className="absolute -top-2 -right-2 bg-clash-bg text-white rounded-full p-1 shadow-sm">
+        <div className="absolute -top-2 -right-2 bg-clash-bg text-on-clash-bg rounded-full p-1 shadow-sm">
           <span className="material-symbols-outlined text-[16px]">error</span>
         </div>
       )}
       {onRemove && (
         <button
-          className="absolute -top-1.5 -right-1.5 bg-urgent-orange text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-sm hover:bg-urgent-orange/80 z-10"
+          className="absolute -top-1.5 -right-1.5 bg-urgent-orange text-on-urgent-orange rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-sm hover:bg-urgent-orange/80 z-10"
           onClick={(e) => { e.stopPropagation(); onRemove(tutor); }}
           tabIndex={isFocused ? 0 : -1}
           title="Remove tutor"
@@ -479,8 +479,8 @@ export default function Organiser() {
                   <div className="flex justify-between items-start mb-stack-sm">
                     <h3 className={`font-body-lg text-body-lg font-bold ${isActive ? "text-primary" : "text-on-surface"}`}>{c.code}</h3>
                     <span
-                      className={`px-2 py-1 rounded font-data-mono text-data-mono text-xs text-white ${
-                        isLow ? "bg-urgent-orange" : isActive ? "bg-trust-blue" : "bg-surface-variant text-on-surface-variant"
+                      className={`px-2 py-1 rounded font-data-mono text-data-mono text-xs ${
+                        isLow ? "bg-urgent-orange text-on-urgent-orange" : isActive ? "bg-trust-blue text-on-trust-blue" : "bg-surface-variant text-on-surface-variant"
                       }`}
                     >
                       Req: {c.req}
@@ -516,7 +516,7 @@ export default function Organiser() {
               <button className="bg-surface-container-high text-on-surface px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:bg-surface-variant transition-colors">
                 Auto-Assign
               </button>
-              <button className="bg-primary text-white px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
+              <button className="bg-primary text-on-primary px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
                 Save Changes
               </button>
             </div>

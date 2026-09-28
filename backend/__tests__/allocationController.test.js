@@ -1,9 +1,9 @@
 // Mock the Prisma client before requiring the controller
 jest.mock('../prisma/client', () => {
   const mockTx = {
-    user: { update: jest.fn() },
-    tutorAssignment: { create: jest.fn(), delete: jest.fn() },
-    application: { update: jest.fn() },
+    user: { update: jest.fn(), updateMany: jest.fn() },
+    tutorAssignment: { create: jest.fn(), createMany: jest.fn(), delete: jest.fn(), findMany: jest.fn() },
+    application: { update: jest.fn(), updateMany: jest.fn() },
   };
 
   return {
@@ -606,7 +606,7 @@ describe('autoAssignTutors', () => {
 
     // Nothing is mutated and no candidate list is even fetched
     expect(prisma.application.findMany).not.toHaveBeenCalled();
-    expect(prisma.__tx.tutorAssignment.create).not.toHaveBeenCalled();
+    expect(prisma.__tx.tutorAssignment.createMany).not.toHaveBeenCalled();
     expect(notifyAssignmentAdded).not.toHaveBeenCalled();
   });
 
@@ -640,10 +640,10 @@ describe('autoAssignTutors', () => {
       course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
       user: { id: 20, firstName: 'Bob', lastName: 'Jones', email: 'bob@wits.ac.za' },
     };
-    prisma.__tx.tutorAssignment.create
-      .mockResolvedValueOnce(aliceRow)
-      .mockResolvedValueOnce(bobRow);
-    prisma.__tx.application.update.mockResolvedValue({});
+    prisma.__tx.user.updateMany.mockResolvedValue({ count: 2 });
+    prisma.__tx.tutorAssignment.createMany.mockResolvedValue({ count: 2 });
+    prisma.__tx.application.updateMany.mockResolvedValue({ count: 2 });
+    prisma.__tx.tutorAssignment.findMany.mockResolvedValue([aliceRow, bobRow]);
 
     const req = mockReq({ body: { courseId: 100 } });
     const res = mockRes();
@@ -652,32 +652,21 @@ describe('autoAssignTutors', () => {
     await autoAssignTutors(req, res, next);
     await flushMicrotasks();
 
-    // Alice and Bob fill the two open slots, in rank order
-    expect(prisma.__tx.tutorAssignment.create).toHaveBeenCalledTimes(2);
-    expect(prisma.__tx.tutorAssignment.create.mock.calls[0][0].data).toEqual(
-      expect.objectContaining({ userId: 10, courseId: 100 }),
-    );
-    expect(prisma.__tx.tutorAssignment.create.mock.calls[1][0].data).toEqual(
-      expect.objectContaining({ userId: 20, courseId: 100 }),
-    );
-
-    // Roles are upgraded and applications marked ASSIGNED
-    expect(prisma.__tx.user.update).toHaveBeenCalledWith({
-      where: { id: 10 },
+    // Batched writes: one statement per concern, regardless of tutor count
+    expect(prisma.__tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [10, 20] } },
       data: { role: 'TUTOR' },
     });
-    expect(prisma.__tx.application.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 1 },
-        data: expect.objectContaining({ status: 'ASSIGNED' }),
-      }),
-    );
-    expect(prisma.__tx.application.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 2 },
-        data: expect.objectContaining({ status: 'ASSIGNED' }),
-      }),
-    );
+    expect(prisma.__tx.tutorAssignment.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ userId: 10, courseId: 100 }),
+        expect.objectContaining({ userId: 20, courseId: 100 }),
+      ],
+    });
+    expect(prisma.__tx.application.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [1, 2] } },
+      data: expect.objectContaining({ status: 'ASSIGNED' }),
+    });
 
     // Both newly assigned tutors are notified
     expect(notifyAssignmentAdded).toHaveBeenCalledTimes(2);
@@ -740,8 +729,10 @@ describe('autoAssignTutors', () => {
       course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
       user: { id: 40, firstName: 'Dana', lastName: 'Pillay', email: 'dana@wits.ac.za' },
     };
-    prisma.__tx.tutorAssignment.create.mockResolvedValueOnce(danaRow);
-    prisma.__tx.application.update.mockResolvedValue({});
+    prisma.__tx.user.updateMany.mockResolvedValue({ count: 1 });
+    prisma.__tx.tutorAssignment.createMany.mockResolvedValue({ count: 1 });
+    prisma.__tx.application.updateMany.mockResolvedValue({ count: 1 });
+    prisma.__tx.tutorAssignment.findMany.mockResolvedValue([danaRow]);
 
     const req = mockReq({ body: { courseId: 100 } });
     const res = mockRes();
@@ -751,10 +742,10 @@ describe('autoAssignTutors', () => {
     await flushMicrotasks();
 
     // Only Dana is assigned; the other three are skipped instead of blocking the run
-    expect(prisma.__tx.tutorAssignment.create).toHaveBeenCalledTimes(1);
-    expect(prisma.__tx.tutorAssignment.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ userId: 40, courseId: 100 }) }),
-    );
+    expect(prisma.__tx.tutorAssignment.createMany).toHaveBeenCalledTimes(1);
+    expect(prisma.__tx.tutorAssignment.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ userId: 40, courseId: 100 })],
+    });
     expect(notifyAssignmentAdded).toHaveBeenCalledTimes(1);
     expect(notifyAssignmentAdded).toHaveBeenCalledWith(danaRow);
 
@@ -781,6 +772,34 @@ describe('autoAssignTutors', () => {
         reason: expect.stringContaining('below the course minimum of 65'),
       }),
     ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns an empty summary without opening a transaction when there are no candidates', async () => {
+    prisma.course.findUnique.mockResolvedValue(course);
+    prisma.tutorAssignment.count.mockResolvedValue(0);
+    prisma.application.findMany.mockResolvedValue([]);
+    prisma.tutorAssignment.findMany.mockResolvedValue([]);
+    prisma.systemSetting.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ body: { courseId: 100 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await autoAssignTutors(req, res, next);
+    await flushMicrotasks();
+
+    // Nothing to assign: no transaction is opened at all
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      courseId: 100,
+      courseCode: 'COMS3000',
+      courseName: 'Algorithms',
+      assigned: [],
+      skipped: [],
+      remaining: 3,
+    });
     expect(next).not.toHaveBeenCalled();
   });
 });

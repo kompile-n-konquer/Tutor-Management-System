@@ -503,51 +503,68 @@ exports.autoAssignTutors = catchAsync(async (req, res, next) => {
   }
 
   // ── Create the assignments, upgrade roles and mark applications ──────
-  const createdAssignments = await prisma.$transaction(async (tx) => {
-    const created = [];
-    for (const application of selected) {
-      await tx.user.update({
-        where: { id: application.userId },
-        data: { role: 'TUTOR' },
-      });
+  // Batched into a fixed number of statements regardless of how many tutors
+  // are filled: a per-tutor loop of round trips can exceed Prisma's default
+  // 5s interactive-transaction timeout on slow/remote databases (P2028,
+  // "Transaction not found"), so the call also gets explicit headroom.
+  const userIds = selected.map((application) => application.userId);
 
-      const assignment = await tx.tutorAssignment.create({
-        data: {
-          userId: application.userId,
-          courseId: course.id,
-          semester: semester ?? '',
-        },
-        include: {
-          course: { select: { courseCode: true, courseName: true } },
-          user: { select: { id: true, firstName: true, lastName: true, email: true } },
-        },
-      });
+  let createdAssignments = [];
+  if (selected.length > 0) {
+    createdAssignments = await prisma.$transaction(
+      async (tx) => {
+        await tx.user.updateMany({
+          where: { id: { in: userIds } },
+          data: { role: 'TUTOR' },
+        });
 
-      await tx.application.update({
-        where: { id: application.id },
-        data: { status: 'ASSIGNED', reviewedAt: new Date() },
-      });
+        await tx.tutorAssignment.createMany({
+          data: selected.map((application) => ({
+            userId: application.userId,
+            courseId: course.id,
+            semester: semester ?? '',
+          })),
+        });
 
-      created.push(assignment);
-    }
-    return created;
-  });
+        await tx.application.updateMany({
+          where: { id: { in: selected.map((application) => application.id) } },
+          data: { status: 'ASSIGNED', reviewedAt: new Date() },
+        });
+
+        // The rows just created, shaped for the response and the
+        // assignment-added notification payload
+        return tx.tutorAssignment.findMany({
+          where: { courseId: course.id, userId: { in: userIds } },
+          include: {
+            course: { select: { courseCode: true, courseName: true } },
+            user: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+        });
+      },
+      { timeout: 15000, maxWait: 5000 },
+    );
+  }
+
+  const assignmentByUserId = new Map(
+    createdAssignments.map((assignment) => [assignment.userId, assignment]),
+  );
 
   // Fire-and-forget: notify every newly assigned tutor.
-  createdAssignments.forEach((assignment) => {
-    notifyAssignmentAdded(assignment).catch(() => {});
+  selected.forEach((application) => {
+    const assignment = assignmentByUserId.get(application.userId);
+    if (assignment) notifyAssignmentAdded(assignment).catch(() => {});
   });
 
   res.status(200).json({
     courseId: course.id,
     courseCode: course.courseCode,
     courseName: course.courseName,
-    assigned: createdAssignments.map((assignment, index) => ({
-      assignmentId: assignment.id,
-      applicantId: selected[index].id,
-      userId: assignment.userId,
-      name: `${assignment.user.firstName} ${assignment.user.lastName}`,
-      courseMark: selected[index].courseMark,
+    assigned: selected.map((application) => ({
+      assignmentId: assignmentByUserId.get(application.userId).id,
+      applicantId: application.id,
+      userId: application.userId,
+      name: `${application.user.firstName} ${application.user.lastName}`,
+      courseMark: application.courseMark,
     })),
     skipped,
     remaining: remaining - createdAssignments.length,

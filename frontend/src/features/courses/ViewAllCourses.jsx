@@ -37,7 +37,6 @@ const ViewAllCourses = () => {
       const response = await execute(() => api.get('/courses'));
       if (response && response.status === 200) {
         setCourses(response.data);
-        console.log(response.data);
       } else {
         setError(response?.data?.message || 'Could not load the courses. Please refresh the page.');
       }

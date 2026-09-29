@@ -110,4 +110,23 @@ describe('globalErrorHandler', () => {
       }),
     );
   });
+
+  test('logs the error when running in the development environment', () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    process.env.SERVER_ENV = 'development';
+
+    try {
+      const error = new Error('Validation failed');
+      error.statusCode = 400;
+
+      globalErrorHandler(error, req, res, jest.fn());
+
+      // Non-500 errors are still logged in development to help with debugging.
+      expect(logSpy).toHaveBeenCalledWith(error);
+      expect(res.status).toHaveBeenCalledWith(400);
+    } finally {
+      delete process.env.SERVER_ENV;
+      logSpy.mockRestore();
+    }
+  });
 });

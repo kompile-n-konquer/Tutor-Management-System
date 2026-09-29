@@ -127,6 +127,15 @@ Legend for the **Access** column: 🔓 no token required, ✅ any authenticated 
 | POST | `/events` | LECTURER | Create an event on an own course |
 | GET | `/events/:id` | Role-scoped | Single event |
 | PUT | `/events/:id` | LECTURER (own course) | Update an event |
+| GET | `/swaps/my-sessions` | TUTOR | Own sessions available for swapping |
+| GET | `/swaps/candidates/:eventId` | TUTOR | Eligible swap partners for a session, with constraint verdicts |
+| GET | `/swaps` | TUTOR, ORGANISER, ADMIN | Swap requests (own for tutors, all for staff, `?status=` filter) |
+| POST | `/swaps` | TUTOR | Request a session swap (one-way or two-way) |
+| POST | `/swaps/:id/accept` | Recipient TUTOR | Agree to the trade |
+| POST | `/swaps/:id/decline` | Recipient TUTOR | Decline with an optional reason |
+| POST | `/swaps/:id/cancel` | Requester TUTOR | Withdraw a pending request |
+| POST | `/swaps/:id/approve` | ORGANISER, ADMIN | Approve — re-validates constraints, then moves the claims |
+| POST | `/swaps/:id/reject` | ORGANISER, ADMIN | Reject an agreed swap with an optional reason |
 | GET | `/timesheets` | ✅ | Own timesheets |
 | GET | `/timesheets/pending-review` | LECTURER, ORGANISER, ADMIN | Submitted timesheets to review |
 | GET | `/timesheets/supervisors` | ✅ | Supervisor directory for entry forms |
@@ -338,6 +347,42 @@ approved.
 Renders an approved timesheet onto the uploaded PDF template and streams it back as
 `application/pdf`.
 
+## Session Swaps
+
+Tutors trade claimed sessions (`TimesheetEntry` claims on events) peer-to-peer. The platform
+validates every swap against the same constraints used when a tutor is allocated — course
+allocation, availability coverage, busy blocks, double-booking and the monthly claimable-hours
+cap — and the organiser gives the final approval before any session moves.
+
+Status flow: `PENDING` → (recipient accepts) → `ACCEPTED` → (organiser approves) → `APPROVED`.
+The recipient can decline and the organiser can reject (both land on `REJECTED`), and the
+requester can `CANCEL` while the request is still `PENDING`.
+
+### `GET /swaps/my-sessions` / `GET /swaps/candidates/:eventId`
+
+Tutor-only. The first lists the caller's swappable sessions (pending claimed events). The second
+returns every other tutor allocated to the same course with an `eligible` flag, the blocking
+constraint `reasons`, and that tutor's own swappable sessions (for two-way trades).
+
+### `POST /swaps`
+
+Body: `{ "recipientId": 20, "requesterEventId": 100, "recipientEventId": 200, "reason": "…" }`.
+`recipientEventId` is optional — omit it for a one-way handover. Every constraint violation
+returns `403` with the reasons; a session with a live request returns `409`.
+
+### `POST /swaps/:id/accept|decline|cancel`
+
+Recipient-side responses and the requester's withdrawal, each allowed only while the request is
+`PENDING`. Declining and rejecting accept an optional free-text `reason`.
+
+### `POST /swaps/:id/approve|reject`
+
+Organiser/admin review of `ACCEPTED` requests. Approval re-validates constraints against current
+data — when anything no longer passes, the failure returns `409` and nothing moves. On success
+the session's claim (the unique `TimesheetEntry.eventId` row) is transferred to the receiving
+tutor's newest draft timesheet (a fresh draft is opened when none exists) and both affected
+timesheet totals are recomputed, all inside one transaction.
+
 ## Settings
 
 ### `GET /settings`
@@ -366,5 +411,5 @@ The API integrates with two external services over HTTPS:
    verified server-side with the Firebase Admin SDK; account deactivation propagates back by
    disabling the Firebase account.
 2. **Resend (email delivery)** — transactional notification emails (assignment added/removed,
-   timesheet approved/rejected) are sent through the Resend HTTP API, with every attempt recorded
-   and de-duplicated in the `EmailLog` table.
+   timesheet approved/rejected, swap requested/responded/reviewed) are sent through the Resend
+   HTTP API, with every attempt recorded and de-duplicated in the `EmailLog` table.

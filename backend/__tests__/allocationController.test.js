@@ -33,6 +33,7 @@ const {
   assignTutor,
   getAssignedTutors,
   unassignTutor,
+  removeTutor,
 } = require('../controllers/allocation');
 
 // catchAsync does not `return` the inner promise, so the wrapped handler
@@ -458,6 +459,19 @@ describe('getAssignedTutors', () => {
     expect(prisma.tutorAssignment.findMany.mock.calls[0][0].where.courseId).toBe(3);
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('returns 400 when the courseId filter is not a valid integer', async () => {
+    const req = mockReq({ query: { courseId: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getAssignedTutors(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'courseId must be a valid integer' }),
+    );
+    expect(prisma.tutorAssignment.findMany).not.toHaveBeenCalled();
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -520,6 +534,98 @@ describe('unassignTutor', () => {
         data: expect.objectContaining({ status: 'PENDING' }),
       }),
     );
+
+    // The removed tutor is notified by email (loaded before deletion)
+    expect(notifyAssignmentRemoved).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 10, userId: 70 }),
+    );
+
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.end).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// removeTutor
+// ════════════════════════════════════════════════════════════════════════
+describe('removeTutor', () => {
+  test('returns 400 when applicantId param is not a valid integer', async () => {
+    const req = mockReq({ params: { applicantId: 'xyz' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await removeTutor(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+    expect(prisma.application.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when no application exists for the applicant', async () => {
+    prisma.application.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { applicantId: '7' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await removeTutor(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Application not found for this applicant' }),
+    );
+    expect(prisma.tutorAssignment.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the application has no assignment to remove', async () => {
+    prisma.application.findUnique.mockResolvedValue({ id: 7, userId: 70, courseId: 100 });
+    prisma.tutorAssignment.findFirst.mockResolvedValue(null);
+
+    const req = mockReq({ params: { applicantId: '7' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await removeTutor(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Assignment not found for this applicant' }),
+    );
+    expect(prisma.__tx.tutorAssignment.delete).not.toHaveBeenCalled();
+  });
+
+  test('deletes the assignment and permanently rejects the application (unlike unassign, which returns it to PENDING)', async () => {
+    prisma.application.findUnique.mockResolvedValue({ id: 7, userId: 70, courseId: 100 });
+    prisma.tutorAssignment.findFirst.mockResolvedValue({
+      id: 10,
+      userId: 70,
+      courseId: 100,
+      course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
+      user: { id: 70, firstName: 'Dave', lastName: 'Root', email: 'dave@wits.ac.za' },
+    });
+    prisma.__tx.tutorAssignment.delete.mockResolvedValue({});
+    prisma.__tx.application.update.mockResolvedValue({});
+
+    const req = mockReq({ params: { applicantId: '7' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await removeTutor(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.tutorAssignment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 70, courseId: 100 } }),
+    );
+    expect(prisma.__tx.tutorAssignment.delete).toHaveBeenCalledWith({ where: { id: 10 } });
+    expect(prisma.__tx.application.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 7 },
+        data: expect.objectContaining({ status: 'REJECTED' }),
+      }),
+    );
+    // Removal is a review decision, so reviewedAt is stamped (unassign clears it)
+    const updateData = prisma.__tx.application.update.mock.calls[0][0].data;
+    expect(updateData.reviewedAt).toBeInstanceOf(Date);
 
     // The removed tutor is notified by email (loaded before deletion)
     expect(notifyAssignmentRemoved).toHaveBeenCalledWith(

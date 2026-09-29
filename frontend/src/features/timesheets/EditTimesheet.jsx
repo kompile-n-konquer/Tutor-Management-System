@@ -431,9 +431,19 @@ const EditTimesheet = () => {
               </p>
             </div>
             {isLoading && !referenceLoaded ? (
-              <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
-                Loading events...
-              </p>
+              <div className="space-y-stack-sm py-stack-sm" aria-hidden="true">
+                {[0, 1, 2].map((row) => (
+                  <div
+                    key={row}
+                    className="animate-pulse flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-sm"
+                  >
+                    <div className="h-4 w-24 rounded bg-surface-container-high" />
+                    <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                    <div className="h-4 w-32 rounded bg-surface-container-high/60" />
+                    <div className="h-6 w-20 rounded bg-surface-container-high ml-auto" />
+                  </div>
+                ))}
+              </div>
             ) : pickerEvents.length === 0 ? (
               <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
                 No claimable events right now.

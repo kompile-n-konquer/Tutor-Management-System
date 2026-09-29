@@ -30,6 +30,9 @@ model User {
   roleApplications RoleApplication[]
   supervisedTimesheets TimesheetEntry[] @relation("TimesheetSupervisor")
   overflowClaims OverflowWork[]
+  swapRequestsSent     SwapRequest[] @relation("SwapRequestsSent")
+  swapRequestsReceived SwapRequest[] @relation("SwapRequestsReceived")
+  volunteerRequests SessionVolunteer[]
 }
 
 // Join table between User (role TUTOR) and Course — one row records that a user
@@ -149,14 +152,24 @@ model TimesheetEntry {
 }
 
 model Session {
-  id            Int             @id @default(autoincrement())
-  assignmentId  Int
-  date          DateTime
-  courseSlotId  Int
-  status        String          @default("SCHEDULED")
-  excuseReason  String?
-  assignment    TutorAssignment @relation(fields: [assignmentId], references: [id])
-  courseSlot    CourseSlot      @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
+  id               Int              @id @default(autoincrement())
+  assignmentId     Int
+  date             DateTime
+  courseSlotId     Int
+  status           String           @default("SCHEDULED") // SCHEDULED | UNASSIGNED | PENDING
+  excuseReason     String?
+  assignment       TutorAssignment  @relation(fields: [assignmentId], references: [id])
+  courseSlot       CourseSlot       @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
+  volunteerRequest SessionVolunteer?
+}
+model SessionVolunteer {
+  id        Int      @id @default(autoincrement())
+  sessionId Int      @unique
+  userId    Int
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model CourseSlot {
@@ -185,8 +198,45 @@ model Event {
   updatedAt   DateTime @updatedAt
   course      Course   @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   claims      TimesheetEntry[]
+  givenSwaps    SwapRequest[] @relation("SwapRequestGivenEvent")
+  receivedSwaps SwapRequest[] @relation("SwapRequestReceivedEvent")
 
   @@index([courseId, date])
+}
+
+// A tutor-to-tutor request to trade an assigned session (a claimed event).
+// The requester offers one of their claimed sessions to the recipient; a
+// recipient session may be attached for a two-way trade. The recipient
+// accepts or declines first, then the organiser approves or rejects — the
+// same approval authority as a tutor being allocated. Status flow:
+//   PENDING → ACCEPTED → APPROVED
+//     ↓ recipient declines      ↓ organiser rejects
+//   REJECTED                    REJECTED
+// (the requester may CANCEL while the request is still PENDING)
+model SwapRequest {
+  id               Int       @id @default(autoincrement())
+  requesterId      Int
+  recipientId      Int
+  requesterEventId Int
+  recipientEventId Int?      // set for a two-way trade; null = a one-way handover
+  status           String    @default("PENDING") // PENDING | ACCEPTED | APPROVED | REJECTED | CANCELLED
+  reason           String?
+  requestedAt      DateTime  @default(now())
+  respondedAt      DateTime? // recipient's accept/decline timestamp
+  reviewedAt       DateTime? // organiser's approve/reject timestamp
+  reviewedById     Int?      // organiser's User.id; no FK to avoid cascade paths
+  rejectionReason  String?
+
+  // NoAction on both user FKs: the two paths into User would otherwise form a
+  // cascade cycle on SQL Server, and a kept swap request must survive user tidy-up.
+  requester        User      @relation("SwapRequestsSent", fields: [requesterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipient        User      @relation("SwapRequestsReceived", fields: [recipientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requesterEvent   Event     @relation("SwapRequestGivenEvent", fields: [requesterEventId], references: [id], onUpdate: NoAction)
+  recipientEvent   Event?    @relation("SwapRequestReceivedEvent", fields: [recipientEventId], references: [id], onUpdate: NoAction)
+
+  @@index([requesterId, status])
+  @@index([recipientId, status])
+  @@index([status])
 }
 
 model OverflowWork {

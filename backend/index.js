@@ -5,6 +5,7 @@ const cors = require('cors');
 const prisma = require('./prisma/client');
 const { globalErrorHandler, notFoundErrorHandler } = require('./controllers/error');
 const usersRouter = require('./routes/auth');
+const sessionsRouter = require('./routes/sessions');
 const allocationRouter = require('./routes/allocation');
 const coursesRouter = require('./routes/courses');
 const availabilityRouter = require('./routes/availability');
@@ -12,8 +13,10 @@ const applicationsRouter = require('./routes/applications');
 const settingsRouter = require('./routes/settings');
 const timesheetsRouter = require('./routes/timesheets');
 const eventsRouter = require('./routes/events');
+const swapsRouter = require('./routes/swaps');
 const onboardingRouter = require('./routes/onboarding');
 const publicRouter = require('./routes/public');
+const analyticsRouter = require('./routes/analytics');
 
 const app = express();
 
@@ -47,6 +50,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.use('/api/users', usersRouter);
+app.use('/api/sessions', sessionsRouter);
 app.use('/api/allocation', allocationRouter);
 app.use('/api/courses', coursesRouter);
 app.use('/api/availability', availabilityRouter);
@@ -54,8 +58,10 @@ app.use('/api/applications', applicationsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/timesheets', timesheetsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/swaps', swapsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/public', publicRouter);
+app.use('/api/analytics', analyticsRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

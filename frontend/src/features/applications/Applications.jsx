@@ -87,7 +87,20 @@ const Applications = () => {
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md mb-gutter">
           {isLoading && !loaded ? (
-            <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading opportunities...</p>
+            <div className="space-y-stack-sm py-stack-sm" aria-hidden="true">
+              {[0, 1, 2].map((row) => (
+                <div
+                  key={row}
+                  className="animate-pulse flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-sm"
+                >
+                  <div className="h-4 w-44 rounded bg-surface-container-high" />
+                  <div className="h-6 w-28 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-16 rounded bg-surface-container-high/60" />
+                  <div className="h-6 w-24 rounded bg-surface-container-high ml-auto" />
+                </div>
+              ))}
+            </div>
           ) : opportunities.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No opportunities are open for your availability right now. Check back later or update your timetable.
@@ -159,7 +172,19 @@ const Applications = () => {
             My Applications
           </h2>
           {isLoading && !loaded ? (
-            <p className="font-body-md text-on-surface-variant py-stack-md text-center">Loading your applications...</p>
+            <div className="space-y-stack-sm" aria-hidden="true">
+              {[0, 1].map((row) => (
+                <div
+                  key={row}
+                  className="animate-pulse flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-sm"
+                >
+                  <div className="h-4 w-44 rounded bg-surface-container-high" />
+                  <div className="h-4 w-16 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                  <div className="h-6 w-20 rounded bg-surface-container-high ml-auto" />
+                </div>
+              ))}
+            </div>
           ) : myApplications.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-md">
               You have not applied for any tutoring opportunities yet.

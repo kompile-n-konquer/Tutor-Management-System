@@ -5,6 +5,9 @@ const {
   assignmentRemovedEmail,
   timesheetApprovedEmail,
   timesheetRejectedEmail,
+  swapRequestedEmail,
+  swapRespondedEmail,
+  swapReviewedEmail,
 } = require('./templates');
 
 // Notification event types. Each type is a different dedupe-able event:
@@ -16,6 +19,9 @@ const EVENT_TYPES = {
   TIMESHEET_APPROVED: 'TIMESHEET_APPROVED',
   TIMESHEET_REJECTED: 'TIMESHEET_REJECTED',
   TIMESHEET_STUCK_REMINDER: 'TIMESHEET_STUCK_REMINDER',
+  SWAP_REQUESTED: 'SWAP_REQUESTED',
+  SWAP_RESPONDED: 'SWAP_RESPONDED',
+  SWAP_REVIEWED: 'SWAP_REVIEWED',
 };
 
 // A PENDING log row younger than this is treated as an in-flight attempt and
@@ -174,18 +180,16 @@ async function sendNotification({
 
 /**
  * Assignment Added trigger. Expects `assignment` loaded with
- * course { courseCode, courseName } and tutor { user { id, firstName, lastName, email } }.
+ * course { courseCode, courseName } and user { id, firstName, lastName, email }.
  */
 async function notifyAssignmentAdded(assignment) {
-  const user = assignment?.tutor?.user;
+  const user = assignment?.user;
   const recipient = toRecipient(user);
   const email = assignmentAddedEmail({
     recipientName: recipient?.name ?? 'there',
     courseCode: assignment?.course?.courseCode,
     courseName: assignment?.course?.courseName,
-    allocatedHours: assignment?.allocatedHours,
     semester: assignment?.semester,
-    status: assignment?.status,
   });
   return sendNotification({
     eventType: EVENT_TYPES.ASSIGNMENT_ADDED,
@@ -202,7 +206,7 @@ async function notifyAssignmentAdded(assignment) {
  * as plain columns, so the audit record survives the deletion).
  */
 async function notifyAssignmentRemoved(assignment) {
-  const user = assignment?.tutor?.user;
+  const user = assignment?.user;
   const recipient = toRecipient(user);
   const email = assignmentRemovedEmail({
     recipientName: recipient?.name ?? 'there',
@@ -221,7 +225,7 @@ async function notifyAssignmentRemoved(assignment) {
 
 /**
  * Timesheet Approved trigger. Expects `timesheet` loaded with
- * tutor { user { id, firstName, lastName, email } }.
+ * user { id, firstName, lastName, email }.
  *
  * The submittedAt timestamp is used as the dedupe suffix so that a timesheet
  * which is rejected, fixed, resubmitted and then approved again notifies the
@@ -229,7 +233,7 @@ async function notifyAssignmentRemoved(assignment) {
  * same approval event can never notify twice.
  */
 async function notifyTimesheetApproved(timesheet) {
-  const user = timesheet?.tutor?.user;
+  const user = timesheet?.user;
   const recipient = toRecipient(user);
   const email = timesheetApprovedEmail({
     recipientName: recipient?.name ?? 'there',
@@ -252,7 +256,7 @@ async function notifyTimesheetApproved(timesheet) {
  * plus the recorded rejectionReason (if any), which is included in the email.
  */
 async function notifyTimesheetRejected(timesheet) {
-  const user = timesheet?.tutor?.user;
+  const user = timesheet?.user;
   const recipient = toRecipient(user);
   const email = timesheetRejectedEmail({
     recipientName: recipient?.name ?? 'there',
@@ -270,6 +274,86 @@ async function notifyTimesheetRejected(timesheet) {
   });
 }
 
+/**
+ * Swap Requested trigger. Expects `swap` loaded with requester/recipient and
+ * both events (course with courseCode/courseName and date).
+ */
+async function notifySwapRequested(swap) {
+  const recipient = toRecipient(swap?.recipient);
+  const email = swapRequestedEmail({
+    recipientName: recipient?.name ?? 'there',
+    requesterName: toRecipient(swap?.requester)?.name ?? 'A tutor',
+    courseCode: swap?.requesterEvent?.course?.courseCode,
+    courseName: swap?.requesterEvent?.course?.courseName,
+    sessionDate: swap?.requesterEvent?.date ? new Date(swap.requesterEvent.date).toISOString().split('T')[0] : null,
+    twoWay: Boolean(swap?.recipientEvent),
+    reason: swap?.reason,
+  });
+  return sendNotification({
+    eventType: EVENT_TYPES.SWAP_REQUESTED,
+    entityType: 'SwapRequest',
+    entityId: swap?.id,
+    recipient,
+    ...email,
+  });
+}
+
+/**
+ * Swap Responded trigger. Expects the same shape as notifySwapRequested — sent
+ * to the requester when the recipient accepts or declines.
+ */
+async function notifySwapResponded(swap) {
+  const recipient = toRecipient(swap?.requester);
+  const accepted = swap?.status === 'ACCEPTED';
+  const email = swapRespondedEmail({
+    recipientName: recipient?.name ?? 'there',
+    responderName: toRecipient(swap?.recipient)?.name ?? 'The tutor',
+    courseCode: swap?.requesterEvent?.course?.courseCode,
+    sessionDate: swap?.requesterEvent?.date ? new Date(swap.requesterEvent.date).toISOString().split('T')[0] : null,
+    accepted,
+    rejectionReason: accepted ? null : swap?.rejectionReason,
+  });
+  return sendNotification({
+    eventType: EVENT_TYPES.SWAP_RESPONDED,
+    entityType: 'SwapRequest',
+    entityId: swap?.id,
+    recipient,
+    ...email,
+  });
+}
+
+/**
+ * Swap Reviewed trigger. Expects the same shape as notifySwapRequested — sent
+ * to BOTH tutors when the organiser approves or rejects the swap.
+ */
+async function notifySwapReviewed(swap) {
+  const approved = swap?.status === 'APPROVED';
+  const sessionDate = swap?.requesterEvent?.date
+    ? new Date(swap.requesterEvent.date).toISOString().split('T')[0]
+    : null;
+  return Promise.all(
+    [swap?.requester, swap?.recipient].map((tutor) => {
+      const recipient = toRecipient(tutor);
+      const other = tutor?.id === swap?.requester?.id ? swap?.recipient : swap?.requester;
+      const email = swapReviewedEmail({
+        recipientName: recipient?.name ?? 'there',
+        otherTutorName: toRecipient(other)?.name ?? 'the other tutor',
+        courseCode: swap?.requesterEvent?.course?.courseCode,
+        sessionDate,
+        approved,
+        rejectionReason: approved ? null : swap?.rejectionReason,
+      });
+      return sendNotification({
+        eventType: EVENT_TYPES.SWAP_REVIEWED,
+        entityType: 'SwapRequest',
+        entityId: swap?.id,
+        recipient,
+        ...email,
+      });
+    }),
+  );
+}
+
 module.exports = {
   EVENT_TYPES,
   PENDING_GRACE_MS,
@@ -279,4 +363,7 @@ module.exports = {
   notifyAssignmentRemoved,
   notifyTimesheetApproved,
   notifyTimesheetRejected,
+  notifySwapRequested,
+  notifySwapResponded,
+  notifySwapReviewed,
 };

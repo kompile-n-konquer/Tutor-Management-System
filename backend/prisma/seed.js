@@ -19,9 +19,10 @@ const {
 //   • every status the system defines — course applications (PENDING,
 //     APPROVED, ASSIGNED, REJECTED), role applications (PENDING, APPROVED,
 //     REJECTED), timesheets (DRAFT, SUBMITTED, APPROVED, REJECTED) and
-//     entries (PENDING, APPROVED, REJECTED), sessions (SCHEDULED, COMPLETED,
-//     CANCELLED, EXCUSED), overflow work (OPEN, CLAIMED, CLOSED) and the
-//     email log (PENDING, SENT, FAILED)
+//     entries (PENDING, APPROVED, REJECTED), sessions (UNASSIGNED — the
+//     excuse/volunteer lifecycle; upcoming SCHEDULED occurrences are
+//     derived from events and never stored), overflow work (OPEN, CLAIMED,
+//     CLOSED) and the email log (PENDING, SENT, FAILED)
 //   • capacity edge cases: a course at maximum tutors (MATH2002 3/3), a
 //     closed fully-staffed course (MATH1014 2/2), a draft timesheet above
 //     the monthly claimable-hours cap, and events older than the claim window
@@ -395,13 +396,18 @@ const TIMESHEETS = [
   },
 ];
 
-// Sessions (legacy concrete-session table) — all four documented statuses.
+// Sessions — the excuse / volunteer lifecycle. Upcoming SCHEDULED occurrences
+// are derived at read time from the events above and are never stored; a
+// Session row only exists once a tutor excuses themselves from an occurrence
+// (UNASSIGNED — open for student volunteers). The past rows keep teaching
+// history for the lecturer view.
 const SESSIONS = [
-  { user: 'alex', course: 'COMS1015', day: 0, when: 'upcoming', weeks: 1, status: 'SCHEDULED' },
+  // Marcus excused himself from next Monday's COMS1015 occurrence — the
+  // c1015-mon-next event — so the Volunteer View has live cover to pick up.
+  { user: 'marcus', course: 'COMS1015', day: 0, when: 'upcoming', weeks: 1, status: 'UNASSIGNED', excuseReason: 'Family commitment I could not move' },
   { user: 'alex', course: 'COMS1015', day: 0, when: 'past', weeks: 1, status: 'COMPLETED' },
   { user: 'marcus', course: 'COMS1015', day: 2, when: 'past', weeks: 1, status: 'CANCELLED' },
   { user: 'sarahJ', course: 'MATH2002', day: 2, when: 'past', weeks: 2, status: 'EXCUSED', excuseReason: 'Medical certificate submitted' },
-  { user: 'priya', course: 'COMS3055', day: 1, when: 'upcoming', weeks: 1, status: 'SCHEDULED' },
   { user: 'alex', course: 'MATH1014', day: 0, when: 'past', weeks: 2, status: 'COMPLETED' },
 ];
 
@@ -743,7 +749,7 @@ async function main() {
     }
   }
 
-  // ── 12. Sessions (legacy concrete-session statuses) ──
+  // ── 12. Sessions (excuse / volunteer lifecycle + teaching history) ──
   console.log('\n📆  Creating sessions...\n');
 
   for (const session of SESSIONS) {
@@ -952,14 +958,19 @@ function printLoginInstructions() {
   console.log('       claiming unclaimed past events, then submit it.');
   console.log('    4. Tutor (priya.nair@tutorflow.test): her draft totals 11h inside a');
   console.log('       31-day window — submitting it triggers the 10h cap guard.');
-  console.log('    5. Lecturer (lecturer@tutorflow.test): Timesheets → pending review —');
+  console.log('    5. Event-driven scheduling — Lecturer (lecturer@tutorflow.test): an');
+  console.log("       event added on the Events page becomes every assigned tutor's");
+  console.log('       next session. Tutor (marcus.webb@tutorflow.test): his dashboard');
+  console.log('       derives those sessions from the events, and his excused Monday');
+  console.log('       COMS1015 session is open for a student volunteer.');
+  console.log('    6. Lecturer (lecturer@tutorflow.test): Timesheets → pending review —');
   console.log("       Alex's mid-review sheet (APPROVED/REJECTED/PENDING entries) and");
   console.log("       Marcus's fresh submission; approve entries one by one.");
-  console.log('    6. Tutor (david.kim@tutorflow.test): the rejected timesheet shows the');
+  console.log('    7. Tutor (david.kim@tutorflow.test): the rejected timesheet shows the');
   console.log('       rejection reason; edit and resubmit it.');
-  console.log('    7. Deactivated account (zanele.mthembu@tutorflow.test): login is');
+  console.log('    8. Deactivated account (zanele.mthembu@tutorflow.test): login is');
   console.log('       refused because the Firebase account is disabled.');
-  console.log('    8. Settings (organiser): the claimable-hours cap (10h), claim window');
+  console.log('    9. Settings (organiser): the claimable-hours cap (10h), claim window');
   console.log('       (3 months) and hourly rates are pre-configured. Upload a PDF');
   console.log("       template there to unlock exporting Sarah Jenkins' approved sheet.");
   console.log(`\n    ${line}`);

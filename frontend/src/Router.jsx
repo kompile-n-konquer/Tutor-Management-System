@@ -37,6 +37,9 @@ import OnboardingHub from './features/onboarding/OnboardingHub.jsx';
 import TutorApplication from './features/onboarding/TutorApplication.jsx';
 import LecturerApplication from './features/onboarding/LecturerApplication.jsx';
 import ApplicationReview from './features/onboarding/ApplicationReview.jsx';
+import Swaps from './features/swaps/Swaps.jsx';
+import NewSwap from './features/swaps/NewSwap.jsx';
+import SwapReview from './features/swaps/SwapReview.jsx';
 
 const router = createBrowserRouter([
   {
@@ -79,7 +82,7 @@ const router = createBrowserRouter([
       {
         path: 'volunteer',
         element: (
-          <ProtectedRoute allowedRoles={['student', 'tutor']}>
+          <ProtectedRoute allowedRoles={['tutor']}>
             <VolunteerView />
           </ProtectedRoute>
         ),
@@ -285,6 +288,35 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={['organiser']}>
             <ApplicationReview />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'swaps',
+        children: [
+          {
+            index: true,
+            element: (
+              <ProtectedRoute allowedRoles={['tutor']}>
+                <Swaps />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'new',
+            element: (
+              <ProtectedRoute allowedRoles={['tutor']}>
+                <NewSwap />
+              </ProtectedRoute>
+            ),
+          },
+        ],
+      },
+      {
+        path: 'swap-review',
+        element: (
+          <ProtectedRoute allowedRoles={['organiser', 'admin']}>
+            <SwapReview />
           </ProtectedRoute>
         ),
       },

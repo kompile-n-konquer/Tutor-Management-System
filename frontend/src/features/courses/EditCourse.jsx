@@ -187,7 +187,18 @@ const EditCourse = () => {
         </div>
 
         {isLoading && !course && (
-          <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading course...</p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter" aria-hidden="true">
+            <div className="lg:col-span-4 animate-pulse bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento space-y-stack-lg">
+              <div className="h-4 w-28 rounded bg-surface-container-high" />
+              <div className="h-11 rounded bg-surface-container-high/60" />
+              <div className="h-11 rounded bg-surface-container-high/60" />
+              <div className="h-11 rounded bg-surface-container-high/60" />
+            </div>
+            <div className="lg:col-span-8 animate-pulse bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento space-y-stack-md">
+              <div className="h-4 w-32 rounded bg-surface-container-high" />
+              <div className="h-64 rounded bg-surface-container-high/60" />
+            </div>
+          </div>
         )}
 
         {course && (

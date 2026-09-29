@@ -204,7 +204,7 @@ export default function Contact() {
         </div>
 
         {/* Team credits (preserved from the original landing page) */}
-        <div className="mt-16 text-center">
+        {/* <div className="mt-16 text-center">
           <div className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-6">
             Built by Kompile and Konquer
           </div>
@@ -219,7 +219,7 @@ export default function Contact() {
               </span>
             ))}
           </div>
-        </div>
+        </div> */}
       </div>
     </section>
   );

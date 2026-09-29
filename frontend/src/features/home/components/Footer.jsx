@@ -40,9 +40,9 @@ export default function Footer() {
         <div className="pt-6 border-t border-ink-700 flex flex-col sm:flex-row items-center justify-between gap-4 font-label-caps text-[11px] uppercase tracking-wider">
           <p>&copy; 2026 School of Computer Science &amp; Applied Mathematics. All rights reserved.</p>
           <div className="flex flex-col sm:flex-row items-center gap-4 text-center">
-            <span>COMS3011A — Software Design Project</span>
+            {/* <span>COMS3011A — Software Design Project</span> */}
             <span className="hidden sm:inline text-ink-600">&bull;</span>
-            <span className="text-white/70">Kompile and Konquer</span>
+            <span className="text-white/70">TutorFlow</span>
           </div>
         </div>
       </div>

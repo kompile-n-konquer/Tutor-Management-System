@@ -77,17 +77,20 @@ const EditTimetable = () => {
   // Fetch upcoming sessions for tutors (the dashboard's source of truth).
   const fetchSessions = useCallback(async () => {
     if (role !== 'tutor') return;
-    const response = await api.get('/sessions/mine');
-    if (response?.status === 200) {
-      // Only upcoming sessions (today or later).
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const upcoming = (response.data?.sessions ?? []).filter(
-        (s) => new Date(s.date) >= now,
-      );
-      setSessions(upcoming);
+    try {
+      const response = await api.get('/sessions/mine');
+      if (response?.status === 200) {
+        // Only upcoming sessions (today or later).
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const upcoming = (response.data?.sessions ?? []).filter(
+          (s) => new Date(s.date) >= now,
+        );
+        setSessions(upcoming);
+      }
+    } catch {
+      // A failed session lookup must never break the availability editor.
     }
-    // Non-tutors get a 403 — silently ignore and show no sessions section.
   }, [role]);
 
   useEffect(() => {

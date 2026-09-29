@@ -54,7 +54,6 @@ const Timesheets = () => {
 
   const formatDate = (iso) => new Date(iso).toLocaleDateString();
 
-  console.log(timesheets);
   return (
     <AppLayout role={role} title="Timesheets">
       <div className="p-gutter md:p-margin-page space-y-gutter">

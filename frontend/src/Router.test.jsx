@@ -46,6 +46,8 @@ describe('Router — application route table', () => {
       'onboarding/tutor-application',
       'onboarding/lecturer-application',
       'application-review',
+      'swaps',
+      'swap-review',
       '*', // catch-all renders the error page
     ]);
     // Every leaf route must render an element; container routes (courses,

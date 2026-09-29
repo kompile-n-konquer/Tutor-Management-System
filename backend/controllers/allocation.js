@@ -232,9 +232,25 @@ exports.getAssignedTutors = catchAsync(async (req, res, next) => {
     orderBy: { id: 'asc' },
   });
 
+  // The unassign/remove endpoints key off the APPLICATION id, not the
+  // assignment row or the user id — resolve the real application for each
+  // assignment (userId + courseId pair) so drags back to the available pool
+  // and the remove (x) button hit the right record instead of 404-ing.
+  const applications = assignments.length
+    ? await prisma.application.findMany({
+        where: {
+          OR: assignments.map((a) => ({ userId: a.userId, courseId: a.courseId })),
+        },
+        select: { id: true, userId: true, courseId: true },
+      })
+    : [];
+  const applicationIdByKey = new Map(
+    applications.map((app) => [`${app.userId}:${app.courseId}`, app.id]),
+  );
+
   const assignedTutors = assignments.map((a) => ({
     assignmentId: a.id,
-    applicantId: a.userId,
+    applicantId: applicationIdByKey.get(`${a.userId}:${a.courseId}`) ?? null,
     name: a.user
       ? `${a.user.firstName} ${a.user.lastName}`
       : null,

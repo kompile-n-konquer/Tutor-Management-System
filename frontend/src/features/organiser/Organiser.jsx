@@ -737,9 +737,6 @@ export default function Organiser() {
               >
                 {autoAssigning ? "Assigning…" : "Auto-Assign"}
               </button>
-              <button className="bg-primary text-on-primary px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
-                Save Changes
-              </button>
             </div>
           </div>
           {loading ? (

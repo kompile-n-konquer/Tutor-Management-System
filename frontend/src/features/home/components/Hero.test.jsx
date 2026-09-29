@@ -1,36 +1,32 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import Hero from "./Hero";
 
-describe("Hero early-access capture", () => {
-  it("shows an error when the email is invalid", async () => {
+describe("Hero section", () => {
+  it("renders the headline, badge and subtitle", () => {
     render(
       <MemoryRouter>
         <Hero />
       </MemoryRouter>,
     );
 
-    const input = screen.getByLabelText(/email address/i);
-    await userEvent.type(input, "not-an-email");
-    await userEvent.click(screen.getByRole("button", { name: /request access/i }));
-
-    expect(await screen.findByText(/please enter a valid email address/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/tutoring made/i);
+    expect(screen.getByText(/Computer Science & Applied Mathematics/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/centralized platform for Computer Science and Applied Mathematics/i),
+    ).toBeInTheDocument();
   });
 
-  it("shows the success panel when the email is valid", async () => {
+  it("renders the trust badges", () => {
     render(
       <MemoryRouter>
         <Hero />
       </MemoryRouter>,
     );
 
-    const input = screen.getByLabelText(/email address/i);
-    await userEvent.type(input, "tutor@university.edu");
-    await userEvent.click(screen.getByRole("button", { name: /request access/i }));
-
-    expect(await screen.findByText(/you're on the list/i)).toBeInTheDocument();
-    expect(screen.getByText("tutor@university.edu")).toBeInTheDocument();
+    expect(screen.getByText("Automated Allocation")).toBeInTheDocument();
+    expect(screen.getByText("Instant Timesheets")).toBeInTheDocument();
+    expect(screen.getByText("CSAM Verified")).toBeInTheDocument();
   });
 });

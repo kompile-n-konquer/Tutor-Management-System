@@ -3,6 +3,29 @@ const catchAsync = require('../utils/catchAsync');
 const { notifyAssignmentAdded, notifyAssignmentRemoved } = require('../email/notifier');
 const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
 const { slotHours } = require('../utils/claimRules');
+const { emitToOrganisers } = require('../realtime/io');
+
+// Board mutations are attributed to the signed-in organiser so other
+// organisers see who changed what on the organiser board.
+async function editorFromReq(req) {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { firstName: true, lastName: true },
+  });
+  return { id: req.user.id, name: user ? `${user.firstName} ${user.lastName}`.trim() : req.user?.email };
+}
+
+// Broadcast a board change to every connected organiser (including the
+// actor — the client filters its own events out by actorId).
+function broadcastAllocationChange(type, courseId, editor) {
+  emitToOrganisers('allocation:changed', {
+    type,
+    courseId,
+    actorId: editor.id,
+    actorName: editor.name,
+    at: new Date().toISOString(),
+  });
+}
 
 /**
  * GET /api/allocation/available-tutors
@@ -171,6 +194,9 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
   // can never fail the assignment request itself.
   notifyAssignmentAdded(assignment).catch(() => {});
 
+  const editor = await editorFromReq(req);
+  broadcastAllocationChange('assign', application.courseId, editor);
+
   res.status(201).json({ assignment });
 });
 
@@ -262,6 +288,9 @@ exports.unassignTutor = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // Fire-and-forget removal notification, loaded before the row was deleted.
+  notifyAssignmentRemoved(assignment).catch(() => {});
+
   await prisma.$transaction(async (tx) => {
     await tx.tutorAssignment.delete({ where: { id: assignment.id } });
 
@@ -271,8 +300,8 @@ exports.unassignTutor = catchAsync(async (req, res, next) => {
     });
   });
 
-  // Fire-and-forget removal notification, loaded before the row was deleted.
-  notifyAssignmentRemoved(assignment).catch(() => {});
+  const editor = await editorFromReq(req);
+  broadcastAllocationChange('unassign', application.courseId, editor);
 
   res.status(204).end();
 });
@@ -329,6 +358,9 @@ exports.removeTutor = catchAsync(async (req, res, next) => {
 
   // Fire-and-forget removal notification, loaded before the row was deleted.
   notifyAssignmentRemoved(assignment).catch(() => {});
+
+  const editor = await editorFromReq(req);
+  broadcastAllocationChange('remove', application.courseId, editor);
 
   res.status(204).end();
 });
@@ -554,6 +586,11 @@ exports.autoAssignTutors = catchAsync(async (req, res, next) => {
     const assignment = assignmentByUserId.get(application.userId);
     if (assignment) notifyAssignmentAdded(assignment).catch(() => {});
   });
+
+  if (createdAssignments.length > 0) {
+    const editor = await editorFromReq(req);
+    broadcastAllocationChange('auto-assign', course.id, editor);
+  }
 
   res.status(200).json({
     courseId: course.id,

@@ -1,9 +1,12 @@
 require('dotenv/config');
 const express = require('express');
+const http = require('http');
 const morgan = require('morgan');
 const cors = require('cors');
 const prisma = require('./prisma/client');
 const { globalErrorHandler, notFoundErrorHandler } = require('./controllers/error');
+const { initSocketServer } = require('./realtime/socketServer');
+const { setIo } = require('./realtime/io');
 const usersRouter = require('./routes/auth');
 const sessionsRouter = require('./routes/sessions');
 const allocationRouter = require('./routes/allocation');
@@ -73,7 +76,12 @@ async function startServer() {
     await prisma.$connect();
     console.log('Database connection established');
 
-    app.listen(PORT, () => {
+    // Socket.IO shares the HTTP server; controllers broadcast board updates
+    // through realtime/io so they never touch the server instance directly.
+    const server = http.createServer(app);
+    setIo(initSocketServer(server));
+
+    server.listen(PORT, () => {
       console.log(`Server started on PORT ${PORT}`);
     });
   } catch (error) {

@@ -20,7 +20,12 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError("");
 
-    const response = await execute(() => sendPasswordResetEmail(auth, email.trim()));
+    // sendPasswordResetEmail resolves with undefined on success, so map it to a
+    // truthy value — execute() returns undefined on failure, which keeps the
+    // redirect from firing when the email cannot be sent.
+    const response = await execute(() =>
+      sendPasswordResetEmail(auth, email.trim()).then(() => true),
+    );
 
     if (response) {
       navigate("/confirmation-message");

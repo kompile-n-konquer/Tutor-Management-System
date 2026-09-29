@@ -138,6 +138,9 @@ skills-lock.json
 # Qoder IDE workspace cache (auto-generated, per-developer)
 .qoder/
 
+# macOS system files
+.DS_Store
+
 # yarn v2
 .yarn/cache
 .yarn/unplugged

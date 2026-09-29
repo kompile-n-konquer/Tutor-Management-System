@@ -5,6 +5,7 @@ module.exports = catchAsync = (func) => {
   return (req, res, next) => {
     // Async functions return a promise. So all errors are caught using the catch() method
     // The catch() method takes a function with an error parameter. This function then passes the error to the global handling middleware
-    func(req, res, next).catch((error) => next(error));
+    // Returning the promise lets callers (and tests) await the wrapped middleware until it settles.
+    return func(req, res, next).catch((error) => next(error));
   };
 };

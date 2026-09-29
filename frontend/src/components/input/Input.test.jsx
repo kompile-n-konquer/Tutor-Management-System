@@ -69,4 +69,34 @@ describe('Input — shared form input used in auth flows', () => {
     fireEvent.change(input, { target: { value: 'kg.newuser@wits.ac.za' } });
     expect(currentValue).toBe('kg.newuser@wits.ac.za');
   });
+
+  describe('password visibility toggle', () => {
+    test('renders a masked password input with the toggle in the hidden state', () => {
+      render(<Input labelText="Password" type="password" isPassword />);
+
+      expect(screen.getByLabelText(/password/i)).toHaveAttribute('type', 'password');
+      // The eye icon starts in the "hidden" state.
+      expect(screen.getByText('visibility_off')).toBeInTheDocument();
+    });
+
+    test('reveals the password when the eye is clicked and masks it again', () => {
+      render(<Input labelText="Password" type="password" isPassword />);
+      const input = screen.getByLabelText(/password/i);
+
+      fireEvent.click(screen.getByRole('button'));
+      expect(input).toHaveAttribute('type', 'text');
+      expect(screen.getByText('visibility')).toBeInTheDocument();
+      expect(screen.queryByText('visibility_off')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button'));
+      expect(input).toHaveAttribute('type', 'password');
+      expect(screen.getByText('visibility_off')).toBeInTheDocument();
+    });
+  });
+
+  test('renders the leading icon when one is provided', () => {
+    render(<Input labelText="Email" type="email" icon="mail" />);
+
+    expect(screen.getByText('mail')).toBeInTheDocument();
+  });
 });

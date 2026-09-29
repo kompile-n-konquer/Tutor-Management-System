@@ -32,6 +32,7 @@ model User {
   overflowClaims OverflowWork[]
   swapRequestsSent     SwapRequest[] @relation("SwapRequestsSent")
   swapRequestsReceived SwapRequest[] @relation("SwapRequestsReceived")
+  volunteerRequests SessionVolunteer[]
 }
 
 // Join table between User (role TUTOR) and Course — one row records that a user
@@ -151,14 +152,24 @@ model TimesheetEntry {
 }
 
 model Session {
-  id            Int             @id @default(autoincrement())
-  assignmentId  Int
-  date          DateTime
-  courseSlotId  Int
-  status        String          @default("SCHEDULED")
-  excuseReason  String?
-  assignment    TutorAssignment @relation(fields: [assignmentId], references: [id])
-  courseSlot    CourseSlot      @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
+  id               Int              @id @default(autoincrement())
+  assignmentId     Int
+  date             DateTime
+  courseSlotId     Int
+  status           String           @default("SCHEDULED") // SCHEDULED | UNASSIGNED | PENDING
+  excuseReason     String?
+  assignment       TutorAssignment  @relation(fields: [assignmentId], references: [id])
+  courseSlot       CourseSlot       @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
+  volunteerRequest SessionVolunteer?
+}
+model SessionVolunteer {
+  id        Int      @id @default(autoincrement())
+  sessionId Int      @unique
+  userId    Int
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model CourseSlot {

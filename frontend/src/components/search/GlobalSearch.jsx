@@ -2,20 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchAll } from "../../utils/searchIndex";
 import api from "../../utils/axiosInstance";
+import useAuth from "../../hooks/useAuth.js";
 
 const TYPE_LABELS = { course: "Courses", analytics: "Analytics", person: "People", timesheet: "Timesheets" };
 const TYPE_ICONS = { course: "menu_book", analytics: "analytics", person: "person", timesheet: "history_edu" };
 
+// Both endpoints return objects carrying id/courseCode/courseName, so the
+// same mapping covers course registry rows and application opportunities.
 function mapApiCourse(c) {
-  return { code: c.courseCode, name: c.courseName };
+  return { id: c.id, code: c.courseCode, name: c.courseName };
 }
 
 /**
  * GlobalSearch
  * One bar, three entity types. Lives in TopNavBar so it's available on every
  * authenticated page. Arrow keys move through results, Enter navigates, Escape closes.
+ * What it recommends is role-scoped: students and tutors search the
+ * opportunities open to them, staff search the course registry.
  */
 export default function GlobalSearch() {
+  const { role, loading: authLoading } = useAuth();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -23,18 +29,30 @@ export default function GlobalSearch() {
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
-  // Fetch courses once on mount for the search index
-  useEffect(() => {
-    let cancelled = false;
-    api.get("/courses").then((res) => {
-      if (!cancelled && res.status === 200 && res.data?.courses) {
-        setCourses(res.data.courses.map(mapApiCourse));
-      }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  const normalizedRole = role?.toLowerCase() ?? null;
 
-  const results = searchAll(query, courses);
+  // Fetch the course data this role is allowed to see once the profile is
+  // loaded. Students and tutors never receive the course registry — they
+  // search the application opportunities open to their availability instead.
+  useEffect(() => {
+    if (authLoading || !normalizedRole) return;
+
+    let cancelled = false;
+    const isApplicant = normalizedRole === "student" || normalizedRole === "tutor";
+    const request = isApplicant ? api.get("/applications") : api.get("/courses");
+    request
+      .then((res) => {
+        if (!cancelled && res.status === 200 && Array.isArray(res.data)) {
+          setCourses(res.data.map(mapApiCourse));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, normalizedRole]);
+
+  const results = searchAll(query, courses, normalizedRole);
   const grouped = results.reduce((acc, r) => {
     (acc[r.type] ||= []).push(r);
     return acc;

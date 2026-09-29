@@ -160,9 +160,10 @@ export default function TutorApplication() {
 
         <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento">
           {coursesLoading && (
-            <div className="flex items-center gap-unit text-on-surface-variant font-body-md p-stack-md mb-stack-md">
-              <span className="material-symbols-outlined animate-spin">progress_activity</span>
-              Loading courses that match your availability...
+            <div className="space-y-stack-sm mb-stack-md" aria-hidden="true">
+              <div className="animate-pulse h-4 w-56 rounded bg-surface-container-high" />
+              <div className="animate-pulse h-11 rounded bg-surface-container-high/60" />
+              <div className="animate-pulse h-11 rounded bg-surface-container-high/60" />
             </div>
           )}
 

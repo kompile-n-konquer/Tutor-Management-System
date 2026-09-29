@@ -148,7 +148,24 @@ const OpportunityDetails = () => {
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
         {isLoading && !opportunity && (
-          <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading opportunity...</p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter" aria-hidden="true">
+            <div className="lg:col-span-4 animate-pulse bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
+              <div className="h-4 w-28 rounded bg-surface-container-high mb-stack-lg" />
+              <div className="space-y-stack-lg">
+                {[0, 1, 2].map((row) => (
+                  <div key={row} className="space-y-unit">
+                    <div className="h-3 w-16 rounded bg-surface-container-high" />
+                    <div className="h-4 rounded bg-surface-container-high/60" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-8 animate-pulse bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento space-y-stack-md">
+              <div className="h-4 w-32 rounded bg-surface-container-high" />
+              <div className="h-24 rounded bg-surface-container-high/60" />
+              <div className="h-24 rounded bg-surface-container-high/60" />
+            </div>
+          </div>
         )}
 
         {opportunity && (

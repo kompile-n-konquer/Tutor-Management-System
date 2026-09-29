@@ -5,6 +5,7 @@ const fs = require('fs');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { getTutorMonthlyClaimableHours, getTutorEventClaimMonths, HOURLY_RATE_KEYS, PDF_TEMPLATE_KEY } = require('../utils/systemSettings');
 const { monthsBefore, findExcessiveWindow, deriveEventEntry, deriveTimes, dayOfWeekFor } = require('../utils/claimRules');
+const { notifyTimesheetApproved, notifyTimesheetRejected } = require('../email/notifier');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
@@ -553,10 +554,16 @@ exports.approveEntry = catchAsync(async (req, res, next) => {
   });
   const allApproved = allEntries.every((e) => e.status === 'APPROVED');
   if (allApproved) {
-    await prisma.timesheet.update({
+    const approvedTimesheet = await prisma.timesheet.update({
       where: { id: timesheetId },
       data: { status: 'APPROVED', approvedAt: new Date() },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
     });
+
+    // Fire-and-forget: notify the tutor their timesheet was approved. The
+    // notifier never throws (failures are logged in EmailLog), so a Resend
+    // outage can never fail the approval request itself.
+    notifyTimesheetApproved(approvedTimesheet).catch(() => {});
   }
 
   res.status(200).json({ message: 'Entry approved', allApproved });
@@ -606,19 +613,25 @@ exports.rejectTimesheet = catchAsync(async (req, res, next) => {
   }
 
   // Reset all entries back to PENDING so the tutor can edit and resubmit
-  await prisma.$transaction([
-    prisma.timesheetEntry.updateMany({
+  const rejectedTimesheet = await prisma.$transaction(async (tx) => {
+    await tx.timesheetEntry.updateMany({
       where: { timesheetId },
       data: { status: 'PENDING' },
-    }),
-    prisma.timesheet.update({
+    });
+    return tx.timesheet.update({
       where: { id: timesheetId },
       data: {
         status: 'REJECTED',
         rejectionReason: reason.trim(),
       },
-    }),
-  ]);
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    });
+  });
+
+  // Fire-and-forget: notify the tutor their timesheet was rejected, including
+  // the recorded reason. The notifier never throws, so a Resend outage can
+  // never fail the rejection request itself.
+  notifyTimesheetRejected(rejectedTimesheet).catch(() => {});
 
   res.status(200).json({ message: 'Timesheet rejected', reason: reason.trim() });
 });

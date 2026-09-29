@@ -129,7 +129,7 @@ exports.submitApplication = catchAsync(async (req, res, next) => {
     }
 
     // One application per course per user
-    const existingApplicant = await prisma.applicant.findFirst({
+    const existingApplicant = await prisma.application.findFirst({
       where: { userId, courseId: parsedCourseId },
     });
     if (existingApplicant) {
@@ -138,7 +138,7 @@ exports.submitApplication = catchAsync(async (req, res, next) => {
       return next(error);
     }
 
-    // Create the role application and the per-course Applicant row together
+    // Create the role application and the per-course Application row together
     // (atomically) so the organiser's per-course available pool immediately
     // reflects the chosen course.
     const application = await prisma.$transaction(async (tx) => {
@@ -152,7 +152,7 @@ exports.submitApplication = catchAsync(async (req, res, next) => {
         include: { user: { select: { firstName: true, lastName: true, email: true } } },
       });
 
-      await tx.applicant.create({
+      await tx.application.create({
         data: {
           userId,
           courseId: parsedCourseId,
@@ -213,9 +213,9 @@ exports.getTutorEligibleCourses = catchAsync(async (req, res, next) => {
         courseCode: true,
         courseName: true,
         minimumMark: true,
-        requiredTutors: true,
+        tutorsRequired: true,
         slots: { select: { dayOfWeek: true, timeSlotId: true } },
-        lecturer: { select: { user: { select: { firstName: true, lastName: true } } } },
+        user: { select: { firstName: true, lastName: true } },
       },
       orderBy: { courseCode: 'asc' },
     }),
@@ -232,9 +232,9 @@ exports.getTutorEligibleCourses = catchAsync(async (req, res, next) => {
       courseCode: course.courseCode,
       courseName: course.courseName,
       minimumMark: course.minimumMark,
-      requiredTutors: course.requiredTutors,
-      lecturerName: course.lecturer?.user
-        ? `${course.lecturer.user.firstName} ${course.lecturer.user.lastName}`
+      tutorsRequired: course.tutorsRequired,
+      lecturerName: course.user
+        ? `${course.user.firstName} ${course.user.lastName}`
         : null,
       slotCount: course.slots.length,
     }));
@@ -301,8 +301,8 @@ exports.getPendingApplications = catchAsync(async (req, res, next) => {
       const availabilityCount = await prisma.availability.count({
         where: { userId: app.userId },
       });
-      // For tutor applicants, fetch their course marks from Applicant records
-      const courseMarks = await prisma.applicant.findMany({
+      // For tutor applicants, fetch their course marks from Application records
+      const courseMarks = await prisma.application.findMany({
         where: { userId: app.userId },
         include: { course: { select: { courseCode: true, courseName: true } } },
         orderBy: { courseMark: 'desc' },
@@ -371,7 +371,7 @@ exports.getApplicationById = catchAsync(async (req, res, next) => {
   });
 
   // Fetch course marks for rank suggestion
-  const courseMarks = await prisma.applicant.findMany({
+  const courseMarks = await prisma.application.findMany({
     where: { userId: application.userId },
     include: { course: { select: { courseCode: true, courseName: true, minimumMark: true } } },
     orderBy: { courseMark: 'desc' },
@@ -421,7 +421,7 @@ exports.getApplicantRank = catchAsync(async (req, res, next) => {
   }
 
   // Gather course marks (same data the existing allocation rank uses)
-  const courseMarks = await prisma.applicant.findMany({
+  const courseMarks = await prisma.application.findMany({
     where: { userId: application.userId },
     include: { course: { select: { courseCode: true, courseName: true, minimumMark: true } } },
   });
@@ -508,7 +508,7 @@ exports.reviewApplication = catchAsync(async (req, res, next) => {
   const normalizedAction = action.toUpperCase();
 
   if (normalizedAction === 'APPROVE') {
-    // ── Approve: change role and create Tutor/Lecturer record ────────
+    // ── Approve: change role ────────────────────────────────────────
     await prisma.$transaction(async (tx) => {
       // 1. Update the application status
       await tx.roleApplication.update({
@@ -521,41 +521,6 @@ exports.reviewApplication = catchAsync(async (req, res, next) => {
         where: { id: application.userId },
         data: { role: application.requestedRole },
       });
-
-      // 3. Create the appropriate role-specific record
-      if (application.requestedRole === ROLES.TUTOR) {
-        await tx.tutor.upsert({
-          where: { userId: application.userId },
-          update: {
-            hourlyRate: application.hourlyRate,
-            maxHoursPerWeek: application.maxHoursPerWeek || 10,
-            status: 'ACTIVE',
-            approvedAt: new Date(),
-          },
-          create: {
-            userId: application.userId,
-            hourlyRate: application.hourlyRate,
-            maxHoursPerWeek: application.maxHoursPerWeek || 10,
-            status: 'ACTIVE',
-            approvedAt: new Date(),
-          },
-        });
-      } else if (application.requestedRole === ROLES.LECTURER) {
-        await tx.lecturer.upsert({
-          where: { userId: application.userId },
-          update: {
-            department: application.department,
-            officeLocation: application.officeLocation,
-            officeHours: application.officeHours,
-          },
-          create: {
-            userId: application.userId,
-            department: application.department || 'Unassigned',
-            officeLocation: application.officeLocation,
-            officeHours: application.officeHours,
-          },
-        });
-      }
     });
 
     return res.json({
@@ -579,7 +544,7 @@ exports.reviewApplication = catchAsync(async (req, res, next) => {
   // pool. Only PENDING rows are touched — an applicant who was already
   // assigned keeps their assignment.
   if (application.requestedRole === ROLES.TUTOR) {
-    await prisma.applicant.updateMany({
+    await prisma.application.updateMany({
       where: { userId: application.userId, status: 'PENDING' },
       data: { status: 'REJECTED', reviewedAt: new Date() },
     });

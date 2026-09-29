@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
 import api from "../../utils/axiosInstance";
+import { useAuth } from "../context/AuthContext";
+import {
+  connectOrganiserSocket,
+  getOrganiserSocket,
+  disconnectOrganiserSocket,
+} from "../../utils/socket";
 
 const MAX_AVAILABLE_TUTORS = 15;
 
@@ -55,9 +61,11 @@ function mapApiAssignedTutor(t) {
   };
 }
 
-function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart, onRemove, isMutating }) {
+function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart, onDragEnd, onRemove, isMutating, draggedBy }) {
   const clashClasses = tutor.clash
     ? "bg-clash-bg/10 border-2 border-clash-bg"
+    : draggedBy
+    ? "bg-secondary-fixed/40 border-2 border-urgent-orange"
     : "bg-surface-container-lowest border border-surface-variant";
   return (
     <div
@@ -69,10 +77,17 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart,
       onFocus={onFocus}
       draggable
       onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={`${clashClasses} p-stack-sm rounded cursor-grab hover:shadow-sm transition-shadow flex items-start gap-stack-sm relative group outline-none ${
         isFocused ? "ring-2 ring-primary ring-offset-1" : ""
       } ${isMutating ? "opacity-50 pointer-events-none" : ""}`}
     >
+      {draggedBy && (
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-urgent-orange text-on-urgent-orange font-label-caps text-label-caps text-[10px] px-2 py-0.5 rounded-full shadow whitespace-nowrap z-10 flex items-center gap-1">
+          <span className="material-symbols-outlined text-[12px]">drag_pan</span>
+          {draggedBy}
+        </div>
+      )}
       {tutor.clash && (
         <div className="absolute -top-2 -right-2 bg-clash-bg text-on-clash-bg rounded-full p-1 shadow-sm">
           <span className="material-symbols-outlined text-[16px]">error</span>
@@ -113,12 +128,19 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart,
   );
 }
 
-function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCardFocus, onDragStart, onDragOver, onDrop, highlighted, onRemove, mutatingId }) {
+function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCardFocus, onDragStart, onDragEnd, onDragOver, onDrop, highlighted, onRemove, mutatingId, remoteDrag }) {
   return (
     <div className="w-1/2 flex flex-col bg-surface-container-low rounded-lg border border-outline-variant/50">
       <div className="p-stack-sm border-b border-outline-variant/50 flex justify-between items-center">
         <span className="font-label-caps text-label-caps text-on-surface-variant">{label}</span>
-        <span className="font-data-mono text-data-mono bg-surface-variant px-2 rounded">{count}</span>
+        {remoteDrag && remoteDrag.pool === id ? (
+          <span className="font-label-caps text-label-caps text-[10px] text-urgent-orange flex items-center gap-1 animate-pulse">
+            <span className="material-symbols-outlined text-[12px]">south</span>
+            {remoteDrag.name}
+          </span>
+        ) : (
+          <span className="font-data-mono text-data-mono bg-surface-variant px-2 rounded">{count}</span>
+        )}
       </div>
       <div
         onDragOver={(e) => onDragOver(e, id)}
@@ -139,8 +161,12 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
             onKeyDown={(e) => onCardKeyDown(e, id, index)}
             onFocus={() => onCardFocus(id, index)}
             onDragStart={(e) => onDragStart(e, t.id)}
+            onDragEnd={() => onDragEnd()}
             onRemove={id === "allocated" ? onRemove : null}
             isMutating={t.applicantId === mutatingId}
+            draggedBy={
+              remoteDrag && remoteDrag.applicantId === t.applicantId ? remoteDrag.name : null
+            }
           />
         ))}
       </div>
@@ -149,6 +175,7 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
 }
 
 export default function Organiser() {
+  const { currentUser, role } = useAuth();
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [availableTutors, setAvailableTutors] = useState([]);
@@ -161,7 +188,71 @@ export default function Organiser() {
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [focus, setFocus] = useState({ pool: "available", index: 0 });
   const [notice, setNotice] = useState(null);
+  const [remoteDrag, setRemoteDrag] = useState(null);
+  const [liveUpdate, setLiveUpdate] = useState(null);
+  const [onlineOrganisers, setOnlineOrganisers] = useState([]);
   const cardRefs = useRef({});
+  const draggingRef = useRef(null);
+  const lastDragPoolRef = useRef(null);
+  // Refs so socket handlers always read the latest course selection without
+  // re-registering the listeners on every change.
+  const selectedCourseRef = useRef(null);
+  const userIdRef = useRef(null);
+
+  selectedCourseRef.current = selectedCourse;
+  userIdRef.current = currentUser?.id ?? null;
+
+  const isOrganiser = role === "organiser" || role === "admin";
+
+  // Live collaboration: every connected organiser sees each other's drags and
+  // board changes. The socket only admits ORGANISER/ADMIN (server-side).
+  useEffect(() => {
+    if (!isOrganiser) return undefined;
+
+    const socket = connectOrganiserSocket();
+
+    const onDrag = (payload) => {
+      if (payload?.userId === userIdRef.current) return;
+      setRemoteDrag(payload);
+    };
+    const onDragEnd = (payload) => {
+      setRemoteDrag((current) =>
+        current && (!payload || current.userId === payload.userId) ? null : current,
+      );
+    };
+    const onAllocationChanged = (payload) => {
+      if (payload?.actorId === userIdRef.current) return;
+      setLiveUpdate({ name: payload?.actorName ?? "Another organiser", type: payload?.type });
+      refetchCourses();
+      if (payload?.courseId === selectedCourseRef.current) {
+        refetchPools(selectedCourseRef.current);
+      }
+    };
+    const onPresence = (payload) => {
+      setOnlineOrganisers(payload?.organisers ?? []);
+    };
+
+    socket.on("presence:drag", onDrag);
+    socket.on("presence:drag-end", onDragEnd);
+    socket.on("allocation:changed", onAllocationChanged);
+    socket.on("presence:list", onPresence);
+    if (!socket.connected) socket.connect();
+
+    return () => {
+      socket.off("presence:drag", onDrag);
+      socket.off("presence:drag-end", onDragEnd);
+      socket.off("allocation:changed", onAllocationChanged);
+      socket.off("presence:list", onPresence);
+      disconnectOrganiserSocket();
+    };
+  }, [isOrganiser]);
+
+  // "Alex Mercer is dragging Priya Nair" style hint that fades after a moment
+  useEffect(() => {
+    if (!liveUpdate) return undefined;
+    const timer = setTimeout(() => setLiveUpdate(null), 4000);
+    return () => clearTimeout(timer);
+  }, [liveUpdate]);
 
   const loading = coursesLoading || poolsLoading;
   const course = courses.find((c) => c.id === selectedCourse);
@@ -331,7 +422,7 @@ export default function Organiser() {
           // as the 409 requiredTutors cap arrive here rather than in catch.
           const message = res?.data?.message;
           if (res.status === 409 && message) {
-            setNotice({ title: "Maximum required tutors reached", message, footnote: "The tutor remains in the available tutors list for this course." });
+            setNotice({ title: "Maximum required tutors reached", message, footnote: "The board was not changed." });
           } else if (message) {
             setNotice({ title: "Could not assign tutor", message, footnote: "The tutor remains in the available tutors list for this course." });
           }
@@ -480,14 +571,53 @@ export default function Organiser() {
 
   function handleDragStartMouse(e, tutorId) {
     e.dataTransfer.setData("text/plain", tutorId);
+    // Tell the other organisers who is dragging what so they can watch
+    // instead of dropping on the same card at the same time.
+    const tutor =
+      availableTutors.find((t) => t.id === tutorId) ||
+      allocatedTutors.find((t) => t.id === tutorId);
+    if (tutor && selectedCourse != null) {
+      draggingRef.current = { applicantId: tutor.applicantId, applicantName: tutor.name };
+      lastDragPoolRef.current = null;
+      getOrganiserSocket()?.emit("board:drag", {
+        applicantId: tutor.applicantId,
+        applicantName: tutor.name,
+        courseId: selectedCourse,
+        pool: availableTutors.some((t) => t.id === tutorId) ? "available" : "allocated",
+      });
+    }
+  }
+  function handleDragEnd() {
+    setDragOverPool(null);
+    draggingRef.current = null;
+    lastDragPoolRef.current = null;
+    getOrganiserSocket()?.emit("board:drag-end");
   }
   function handleDragOver(e, poolId) {
     e.preventDefault();
     setDragOverPool(poolId);
+    // Stream the drag position: whenever the card hovers a different pool,
+    // other organisers see where it is heading in real time.
+    if (
+      draggingRef.current &&
+      lastDragPoolRef.current !== poolId &&
+      selectedCourse != null
+    ) {
+      lastDragPoolRef.current = poolId;
+      getOrganiserSocket()?.emit("board:drag", {
+        applicantId: draggingRef.current.applicantId,
+        applicantName: draggingRef.current.applicantName,
+        courseId: selectedCourse,
+        pool: poolId,
+      });
+    }
   }
   function handleDrop(e, poolId) {
     e.preventDefault();
     setDragOverPool(null);
+    draggingRef.current = null;
+    lastDragPoolRef.current = null;
+    getOrganiserSocket()?.emit("board:drag-end");
     const tutorId = e.dataTransfer.getData("text/plain");
     const draggedTutor =
       availableTutors.find((t) => t.id === tutorId) ||
@@ -577,8 +707,29 @@ export default function Organiser() {
               <p className="font-label-caps text-label-caps text-on-surface-variant mt-unit">
                 Drag tutors, or use ↑↓ to move, ←→ to switch pools, Enter to assign, Delete to remove, Esc to clear focus
               </p>
+              {liveUpdate && (
+                <p className="font-label-caps text-label-caps text-trust-blue mt-unit flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">sync</span>
+                  Board updated by {liveUpdate.name} — pools refreshed
+                </p>
+              )}
+              {remoteDrag && remoteDrag.courseId !== selectedCourse && (
+                <p className="font-label-caps text-label-caps text-urgent-orange mt-unit flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">drag_pan</span>
+                  {remoteDrag.name} is dragging {remoteDrag.applicantName} on another course
+                </p>
+              )}
             </div>
-            <div className="flex gap-stack-sm">
+            <div className="flex items-center gap-stack-sm">
+              {onlineOrganisers.length > 0 && (
+                <span
+                  className="font-label-caps text-label-caps text-on-surface-variant flex items-center gap-1"
+                  title={onlineOrganisers.map((o) => o.name).join(", ")}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-trust-blue">group</span>
+                  {onlineOrganisers.length} online
+                </span>
+              )}
               <button
                 onClick={handleAutoAssign}
                 disabled={autoAssigning || !course || allocatedTutors.length >= (course?.req ?? 0)}
@@ -628,10 +779,12 @@ export default function Organiser() {
                 onCardKeyDown={handleCardKeyDown}
                 onCardFocus={handleCardFocus}
                 onDragStart={handleDragStartMouse}
+                onDragEnd={handleDragEnd}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 highlighted={dragOverPool}
                 mutatingId={mutatingId}
+                remoteDrag={remoteDrag}
               />
               <Pool
                 id="allocated"
@@ -643,11 +796,13 @@ export default function Organiser() {
                 onCardKeyDown={handleCardKeyDown}
                 onCardFocus={handleCardFocus}
                 onDragStart={handleDragStartMouse}
+                onDragEnd={handleDragEnd}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 highlighted={dragOverPool}
                 onRemove={removeAssignedTutor}
                 mutatingId={mutatingId}
+                remoteDrag={remoteDrag}
               />
             </div>
           )}

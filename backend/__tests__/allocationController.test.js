@@ -426,6 +426,11 @@ describe('getAssignedTutors', () => {
         course: { courseCode: 'COMS3000', courseName: 'Algorithms' },
       },
     ]);
+    // applicantId must resolve to the APPLICATION id (not the userId) so the
+    // unassign/remove endpoints find the right record.
+    prisma.application.findMany.mockResolvedValue([
+      { id: 77, userId: 10, courseId: 100 },
+    ]);
 
     const req = mockReq();
     const res = mockRes();
@@ -437,7 +442,7 @@ describe('getAssignedTutors', () => {
       assignedTutors: [
         expect.objectContaining({
           assignmentId: 1,
-          applicantId: 10,
+          applicantId: 77,
           name: 'Alice Smith',
           courseCode: 'COMS3000',
           semester: '2026-S1',

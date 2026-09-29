@@ -7,6 +7,8 @@ jest.mock('../prisma/client', () => {
   };
 
   return {
+    user: { findUnique: jest.fn() },
+    courseSlot: { findMany: jest.fn() },
     application: { findMany: jest.fn(), findUnique: jest.fn() },
     tutorAssignment: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), delete: jest.fn(), count: jest.fn() },
     course: { findUnique: jest.fn() },
@@ -48,6 +50,8 @@ function mockReq(overrides = {}) {
     body: {},
     query: {},
     params: {},
+    // Board mutations are attributed to the signed-in organiser
+    user: { id: 1, email: 'organiser@test.ub' },
     ...overrides,
   };
 }
@@ -62,6 +66,11 @@ function mockRes() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Defaults for the board-guard/over-allocation lookups; individual tests
+  // override these when they need specific data.
+  prisma.user.findUnique.mockResolvedValue({ firstName: 'Test', lastName: 'Organiser' });
+  prisma.courseSlot.findMany.mockResolvedValue([]);
+  prisma.tutorAssignment.findMany.mockResolvedValue([]);
 });
 
 // ════════════════════════════════════════════════════════════════════════

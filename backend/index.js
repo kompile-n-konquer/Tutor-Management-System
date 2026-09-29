@@ -1,9 +1,12 @@
 require('dotenv/config');
 const express = require('express');
+const http = require('http');
 const morgan = require('morgan');
 const cors = require('cors');
 const prisma = require('./prisma/client');
 const { globalErrorHandler, notFoundErrorHandler } = require('./controllers/error');
+const { initSocketServer } = require('./realtime/socketServer');
+const { setIo } = require('./realtime/io');
 const usersRouter = require('./routes/auth');
 const sessionsRouter = require('./routes/sessions');
 const allocationRouter = require('./routes/allocation');
@@ -13,6 +16,7 @@ const applicationsRouter = require('./routes/applications');
 const settingsRouter = require('./routes/settings');
 const timesheetsRouter = require('./routes/timesheets');
 const eventsRouter = require('./routes/events');
+const swapsRouter = require('./routes/swaps');
 const onboardingRouter = require('./routes/onboarding');
 const publicRouter = require('./routes/public');
 const analyticsRouter = require('./routes/analytics');
@@ -57,6 +61,7 @@ app.use('/api/applications', applicationsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/timesheets', timesheetsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/swaps', swapsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/public', publicRouter);
 app.use('/api/analytics', analyticsRouter);
@@ -73,7 +78,12 @@ async function startServer() {
     await prisma.$connect();
     console.log('Database connection established');
 
-    app.listen(PORT, () => {
+    // Socket.IO shares the HTTP server; controllers broadcast board updates
+    // through realtime/io so they never touch the server instance directly.
+    const server = http.createServer(app);
+    setIo(initSocketServer(server));
+
+    server.listen(PORT, () => {
       console.log(`Server started on PORT ${PORT}`);
     });
   } catch (error) {

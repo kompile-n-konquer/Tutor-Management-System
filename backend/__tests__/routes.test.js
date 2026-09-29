@@ -23,8 +23,11 @@ describe('routes wiring', () => {
     expect(routeTable(sessionsRouter)).toEqual([
       { path: '/unassigned', methods: ['get'], handlers: 2 }, // auth + controller
       { path: '/mine', methods: ['get'], handlers: 2 },
+      { path: '/volunteered', methods: ['get'], handlers: 2 },
+      { path: '/lecturer', methods: ['get'], handlers: 3 }, // auth + lecturer gate + controller
       { path: '/:id/excuse', methods: ['patch'], handlers: 2 },
       { path: '/:id/volunteer', methods: ['post'], handlers: 2 },
+      { path: '/:id/volunteer', methods: ['patch'], handlers: 3 }, // auth + lecturer gate + controller
     ]);
   });
 

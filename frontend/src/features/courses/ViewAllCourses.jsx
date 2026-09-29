@@ -37,7 +37,6 @@ const ViewAllCourses = () => {
       const response = await execute(() => api.get('/courses'));
       if (response && response.status === 200) {
         setCourses(response.data);
-        console.log(response.data);
       } else {
         setError(response?.data?.message || 'Could not load the courses. Please refresh the page.');
       }
@@ -132,7 +131,20 @@ const ViewAllCourses = () => {
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
           {isLoading && !loaded ? (
-            <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading courses...</p>
+            <div className="space-y-stack-sm py-stack-sm" aria-hidden="true">
+              {[0, 1, 2, 3].map((row) => (
+                <div
+                  key={row}
+                  className="animate-pulse flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-sm"
+                >
+                  <div className="h-4 w-5 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-48 rounded bg-surface-container-high" />
+                  <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-16 rounded bg-surface-container-high/60 ml-auto" />
+                </div>
+              ))}
+            </div>
           ) : courses.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No courses have been added yet.

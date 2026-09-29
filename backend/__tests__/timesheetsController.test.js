@@ -20,7 +20,7 @@ const prisma = require('../prisma/client');
 jest.mock('../prisma/client', () => {
   const tx = {
     timesheet: { create: jest.fn(), update: jest.fn() },
-    timesheetEntry: { deleteMany: jest.fn(), createMany: jest.fn() },
+    timesheetEntry: { deleteMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
   };
   return {
     __tx: tx,
@@ -44,6 +44,13 @@ jest.mock('../prisma/client', () => {
     $transaction: jest.fn(),
   };
 });
+
+// Timesheet approval/rejection emails are fire-and-forget: mock the notifier
+// so tests assert it was invoked without hitting Resend or the EmailLog table.
+jest.mock('../email/notifier', () => ({
+  notifyTimesheetApproved: jest.fn().mockResolvedValue({ sent: true, skipped: false }),
+  notifyTimesheetRejected: jest.fn().mockResolvedValue({ sent: true, skipped: false }),
+}));
 
 // The claim rules and organiser settings are unit-tested in their own suites
 // (claimRules.test.js) — stub them here so this suite stays focused on the
@@ -86,6 +93,7 @@ const {
   deriveTimes,
   dayOfWeekFor,
 } = require('../utils/claimRules');
+const { notifyTimesheetApproved, notifyTimesheetRejected } = require('../email/notifier');
 const { PDFDocument } = require('pdf-lib');
 const fs = require('fs');
 
@@ -803,18 +811,23 @@ describe('timesheet workflow — creation, review, corrections', () => {
       expect(res.json).toHaveBeenCalledWith({ message: 'Entry approved', allApproved: false });
     });
 
-    test('the final approval moves the whole timesheet to APPROVED', async () => {
+    test('the final approval moves the whole timesheet to APPROVED and emails the tutor', async () => {
       prisma.timesheet.findUnique.mockResolvedValue(makeTimesheet({ status: 'SUBMITTED' }));
       prisma.timesheetEntry.findFirst.mockResolvedValue({ id: 7, supervisorId: 9 });
       prisma.timesheetEntry.update.mockResolvedValue({});
       prisma.timesheetEntry.findMany.mockResolvedValue([{ status: 'APPROVED' }]);
+      const approvedTimesheet = makeTimesheet({ status: 'APPROVED' });
+      prisma.timesheet.update.mockResolvedValue(approvedTimesheet);
 
       await approveEntry(req, res, next);
 
       expect(prisma.timesheet.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: { status: 'APPROVED', approvedAt: expect.any(Date) },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
       });
+      // The approval email is fire-and-forget and never fails the request.
+      expect(notifyTimesheetApproved).toHaveBeenCalledWith(approvedTimesheet);
       expect(res.json).toHaveBeenCalledWith({ message: 'Entry approved', allApproved: true });
     });
   });
@@ -885,20 +898,25 @@ describe('timesheet workflow — creation, review, corrections', () => {
           entries: [makeEntry({ supervisorId: 9 }), makeEntry({ id: 72, supervisorId: 6 })],
         }),
       );
-      prisma.timesheetEntry.updateMany.mockResolvedValue({});
-      prisma.timesheet.update.mockResolvedValue({});
+      const rejectedTimesheet = makeTimesheet({ status: 'REJECTED', rejectionReason: 'Wrong dates' });
+      prisma.__tx.timesheetEntry.updateMany.mockResolvedValue({});
+      prisma.__tx.timesheet.update.mockResolvedValue(rejectedTimesheet);
 
       await rejectTimesheet(req, res, next);
 
-      // Every entry returns to PENDING so the tutor can edit and resubmit.
-      expect(prisma.timesheetEntry.updateMany).toHaveBeenCalledWith({
+      // Every entry returns to PENDING inside the transaction so the tutor can
+      // edit and resubmit.
+      expect(prisma.__tx.timesheetEntry.updateMany).toHaveBeenCalledWith({
         where: { timesheetId: 1 },
         data: { status: 'PENDING' },
       });
-      expect(prisma.timesheet.update).toHaveBeenCalledWith({
+      expect(prisma.__tx.timesheet.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: { status: 'REJECTED', rejectionReason: 'Wrong dates' },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
       });
+      // The rejection email is fire-and-forget and carries the reason.
+      expect(notifyTimesheetRejected).toHaveBeenCalledWith(rejectedTimesheet);
       expect(res.json).toHaveBeenCalledWith({ message: 'Timesheet rejected', reason: 'Wrong dates' });
     });
 
@@ -908,8 +926,10 @@ describe('timesheet workflow — creation, review, corrections', () => {
       prisma.timesheet.findUnique.mockResolvedValue(
         makeTimesheet({ status: 'SUBMITTED', entries: [makeEntry({ supervisorId: 9 })] }),
       );
-      prisma.timesheetEntry.updateMany.mockResolvedValue({});
-      prisma.timesheet.update.mockResolvedValue({});
+      prisma.__tx.timesheetEntry.updateMany.mockResolvedValue({});
+      prisma.__tx.timesheet.update.mockResolvedValue(
+        makeTimesheet({ status: 'REJECTED', rejectionReason: 'Payroll query' }),
+      );
 
       await rejectTimesheet(req, res, next);
 

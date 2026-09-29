@@ -59,12 +59,13 @@ describe('Timesheets — tutor and lecturer review table', () => {
     authState.loading = false;
   });
 
-  test('shows a loading state while the timesheets are fetched', () => {
+  test('shows skeleton rows while the timesheets are fetched', () => {
     mockGet.mockReturnValue(new Promise(() => {})); // never settles
 
-    renderTimesheets();
+    const { container } = renderTimesheets();
 
-    expect(screen.getByText('Loading timesheets...')).toBeInTheDocument();
+    // Four pulse-animated placeholder rows stand in for the review table.
+    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(4);
     expect(mockGet).toHaveBeenCalledWith('/timesheets');
   });
 

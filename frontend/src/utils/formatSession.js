@@ -14,12 +14,15 @@ const minutesToTime = (minutes) => {
 export const formatSessionDate = (date) =>
   new Date(date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 
-// Accepts the full session object (with courseSlot.timeSlot populated).
-export const formatSessionTimeRange = (session) => {
-  const ts = session?.courseSlot?.timeSlot;
-  if (!ts) return '';
-  return `${minutesToTime(ts.startMinute)} – ${minutesToTime(ts.endMinute)}`;
+// Formats a bare TimeSlot's minutes-since-midnight range (shared by the
+// tutor dashboard, the lecturer scheduler and the volunteer view).
+export const formatTimeRange = (timeSlot) => {
+  if (!timeSlot) return "";
+  return `${minutesToTime(timeSlot.startMinute)} – ${minutesToTime(timeSlot.endMinute)}`;
 };
+
+// Accepts the full session object (with courseSlot.timeSlot populated).
+export const formatSessionTimeRange = (session) => formatTimeRange(session?.courseSlot?.timeSlot);
 
 // Returns the session length in hours (e.g. 1.5), or null when the timeSlot is unusable.
 export const sessionDurationHours = (session) => {

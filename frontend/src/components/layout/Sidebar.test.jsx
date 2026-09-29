@@ -49,11 +49,11 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
   });
 
-  test('students see the volunteer and onboarding links, and no tutor-only links', () => {
+  test('students see the onboarding link, and no tutor-only links', () => {
     renderSidebar('student');
 
-    expect(screen.getByText('Volunteer View')).toBeInTheDocument();
     expect(screen.getByText('Become a Tutor/Lecturer')).toBeInTheDocument();
+    expect(screen.queryByText('Volunteer View')).not.toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 

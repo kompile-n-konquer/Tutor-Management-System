@@ -19,10 +19,10 @@ const {
 //   • every status the system defines — course applications (PENDING,
 //     APPROVED, ASSIGNED, REJECTED), role applications (PENDING, APPROVED,
 //     REJECTED), timesheets (DRAFT, SUBMITTED, APPROVED, REJECTED) and
-//     entries (PENDING, APPROVED, REJECTED), sessions (SCHEDULED, COMPLETED,
-//     CANCELLED, EXCUSED, UNASSIGNED, PENDING), volunteer requests (PENDING),
-//     overflow work (OPEN, CLAIMED, CLOSED) and the
-//     email log (PENDING, SENT, FAILED)
+//     entries (PENDING, APPROVED, REJECTED), sessions (UNASSIGNED — the
+//     excuse/volunteer lifecycle; upcoming SCHEDULED occurrences are
+//     derived from events and never stored), overflow work (OPEN, CLAIMED,
+//     CLOSED) and the email log (PENDING, SENT, FAILED)
 //   • capacity edge cases: a course at maximum tutors (MATH2002 3/3), a
 //     closed fully-staffed course (MATH1014 2/2), a draft timesheet above
 //     the monthly claimable-hours cap, and events older than the claim window
@@ -396,27 +396,19 @@ const TIMESHEETS = [
   },
 ];
 
-// Sessions (legacy concrete-session table) — every documented status:
-// SCHEDULED / COMPLETED / CANCELLED / EXCUSED plus the volunteer flow's
-// UNASSIGNED (excused, open for students to volunteer for) and PENDING (a
-// student volunteered and the request is awaiting approval).
+// Sessions — the excuse / volunteer lifecycle. Upcoming SCHEDULED occurrences
+// are derived at read time from the events above and are never stored; a
+// Session row only exists once a tutor excuses themselves from an occurrence
+// (UNASSIGNED — open for student volunteers). The past rows keep teaching
+// history for the lecturer view.
 const SESSIONS = [
-  { user: 'alex', course: 'COMS1015', day: 0, when: 'upcoming', weeks: 1, status: 'SCHEDULED' },
+  // Marcus excused himself from next Monday's COMS1015 occurrence — the
+  // c1015-mon-next event — so the Volunteer View has live cover to pick up.
+  { user: 'marcus', course: 'COMS1015', day: 0, when: 'upcoming', weeks: 1, status: 'UNASSIGNED', excuseReason: 'Family commitment I could not move' },
   { user: 'alex', course: 'COMS1015', day: 0, when: 'past', weeks: 1, status: 'COMPLETED' },
   { user: 'marcus', course: 'COMS1015', day: 2, when: 'past', weeks: 1, status: 'CANCELLED' },
   { user: 'sarahJ', course: 'MATH2002', day: 2, when: 'past', weeks: 2, status: 'EXCUSED', excuseReason: 'Medical certificate submitted' },
-  { user: 'priya', course: 'COMS3055', day: 1, when: 'upcoming', weeks: 1, status: 'SCHEDULED' },
   { user: 'alex', course: 'MATH1014', day: 0, when: 'past', weeks: 2, status: 'COMPLETED' },
-  // Volunteer flow (#37): two open sessions and one that already has a volunteer.
-  { user: 'alex', course: 'COMS1015', day: 2, when: 'upcoming', weeks: 1, status: 'UNASSIGNED', excuseReason: 'Medical appointment I could not move' },
-  { user: 'priya', course: 'COMS3055', day: 3, when: 'upcoming', weeks: 1, status: 'UNASSIGNED', excuseReason: 'Conference travel' },
-  { key: 'm2002-mon-volunteer', user: 'sarahJ', course: 'MATH2002', day: 0, when: 'upcoming', weeks: 1, status: 'PENDING', excuseReason: 'Family emergency' },
-];
-
-// A student already volunteered for the PENDING session above (issue #37), so
-// the demo shows the "already volunteered" guard on re-attempting it.
-const SESSION_VOLUNTEERS = [
-  { user: 'nomsa', sessionKey: 'm2002-mon-volunteer', status: 'PENDING' },
 ];
 
 // Overflow work (volunteering) — OPEN, CLAIMED and CLOSED.
@@ -468,7 +460,6 @@ async function cleanup() {
 
   await prisma.timesheetEntry.deleteMany({});
   await prisma.timesheet.deleteMany({});
-  await prisma.sessionVolunteer.deleteMany({});
   await prisma.session.deleteMany({});
   await prisma.tutorAssignment.deleteMany({});
   await prisma.application.deleteMany({});
@@ -758,12 +749,11 @@ async function main() {
     }
   }
 
-  // ── 12. Sessions (every concrete-session status) ──
+  // ── 12. Sessions (excuse / volunteer lifecycle + teaching history) ──
   console.log('\n📆  Creating sessions...\n');
 
-  const sessionIds = {}; // session.key → Session.id (volunteer-flow sessions only)
   for (const session of SESSIONS) {
-    const created = await prisma.session.create({
+    await prisma.session.create({
       data: {
         assignmentId: assignmentIds[`${session.user}:${session.course}`],
         courseSlotId: courseSlotIds[`${session.course}:${session.day}`],
@@ -772,20 +762,7 @@ async function main() {
         ...(session.excuseReason ? { excuseReason: session.excuseReason } : {}),
       },
     });
-    if (session.key) sessionIds[session.key] = created.id;
     console.log(`    ✓ ${session.status.padEnd(10)} ${session.course} (${session.user})`);
-  }
-
-  // ── 12b. Volunteer requests (issue #37) ──
-  for (const volunteer of SESSION_VOLUNTEERS) {
-    await prisma.sessionVolunteer.create({
-      data: {
-        sessionId: sessionIds[volunteer.sessionKey],
-        userId: users[volunteer.user].id,
-        status: volunteer.status,
-      },
-    });
-    console.log(`    ✓ ${volunteer.status.padEnd(10)} volunteer → ${users[volunteer.user].email}`);
   }
 
   // ── 13. Overflow work ──
@@ -884,7 +861,6 @@ async function printStatusCoverage() {
     sheetStatuses,
     entryStatuses,
     sessionStatuses,
-    volunteerStatuses,
     overflowStatuses,
     emailStatuses,
     courseList,
@@ -896,7 +872,6 @@ async function printStatusCoverage() {
     prisma.timesheet.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.timesheetEntry.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.session.groupBy({ by: ['status'], _count: { _all: true } }),
-    prisma.sessionVolunteer.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.overflowWork.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.emailLog.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.course.findMany({
@@ -916,7 +891,6 @@ async function printStatusCoverage() {
   console.log(`    Timesheets          : ${tally(sheetStatuses)}`);
   console.log(`    Timesheet entries   : ${tally(entryStatuses)}`);
   console.log(`    Sessions            : ${tally(sessionStatuses)}`);
-  console.log(`    Volunteer requests  : ${tally(volunteerStatuses)}`);
   console.log(`    Overflow work       : ${tally(overflowStatuses)}`);
   console.log(`    Email log           : ${tally(emailStatuses)}`);
   console.log('\n    Course allocation:');
@@ -958,7 +932,7 @@ function printLoginInstructions() {
     marcus: 'tutor — fresh submitted timesheet',
     thabo: 'student — 2 pending applications, locked slots',
     lerato: 'student — pending on a FULL course',
-    nomsa: 'student — approved, not yet assigned, pending volunteer request',
+    nomsa: 'student — approved, not yet assigned',
     sipho: 'student — pending application',
     refilwe: 'student — pending tutor role application',
     kabelo: 'student — pending lecturer role application',
@@ -984,20 +958,21 @@ function printLoginInstructions() {
   console.log('       claiming unclaimed past events, then submit it.');
   console.log('    4. Tutor (priya.nair@tutorflow.test): her draft totals 11h inside a');
   console.log('       31-day window — submitting it triggers the 10h cap guard.');
-  console.log('    5. Lecturer (lecturer@tutorflow.test): Timesheets → pending review —');
+  console.log('    5. Event-driven scheduling — Lecturer (lecturer@tutorflow.test): an');
+  console.log("       event added on the Events page becomes every assigned tutor's");
+  console.log('       next session. Tutor (marcus.webb@tutorflow.test): his dashboard');
+  console.log('       derives those sessions from the events, and his excused Monday');
+  console.log('       COMS1015 session is open for a student volunteer.');
+  console.log('    6. Lecturer (lecturer@tutorflow.test): Timesheets → pending review —');
   console.log("       Alex's mid-review sheet (APPROVED/REJECTED/PENDING entries) and");
   console.log("       Marcus's fresh submission; approve entries one by one.");
-  console.log('    6. Tutor (david.kim@tutorflow.test): the rejected timesheet shows the');
+  console.log('    7. Tutor (david.kim@tutorflow.test): the rejected timesheet shows the');
   console.log('       rejection reason; edit and resubmit it.');
-  console.log('    7. Deactivated account (zanele.mthembu@tutorflow.test): login is');
+  console.log('    8. Deactivated account (zanele.mthembu@tutorflow.test): login is');
   console.log('       refused because the Firebase account is disabled.');
-  console.log('    8. Settings (organiser): the claimable-hours cap (10h), claim window');
+  console.log('    9. Settings (organiser): the claimable-hours cap (10h), claim window');
   console.log('       (3 months) and hourly rates are pre-configured. Upload a PDF');
   console.log("       template there to unlock exporting Sarah Jenkins' approved sheet.");
-  console.log('    9. Volunteer flow — thabo.mokoena@tutorflow.test (student): Volunteer View');
-  console.log('       lists the sessions whose tutors excused themselves. One already has a');
-  console.log('       pending request from nomsa.dube@tutorflow.test (registered by this');
-  console.log('       seed) — volunteering for an open one flips it to PENDING.');
   console.log(`\n    ${line}`);
   console.log('    Re-run any time — the seed is idempotent (full reset + recreate):');
   console.log('        cd backend');

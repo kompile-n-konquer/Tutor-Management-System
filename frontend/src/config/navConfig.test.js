@@ -32,11 +32,10 @@ describe('navConfig — sidebar link source of truth', () => {
     ]);
   });
 
-  test('students see applications, volunteering, their timetable and onboarding', () => {
+  test('students see applications, their timetable and onboarding — volunteering is tutor-only', () => {
     const labels = getNavLinksForRole('student').map((link) => link.label);
     expect(labels).toEqual([
       'Applications',
-      'Volunteer View',
       'Timetable',
       'Become a Tutor/Lecturer',
     ]);
@@ -56,16 +55,17 @@ describe('navConfig — sidebar link source of truth', () => {
     expect(getNavLinksForRole('TUTOR')).toEqual(getNavLinksForRole('tutor'));
   });
 
-  test('every nav link declares a route, icon, label and its roles', () => {
+  test('every nav link declares a route, icon, label, its roles and a section', () => {
     for (const link of NAV_LINKS) {
       expect(link.to).toMatch(/^\//);
       expect(link.icon).toBeTruthy();
       expect(link.label).toBeTruthy();
       expect(Array.isArray(link.roles)).toBe(true);
+      expect(['main', 'general']).toContain(link.section);
     }
   });
 
-  test('the footer always exposes Settings and Logout', () => {
-    expect(FOOTER_LINKS.map((link) => link.label)).toEqual(['Settings', 'Logout']);
+  test('the footer always exposes Profile, Settings and Logout', () => {
+    expect(FOOTER_LINKS.map((link) => link.label)).toEqual(['Profile', 'Settings', 'Logout']);
   });
 });

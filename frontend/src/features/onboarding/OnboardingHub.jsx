@@ -43,8 +43,27 @@ export default function OnboardingHub() {
   if (authLoading || loadingData) {
     return (
       <AppLayout title="Onboarding">
-        <div className="flex items-center justify-center p-stack-lg">
-          <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+        <div
+          className="p-stack-md md:p-margin-page max-w-container-max mx-auto w-full space-y-gutter"
+          aria-hidden="true"
+        >
+          <div className="space-y-stack-sm">
+            <div className="animate-pulse h-12 w-72 max-w-full rounded bg-surface-container-high" />
+            <div className="animate-pulse h-5 w-96 max-w-full rounded bg-surface-container-high/60" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+            {[0, 1].map((card) => (
+              <div
+                key={card}
+                className="animate-pulse bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento space-y-stack-md"
+              >
+                <div className="h-6 w-44 rounded bg-surface-container-high" />
+                <div className="h-4 rounded bg-surface-container-high/60" />
+                <div className="h-4 w-3/4 rounded bg-surface-container-high/60" />
+                <div className="h-9 rounded bg-surface-container-high/60" />
+              </div>
+            ))}
+          </div>
         </div>
       </AppLayout>
     );

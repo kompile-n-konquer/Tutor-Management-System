@@ -3,9 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ThemeProvider from '../context/ThemeProvider.jsx';
 
-const { mockAuth, authState, mockGet, mockDelete, mockSignOut } = vi.hoisted(() => ({
+const { mockAuth, authState, roleState, mockGet, mockDelete, mockSignOut } = vi.hoisted(() => ({
   mockAuth: { currentUser: { getIdToken: vi.fn(async () => 'token123') } },
   authState: { currentUser: { uid: 'u1' }, loading: false },
+  roleState: { value: 'tutor' },
   mockGet: vi.fn(),
   mockDelete: vi.fn(),
   mockSignOut: vi.fn(async () => {}),
@@ -15,7 +16,7 @@ vi.mock('../../firebase/firebase', () => ({ auth: mockAuth }));
 vi.mock('firebase/auth', () => ({ signOut: mockSignOut }));
 vi.mock('../../utils/axiosInstance.js', () => ({ default: { get: mockGet, delete: mockDelete } }));
 vi.mock('../../hooks/useAuth.js', () => ({
-  default: () => ({ currentUser: authState.currentUser, role: 'tutor', loading: authState.loading }),
+  default: () => ({ currentUser: authState.currentUser, role: roleState.value, loading: authState.loading }),
 }));
 
 import Profile from './Profile.jsx';
@@ -29,23 +30,42 @@ const TIME_SLOTS = [
 
 const USER_PROFILE = { firstName: 'Alex', lastName: 'Mercer', email: 'alex.mercer@wits.ac.za' };
 
-// Profile loads two endpoints in parallel: /availability (the grid) and
-// /users/:uid (personal info). Route the axios mock per URL so each test
-// controls both responses independently.
+// Profile loads three endpoints: /availability (the grid), the role's
+// sessions feed (/sessions/mine or /sessions/volunteered) and /users/:uid
+// (personal info). Route the axios mock per URL so each test controls every
+// response independently.
 const mockApi = ({
   slots = TIME_SLOTS,
   availability = [],
   lockedSlots = [],
+  includeLockedSlots = true,
   availabilityStatus = 200,
   profile = USER_PROFILE,
+  mineStatus = 200,
+  mineSessions = [],
+  volunteeredStatus = 200,
+  volunteeredData = { sessions: [] },
 } = {}) =>
   mockGet.mockImplementation((url) => {
     if (url === '/availability') {
       return Promise.resolve(
         availabilityStatus === 200
-          ? { status: 200, data: { timeSlots: slots, availability, lockedSlots } }
+          ? {
+              status: 200,
+              data: {
+                timeSlots: slots,
+                availability,
+                ...(includeLockedSlots ? { lockedSlots } : {}),
+              },
+            }
           : { status: availabilityStatus, data: {} },
       );
+    }
+    if (url === '/sessions/mine') {
+      return Promise.resolve({ status: mineStatus, data: { sessions: mineSessions } });
+    }
+    if (url === '/sessions/volunteered') {
+      return Promise.resolve({ status: volunteeredStatus, data: volunteeredData });
     }
     if (url === `/users/${authState.currentUser?.uid}`) {
       return Promise.resolve(profile ? { status: 200, data: profile } : { status: 404, data: {} });
@@ -72,6 +92,7 @@ describe('Profile — tutor profile with the availability grid', () => {
     vi.clearAllMocks();
     authState.currentUser = { uid: 'u1' };
     authState.loading = false;
+    roleState.value = 'tutor';
     mockAuth.currentUser = { getIdToken: vi.fn(async () => 'token123') };
     // The grid is time-of-day dependent, so pin the clock for determinism.
     // shouldAdvanceTime keeps @testing-library's polling timers working.
@@ -157,6 +178,198 @@ describe('Profile — tutor profile with the availability grid', () => {
 
     expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
     expect(screen.queryByText('Available')).not.toBeInTheDocument();
+  });
+
+  test('capitalises the year of study and shows the join date when provided', async () => {
+    mockApi({
+      profile: {
+        firstName: 'Alex',
+        lastName: 'Mercer',
+        email: 'alex.mercer@wits.ac.za',
+        yearOfStudy: 'third',
+        createdAt: '2025-03-02T09:00:00Z',
+      },
+    });
+
+    renderProfile();
+
+    expect(await screen.findByText(/Third Student · Joined: March 2025/)).toBeInTheDocument();
+    // The info card shows the capitalised year on its own.
+    expect(screen.getByText('Third')).toBeInTheDocument();
+  });
+
+  test('falls back to placeholders when the profile record is sparse', async () => {
+    mockApi({ profile: { phoneNumber: '082 123 4567' } });
+
+    renderProfile();
+
+    expect(await screen.findByText('082 123 4567')).toBeInTheDocument();
+    // No year of study → a generic "Student" headline and an em dash in the info card.
+    expect(screen.getByText('Student')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText(/Joined:/)).not.toBeInTheDocument();
+  });
+
+  test('tolerates an availability payload without lockedSlots', async () => {
+    mockApi({ includeLockedSlots: false });
+
+    renderProfile();
+
+    expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+    expect(screen.queryByText('Locked')).not.toBeInTheDocument();
+  });
+
+  describe('sessions section', () => {
+    test('shows the generic User badge and no sessions section when the role is unknown', async () => {
+      roleState.value = null;
+      mockApi();
+
+      renderProfile();
+
+      expect(await screen.findByText('User')).toBeInTheDocument();
+      expect(screen.queryByText('Scheduled Sessions')).not.toBeInTheDocument();
+      expect(screen.queryByText('Volunteer Work')).not.toBeInTheDocument();
+      // Roles without a sessions feed never touch either endpoint.
+      expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
+      expect(mockGet).not.toHaveBeenCalledWith('/sessions/volunteered');
+    });
+
+    test('lists upcoming tutor sessions with one status chip per session', async () => {
+      mockApi({
+        mineSessions: [
+          {
+            id: 'e1-2026-09-15',
+            status: 'UNASSIGNED',
+            date: '2026-09-15',
+            course: { courseCode: 'COMS3005', courseName: 'Software Design' },
+            courseSlot: { venue: 'Room 204', timeSlot: { startMinute: 480, endMinute: 570 } },
+          },
+          {
+            id: 'e1-2026-09-16',
+            status: 'PENDING',
+            date: '2026-09-16',
+            course: { courseCode: 'COMS3007', courseName: 'Machine Learning' },
+            courseSlot: { timeSlot: { startMinute: 600, endMinute: 660 } },
+          },
+          {
+            id: 'e1-2026-09-17',
+            status: 'SCHEDULED',
+            date: '2026-09-17',
+            course: { courseName: 'Operating Systems' },
+          },
+        ],
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Scheduled Sessions')).toBeInTheDocument();
+      expect(screen.getByText('Your upcoming tutoring sessions.')).toBeInTheDocument();
+      expect(screen.getByText('3 sessions')).toBeInTheDocument();
+      // Excused (awaiting a volunteer), volunteer pending, and leading.
+      expect(screen.getByText('Excused')).toBeInTheDocument();
+      expect(screen.getByText('Volunteer pending')).toBeInTheDocument();
+      expect(screen.getByText('You lead')).toBeInTheDocument();
+      expect(screen.getByText('COMS3005')).toBeInTheDocument();
+      expect(screen.getByText('Room 204')).toBeInTheDocument();
+      // Em dashes: the phone and year-of-study placeholders plus the missing
+      // course code.
+      expect(screen.getAllByText('—')).toHaveLength(3);
+    });
+
+    test('hides the section when every session is in the past', async () => {
+      mockApi({
+        mineSessions: [
+          {
+            id: 'e1-2026-09-01',
+            status: 'SCHEDULED',
+            date: '2026-09-01',
+            course: { courseCode: 'COMS3005', courseName: 'Software Design' },
+          },
+        ],
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Scheduled Sessions')).not.toBeInTheDocument();
+    });
+
+    test('ignores a non-200 tutor sessions feed', async () => {
+      mockApi({ mineStatus: 500 });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Scheduled Sessions')).not.toBeInTheDocument();
+    });
+
+    test("lists a student's approved volunteered session", async () => {
+      roleState.value = 'student';
+      mockApi({
+        volunteeredData: {
+          sessions: [
+            {
+              id: 1,
+              volunteerStatus: 'APPROVED',
+              date: '2026-09-15',
+              course: { courseCode: 'COMS3005', courseName: 'Software Design' },
+              courseSlot: { venue: 'Room 204', timeSlot: { startMinute: 480, endMinute: 570 } },
+            },
+          ],
+        },
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Volunteer Work')).toBeInTheDocument();
+      expect(screen.getByText('Sessions you have volunteered for.')).toBeInTheDocument();
+      expect(screen.getByText('1 session')).toBeInTheDocument();
+      expect(screen.getByText('Approved')).toBeInTheDocument();
+      expect(mockGet).toHaveBeenCalledWith('/sessions/volunteered');
+      expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
+    });
+
+    test('marks volunteered sessions that are not approved yet as pending', async () => {
+      roleState.value = 'student';
+      mockApi({
+        volunteeredData: {
+          sessions: [
+            {
+              id: 2,
+              volunteerStatus: 'PENDING',
+              date: '2026-09-16',
+              course: { courseCode: 'COMS3007', courseName: 'Machine Learning' },
+            },
+          ],
+        },
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Volunteer Work')).toBeInTheDocument();
+      // The chip is a span — the academic history card also says "Pending".
+      expect(screen.getByText('Pending', { selector: 'span' })).toBeInTheDocument();
+    });
+
+    test('tolerates a volunteered feed without a sessions key', async () => {
+      roleState.value = 'student';
+      mockApi({ volunteeredData: {} });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Volunteer Work')).not.toBeInTheDocument();
+    });
+
+    test('ignores a non-200 volunteered feed', async () => {
+      roleState.value = 'student';
+      mockApi({ volunteeredStatus: 500, volunteeredData: {} });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Volunteer Work')).not.toBeInTheDocument();
+    });
   });
 
   describe('delete account', () => {

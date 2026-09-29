@@ -9,7 +9,7 @@ vi.mock('../../utils/axiosInstance.js', () => ({
   default: { get: mockGet, post: mockPost },
 }));
 vi.mock('../../hooks/useAuth.js', () => ({
-  default: () => ({ currentUser: { uid: 'u1' }, role: 'student', loading: false, signOut: vi.fn() }),
+  default: () => ({ currentUser: { uid: 'u1' }, role: 'tutor', loading: false, signOut: vi.fn() }),
 }));
 
 import VolunteerView from './VolunteerView.jsx';
@@ -33,17 +33,18 @@ const renderVolunteerView = () =>
     </ThemeProvider>,
   );
 
-describe('VolunteerView — student view of unassigned sessions (#37)', () => {
+describe('VolunteerView — tutor view of unassigned sessions (#37)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  test('shows a loading state while the sessions are fetched', () => {
+  test('shows skeleton cards while the sessions are fetched', () => {
     mockGet.mockReturnValue(new Promise(() => {})); // never settles
 
-    renderVolunteerView();
+    const { container } = renderVolunteerView();
 
-    expect(screen.getByText('Loading available sessions…')).toBeInTheDocument();
+    // Four pulse-animated placeholder cards stand in for the session grid.
+    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(4);
     expect(mockGet).toHaveBeenCalledWith('/sessions/unassigned');
   });
 
@@ -67,7 +68,7 @@ describe('VolunteerView — student view of unassigned sessions (#37)', () => {
     renderVolunteerView();
 
     expect(
-      screen.getByText(/does not assign the session to you straight away/i),
+      screen.getByText(/sends a cover request to the lecturer — once approved/i),
     ).toBeInTheDocument();
     // Await the settled (empty) list so the state update lands inside act().
     expect(

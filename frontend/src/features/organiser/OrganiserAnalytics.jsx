@@ -1,45 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
+import ErrorMessage from "../../components/error-message/ErrorMessage";
 import api from "../../utils/axiosInstance";
-import { TUTORS, TIMESHEETS } from "../../data/mockData";
 
-function mapApiCourse(c) {
-  return {
-    id: c.id,
-    code: c.courseCode,
-    name: c.courseName,
-    req: c.requiredTutors,
-    budget: c.budgetHours,
-    rate: c.hourlyRate,
-    assignedCount: c.assignedCount,
-  };
-}
-
-/**
- * Sum approved hours per course code from a list of timesheets.
- * Only "approved" timesheets count — pending ones are excluded so
- * the organiser sees confirmed figures, not aspirational ones.
- */
-function getApprovedHoursByCourse(timesheets) {
-  return timesheets
-    .filter((t) => t.status === "approved")
-    .reduce((acc, t) => {
-      acc[t.courseCode] = (acc[t.courseCode] || 0) + t.hours;
-      return acc;
-    }, {});
-}
-
-/**
- * Sum approved hours per tutor from a list of timesheets.
- */
-function getApprovedHoursByTutor(timesheets) {
-  return timesheets
-    .filter((t) => t.status === "approved")
-    .reduce((acc, t) => {
-      acc[t.tutorName] = (acc[t.tutorName] || 0) + t.hours;
-      return acc;
-    }, {});
-}
+// Hours are stored as whole numbers but the API may return a float after
+// aggregation, so keep the display compact (12 -> "12", 12.5 -> "12.5").
+const formatHours = (value) =>
+  Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
 function StatCard({ icon, label, value, accent = "text-primary", subtext }) {
   return (
@@ -56,275 +23,366 @@ function StatCard({ icon, label, value, accent = "text-primary", subtext }) {
   );
 }
 
-export default function OrganiserAnalytics() {
-  const [courses, setCourses] = useState([]);
+// Compact tile used for status breakdowns inside the detail cards.
+function MetricTile({ label, value, accent = "text-on-surface" }) {
+  return (
+    <div className="bg-surface-container-low rounded-lg p-stack-md border border-outline-variant/50">
+      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">{label}</p>
+      <p className={`font-display text-headline-md mt-unit ${accent}`}>{value}</p>
+    </div>
+  );
+}
 
+// Placeholders mirroring the KPI grid and section cards so the layout does
+// not jump when the real numbers arrive.
+function AnalyticsSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-stack-lg mb-stack-lg">
+        {[0, 1, 2, 3].map((card) => (
+          <div
+            key={card}
+            className="animate-pulse bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-bento"
+          >
+            <div className="h-4 w-24 rounded bg-surface-container-high mb-stack-md" />
+            <div className="h-10 w-24 rounded bg-surface-container-high mb-stack-sm" />
+            <div className="h-3 w-32 rounded bg-surface-container-high/60" />
+          </div>
+        ))}
+      </div>
+
+      <div className="animate-pulse bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg p-stack-lg">
+        <div className="h-5 w-48 rounded bg-surface-container-high mb-stack-lg" />
+        <div className="space-y-stack-md">
+          {[0, 1, 2, 3].map((row) => (
+            <div key={row} className="h-4 rounded bg-surface-container-high/60" />
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-stack-lg">
+        {[0, 1].map((card) => (
+          <div
+            key={card}
+            className="animate-pulse bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento p-stack-lg"
+          >
+            <div className="h-5 w-40 rounded bg-surface-container-high mb-stack-lg" />
+            <div className="grid grid-cols-3 gap-stack-md">
+              {[0, 1, 2].map((tile) => (
+                <div key={tile} className="h-16 rounded-lg bg-surface-container-high/60" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function OrganiserAnalytics() {
+  const [data, setData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Re-fetch on mount and whenever the Refresh button bumps reloadKey so the
+  // figures always come from the database rather than a cached snapshot.
   useEffect(() => {
     let cancelled = false;
-    api.get("/courses").then((res) => {
-      if (!cancelled && res.status === 200 && res.data?.courses) {
-        setCourses(res.data.courses.map(mapApiCourse));
+
+    const fetchAnalytics = async () => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const response = await api.get("/analytics/organiser");
+        if (cancelled) return;
+        if (response.status === 200) {
+          setData(response.data);
+        } else {
+          setError(response?.data?.message || "Could not load the analytics. Please refresh the page.");
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Could not load the analytics. Please refresh the page.");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+    };
 
-  const courseHours = useMemo(() => getApprovedHoursByCourse(TIMESHEETS), []);
-  const tutorHours = useMemo(() => getApprovedHoursByTutor(TIMESHEETS), []);
+    fetchAnalytics();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
-  const totalApprovedHours = Object.values(courseHours).reduce((a, b) => a + b, 0);
-  const totalBudgetHours = courses.reduce((a, c) => a + c.budget, 0);
-  const totalSpend = courses.reduce(
-    (a, c) => a + (courseHours[c.code] || 0) * c.rate,
-    0
-  );
-  const totalBudgetValue = courses.reduce((a, c) => a + c.budget * c.rate, 0);
-  const activeTutorCount = Object.keys(tutorHours).length;
+  const totals = data?.totals ?? {};
+  const staffing = data?.staffing ?? { required: 0, assigned: 0, understaffedCourses: 0, courses: [] };
+  const sessions = data?.sessions ?? { scheduled: 0, unassigned: 0, pendingCover: 0 };
+  const timesheets = data?.timesheets ?? {
+    draft: 0, submitted: 0, approved: 0, rejected: 0,
+    approvedHours: 0, submittedHours: 0, signOffRate: 0,
+  };
+  const applications = data?.applications ?? {
+    role: { pending: 0, approved: 0, rejected: 0 },
+    course: { pending: 0, assigned: 0, rejected: 0 },
+  };
+  const workload = data?.workload ?? [];
+  const maxWorkloadHours = Math.max(...workload.map((row) => row.approvedHours), 1);
+  const sessionsNeedingCover = sessions.unassigned + sessions.pendingCover;
 
   return (
-    <AppLayout role="tutor" title="Tutor Management System">
+    <AppLayout title="Tutor Management System">
       <div className="p-margin-page max-w-container-max mx-auto w-full">
         {/* Header */}
-        <div className="mb-stack-lg">
-          <h2 className="font-display text-display text-primary mb-unit">Organiser Analytics</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant">
-            Read-only overview of hours, budget utilisation, and tutor workload.
-            All figures are derived from approved timesheets and allocation data.
-          </p>
-        </div>
-
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-stack-lg mb-stack-lg">
-          <StatCard
-            icon="schedule"
-            label="Approved Hours"
-            value={`${totalApprovedHours}h`}
-            subtext={`of ${totalBudgetHours}h budgeted`}
-          />
-          <StatCard
-            icon="payments"
-            label="Total Spend"
-            value={`R${totalSpend.toLocaleString()}`}
-            accent="text-secondary"
-            subtext={`of R${totalBudgetValue.toLocaleString()} budgeted`}
-          />
-          <StatCard
-            icon="school"
-            label="Courses"
-            value={courses.length}
-            accent="text-primary"
-            subtext={`${courses.filter((c) => (courseHours[c.code] || 0) > 0).length} with approved hours`}
-          />
-          <StatCard
-            icon="group"
-            label="Active Tutors"
-            value={activeTutorCount}
-            accent="text-secondary"
-            subtext={`of ${TUTORS.length} total`}
-          />
-        </div>
-
-        {/* Hours per course */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
-          <div className="p-stack-lg border-b border-outline-variant">
-            <h3 className="font-headline-md text-headline-md text-on-surface">Hours per Course</h3>
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
-              Summed from approved timesheets only.
+        <div className="mb-stack-lg flex flex-wrap items-start justify-between gap-gutter">
+          <div className="flex-1 min-w-[14rem]">
+            <h2 className="font-display text-display text-primary mb-unit">Organiser Analytics</h2>
+            <p className="font-body-lg text-body-lg text-on-surface-variant">
+              Live overview of staffing coverage, timesheet sign-off, applications and tutor
+              workload. Every figure is computed from the current data — refresh to pull the
+              latest numbers.
             </p>
           </div>
-          <div className="p-stack-lg space-y-stack-lg">
-            {courses.map((c) => {
-              const hours = courseHours[c.code] || 0;
-              const pct = c.budget ? Math.round((hours / c.budget) * 100) : 0;
-              const isOver = pct > 90;
-              return (
-                <div key={c.code}>
-                  <div className="flex justify-between items-end mb-stack-sm">
-                    <div>
-                      <span className="font-body-md text-body-md font-bold text-on-surface">{c.code}</span>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant ml-2">{c.name}</span>
-                    </div>
-                    <div className="flex items-baseline gap-unit">
-                      <span className={`font-data-mono text-data-mono font-bold ${isOver ? "text-urgent-orange" : "text-primary"}`}>
-                        {hours}h
-                      </span>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">/ {c.budget}h</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-surface-container-high rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all ${isOver ? "bg-urgent-orange" : "bg-primary"}`}
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
-                  </div>
-                  <p className="font-label-caps text-label-caps text-on-surface-variant mt-unit">
-                    {pct}% of budget used
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            onClick={() => setReloadKey((key) => key + 1)}
+            disabled={isLoading}
+            className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-stack-md py-stack-sm font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-lg">refresh</span>
+            Refresh
+          </button>
         </div>
 
-        {/* Spend vs budget */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
-          <div className="p-stack-lg border-b border-outline-variant">
-            <h3 className="font-headline-md text-headline-md text-on-surface">Spend vs Budget</h3>
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
-              Cost per course at the standard hourly rate. Figures are derived from approved timesheets.
-            </p>
+        {error && (
+          <div className="mb-stack-lg">
+            <ErrorMessage>{error}</ErrorMessage>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-surface border-b border-outline-variant">
-                <tr>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Course</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Hours Used</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Budget Hours</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Rate/hr</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Spend</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Budget</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Remaining</th>
-                </tr>
-              </thead>
-              <tbody>
-                {courses.map((c) => {
-                  const hours = courseHours[c.code] || 0;
-                  const spend = hours * c.rate;
-                  const budgetValue = c.budget * c.rate;
-                  const remaining = budgetValue - spend;
-                  const isLow = remaining < budgetValue * 0.2;
-                  return (
-                    <tr key={c.code} className="border-b border-outline-variant/50">
-                      <td className="p-stack-sm font-body-md text-on-surface font-bold">{c.code}</td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-on-surface">{hours}h</td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">{c.budget}h</td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">R{c.rate}</td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-on-surface font-bold">
-                        R{spend.toLocaleString()}
-                      </td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">
-                        R{budgetValue.toLocaleString()}
-                      </td>
-                      <td className="p-stack-sm">
-                        <span
-                          className={`font-data-mono text-data-mono font-bold ${
-                            isLow ? "text-urgent-orange" : "text-trust-blue"
-                          }`}
-                        >
-                          R{remaining.toLocaleString()}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {/* Totals row */}
-                <tr className="bg-surface-container-low font-bold">
-                  <td className="p-stack-sm font-body-md text-on-surface">Total</td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface">{totalApprovedHours}h</td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">{totalBudgetHours}h</td>
-                  <td className="p-stack-sm" />
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface">
-                    R{totalSpend.toLocaleString()}
-                  </td>
-                  <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">
-                    R{totalBudgetValue.toLocaleString()}
-                  </td>
-                  <td className="p-stack-sm">
-                    <span
-                      className={`font-data-mono text-data-mono font-bold ${
-                        totalBudgetValue - totalSpend < totalBudgetValue * 0.2
-                          ? "text-urgent-orange"
-                          : "text-trust-blue"
-                      }`}
-                    >
-                      R{(totalBudgetValue - totalSpend).toLocaleString()}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
 
-        {/* Workload spread */}
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento">
-          <div className="p-stack-lg border-b border-outline-variant">
-            <h3 className="font-headline-md text-headline-md text-on-surface">Workload Spread</h3>
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
-              Approved hours per tutor across the term.
-            </p>
-          </div>
-          <div className="p-stack-lg space-y-stack-md">
-            {TUTORS.map((t) => {
-              const hours = tutorHours[t.name] || 0;
-              const maxHours = Math.max(...Object.values(tutorHours), 1);
-              const widthPct = Math.round((hours / maxHours) * 100);
-              return (
-                <div key={t.id} className="flex items-center gap-stack-md">
-                  <div className="w-32 shrink-0">
-                    <span className="font-body-md text-body-md text-on-surface truncate block">{t.name}</span>
-                  </div>
-                  <div className="flex-1 bg-surface-container-high rounded-full h-6 relative overflow-hidden">
-                    <div
-                      className="h-6 rounded-full bg-secondary transition-all"
-                      style={{ width: `${widthPct}%` }}
-                    />
-                    {hours > 0 && (
-                      <span className="absolute inset-0 flex items-center pl-2 font-data-mono text-data-mono text-on-surface text-xs">
-                        {hours}h
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-data-mono text-data-mono text-on-surface-variant w-12 text-right shrink-0">
-                    {hours > 0 ? `${hours}h` : "—"}
+        {isLoading && !data ? (
+          <AnalyticsSkeleton />
+        ) : data ? (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-stack-lg mb-stack-lg">
+              <StatCard
+                icon="schedule"
+                label="Approved Hours"
+                value={`${formatHours(timesheets.approvedHours)}h`}
+                subtext={`${formatHours(timesheets.submittedHours)}h awaiting sign-off`}
+              />
+              <StatCard
+                icon="group"
+                label="Tutors"
+                value={totals.tutors}
+                accent="text-secondary"
+                subtext={`${totals.lecturers} lecturers · ${totals.students} students`}
+              />
+              <StatCard
+                icon="school"
+                label="Courses"
+                value={totals.courses}
+                subtext={`${staffing.understaffedCourses} understaffed`}
+              />
+              <StatCard
+                icon="event_upcoming"
+                label="Upcoming Events"
+                value={totals.upcomingEvents}
+                accent="text-secondary"
+                subtext={`${totals.events} created in total`}
+              />
+            </div>
+
+            {/* Timesheet sign-off */}
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
+              <div className="p-stack-lg border-b border-outline-variant">
+                <h3 className="font-headline-md text-headline-md text-on-surface">Timesheet Sign-off</h3>
+                <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
+                  Review progress of submitted timesheets. Drafts are excluded from the sign-off rate.
+                </p>
+              </div>
+              <div className="p-stack-lg">
+                <div className="flex flex-wrap items-baseline gap-x-stack-sm gap-y-unit mb-stack-sm">
+                  <span className="font-display text-display text-primary">{timesheets.signOffRate}%</span>
+                  <span className="font-body-sm text-body-sm text-on-surface-variant">
+                    of reviewed timesheets approved
                   </span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="w-full bg-surface-container-high rounded-full h-2 mb-stack-lg">
+                  <div
+                    className="h-2 rounded-full bg-primary transition-all"
+                    style={{ width: `${timesheets.signOffRate}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-stack-md">
+                  <MetricTile label="Draft" value={timesheets.draft} accent="text-on-surface-variant" />
+                  <MetricTile label="Awaiting Review" value={timesheets.submitted} accent="text-secondary" />
+                  <MetricTile label="Approved" value={timesheets.approved} accent="text-primary" />
+                  <MetricTile label="Rejected" value={timesheets.rejected} accent="text-urgent-orange" />
+                </div>
+                <p className="font-label-caps text-label-caps text-on-surface-variant mt-stack-md">
+                  {formatHours(timesheets.approvedHours)}h approved · {formatHours(timesheets.submittedHours)}h awaiting review
+                </p>
+              </div>
+            </div>
 
-          {/* Detail table */}
-          <div className="border-t border-outline-variant overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-surface border-b border-outline-variant">
-                <tr>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Tutor</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Approved Hours</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Rating</th>
-                  <th className="p-stack-sm font-label-caps text-label-caps text-on-surface-variant">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {TUTORS.map((t) => {
-                  const hours = tutorHours[t.name] || 0;
-                  return (
-                    <tr key={t.id} className="border-b border-outline-variant/50">
-                      <td className="p-stack-sm font-body-md text-on-surface">{t.name}</td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-primary font-bold">
-                        {hours > 0 ? `${hours}h` : "—"}
-                      </td>
-                      <td className="p-stack-sm font-data-mono text-data-mono text-on-surface-variant">
-                        {t.rating}
-                      </td>
-                      <td className="p-stack-sm">
-                        <span
-                          className={`font-label-caps text-label-caps px-2 py-0.5 rounded ${
-                            t.verified
-                              ? "text-trust-blue bg-trust-blue/10"
-                              : "text-urgent-orange bg-urgent-orange/10"
-                          }`}
-                        >
-                          {t.verified ? "VERIFIED" : "UNVERIFIED"}
+            {/* Allocation coverage */}
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
+              <div className="p-stack-lg border-b border-outline-variant">
+                <h3 className="font-headline-md text-headline-md text-on-surface">Allocation Coverage</h3>
+                <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
+                  Tutors assigned against the number each course requires ({staffing.assigned} of{" "}
+                  {staffing.required} positions filled).
+                </p>
+              </div>
+              <div className="p-stack-lg space-y-stack-lg">
+                {staffing.courses.length === 0 ? (
+                  <p className="font-body-md text-body-md text-on-surface-variant py-stack-lg text-center">
+                    No courses have been created yet.
+                  </p>
+                ) : (
+                  staffing.courses.map((course) => {
+                    const pct =
+                      course.tutorsRequired > 0
+                        ? Math.round((course.assigned / course.tutorsRequired) * 100)
+                        : 100;
+                    const understaffed = course.assigned < course.tutorsRequired;
+                    return (
+                      <div key={course.id}>
+                        <div className="flex flex-wrap items-center justify-between gap-x-stack-md gap-y-unit mb-stack-sm">
+                          <div className="flex items-center gap-x-stack-sm min-w-0">
+                            <span className="font-data-mono text-data-mono font-bold text-on-surface">
+                              {course.courseCode}
+                            </span>
+                            <span className="font-body-sm text-body-sm text-on-surface-variant break-words">
+                              {course.courseName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-stack-sm shrink-0">
+                            {understaffed && (
+                              <span className="font-label-caps text-label-caps text-urgent-orange bg-urgent-orange/10 px-2 py-0.5 rounded-full">
+                                Understaffed
+                              </span>
+                            )}
+                            <span className="font-data-mono text-data-mono text-on-surface">
+                              {course.assigned} / {course.tutorsRequired}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full bg-surface-container-high rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              understaffed ? "bg-urgent-orange" : "bg-primary"
+                            }`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Tutor workload */}
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
+              <div className="p-stack-lg border-b border-outline-variant">
+                <h3 className="font-headline-md text-headline-md text-on-surface">Tutor Workload</h3>
+                <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
+                  Approved hours per tutor; hours still awaiting review are shown beside each figure.
+                </p>
+              </div>
+              <div className="p-stack-lg space-y-stack-md">
+                {workload.length === 0 ? (
+                  <p className="font-body-md text-body-md text-on-surface-variant py-stack-lg text-center">
+                    No approved or submitted timesheets yet.
+                  </p>
+                ) : (
+                  workload.map((tutor) => (
+                    <div key={tutor.userId} className="flex items-center gap-stack-md">
+                      <div className="w-32 shrink-0">
+                        <span className="font-body-md text-body-md text-on-surface truncate block">
+                          {tutor.name}
                         </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      </div>
+                      <div className="flex-1 min-w-0 bg-surface-container-high rounded-full h-6 overflow-hidden">
+                        <div
+                          className="h-6 rounded-full bg-secondary transition-all"
+                          style={{
+                            width: `${Math.round((tutor.approvedHours / maxWorkloadHours) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="w-28 shrink-0 text-right">
+                        <span className="font-data-mono text-data-mono text-on-surface block">
+                          {formatHours(tutor.approvedHours)}h
+                        </span>
+                        {tutor.submittedHours > 0 && (
+                          <span className="font-body-sm text-body-sm text-on-surface-variant block">
+                            +{formatHours(tutor.submittedHours)}h pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Applications pipeline + session cover */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-stack-lg">
+              <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento">
+                <div className="p-stack-lg border-b border-outline-variant">
+                  <h3 className="font-headline-md text-headline-md text-on-surface">Applications Pipeline</h3>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
+                    Role applications and course applications by current status.
+                  </p>
+                </div>
+                <div className="p-stack-lg">
+                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-stack-sm">
+                    Tutor &amp; lecturer roles
+                  </p>
+                  <div className="grid grid-cols-3 gap-stack-md mb-stack-lg">
+                    <MetricTile label="Pending" value={applications.role.pending} accent="text-secondary" />
+                    <MetricTile label="Approved" value={applications.role.approved} accent="text-primary" />
+                    <MetricTile label="Rejected" value={applications.role.rejected} accent="text-urgent-orange" />
+                  </div>
+                  <p className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-stack-sm">
+                    Course allocations
+                  </p>
+                  <div className="grid grid-cols-3 gap-stack-md">
+                    <MetricTile label="Pending" value={applications.course.pending} accent="text-secondary" />
+                    <MetricTile label="Assigned" value={applications.course.assigned} accent="text-primary" />
+                    <MetricTile label="Rejected" value={applications.course.rejected} accent="text-urgent-orange" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento">
+                <div className="p-stack-lg border-b border-outline-variant">
+                  <h3 className="font-headline-md text-headline-md text-on-surface">Session Cover</h3>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
+                    Tutoring sessions by cover status.
+                  </p>
+                </div>
+                <div className="p-stack-lg">
+                  <div className="grid grid-cols-3 gap-stack-md">
+                    <MetricTile label="Covered" value={sessions.scheduled} accent="text-primary" />
+                    <MetricTile label="Unassigned" value={sessions.unassigned} accent="text-urgent-orange" />
+                    <MetricTile label="Pending Cover" value={sessions.pendingCover} accent="text-secondary" />
+                  </div>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant mt-stack-md">
+                    {sessionsNeedingCover > 0
+                      ? `${sessionsNeedingCover} session${sessionsNeedingCover === 1 ? '' : 's'} still need a tutor.`
+                      : "Every session currently has a tutor."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : null}
       </div>
     </AppLayout>
   );

@@ -100,7 +100,29 @@ const TimesheetDetails = () => {
 
   if (authLoading) return null;
   if (!currentUser) return null;
-  if (!timesheet) return null;
+
+  // Shaped placeholder while the timesheet loads so the page never flashes blank.
+  if (!timesheet) {
+    return (
+      <AppLayout role={role} title="Timesheet">
+        <div className="p-gutter md:p-margin-page space-y-gutter" aria-hidden="true">
+          <div className="mb-stack-lg flex flex-wrap items-center justify-between gap-gutter">
+            <div className="space-y-stack-sm">
+              <div className="animate-pulse h-12 w-64 rounded bg-surface-container-high" />
+              <div className="animate-pulse h-4 w-80 max-w-full rounded bg-surface-container-high/60" />
+            </div>
+            <div className="animate-pulse h-9 w-36 rounded bg-surface-container-high" />
+          </div>
+          <div className="animate-pulse bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md space-y-stack-sm">
+            <div className="h-4 w-40 rounded bg-surface-container-high" />
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="h-12 rounded bg-surface-container-high/60" />
+            ))}
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   const totalHours = entries.reduce((sum, e) => sum + Number(e.duration || 0), 0);
   const statusMessage = STATUS_MESSAGES[timesheet.status] || '';
@@ -234,7 +256,7 @@ const TimesheetDetails = () => {
             {isLecturer && isSubmitted && (
               <div className="flex">
                 <Button
-                  className="min-w-32 max-h-8 mr-3 bg-primary text-white"
+                  className="min-w-32 max-h-8 mr-3 bg-primary text-on-primary"
                   onClick={handleApproveTimesheet}
                   disabled={!canApprove}
                 >
@@ -321,7 +343,7 @@ const TimesheetDetails = () => {
                 </button>
                 <button
                   onClick={handleRejectTimesheet}
-                  className="cursor-pointer bg-error text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90"
+                  className="cursor-pointer bg-error text-on-error px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90"
                 >
                   Reject
                 </button>

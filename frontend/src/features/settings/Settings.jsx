@@ -7,6 +7,7 @@ import api from "../../utils/axiosInstance";
 import useAsync from "../../hooks/useAsync";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import AppearanceSettings from "./AppearanceSettings";
 
 // A month has at most 744 hours (31 days) — the backend enforces the same bound
 const MAX_MONTHLY_HOURS = 744;
@@ -224,10 +225,14 @@ const Settings = () => {
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
-        {isOrganiser ? (
-          <div className="space-y-gutter">
+        <div className="space-y-gutter">
+          {/* Appearance applies to every signed-in user, not just organisers. */}
+          <AppearanceSettings />
+
+          {isOrganiser ? (
+            <div className="space-y-gutter">
             <div className="flex flex-wrap items-stretch gap-gutter">
-              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
                 <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                   <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                     Max Claimable Hours
@@ -269,7 +274,7 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
                 <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                   <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                     Event Claim Window
@@ -313,7 +318,7 @@ const Settings = () => {
             </div>
 
             {/* Hourly Rates Card — full width */}
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
               <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                   Hourly Rates by Year of Study
@@ -361,7 +366,7 @@ const Settings = () => {
             </div>
 
             {/* PDF Template Card — full width */}
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)]">
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
               <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                   Timesheet PDF Template
@@ -418,21 +423,23 @@ const Settings = () => {
               </div>
             </div>
           </div>
-        ) : (
-          <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] max-w-xl">
-            <div className="flex items-start gap-4">
-              <span className="material-symbols-outlined text-outline text-[32px]">tune</span>
-              <div>
-                <h3 className="font-headline-md text-headline-md text-on-surface">
-                  Settings coming soon
-                </h3>
-                <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-                  Settings are not yet implemented. They will be available here later.
-                </p>
+          ) : (
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento max-w-xl">
+              <div className="flex items-start gap-4">
+                <span className="material-symbols-outlined text-outline text-[32px]">tune</span>
+                <div>
+                  <h3 className="font-headline-md text-headline-md text-on-surface">
+                    System settings coming soon
+                  </h3>
+                  <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+                    Organiser-only settings are not yet available. They will appear here
+                    later.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </AppLayout>
   );

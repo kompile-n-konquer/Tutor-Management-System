@@ -6,16 +6,15 @@ const MAX_AVAILABLE_TUTORS = 15;
 
 /**
  * Maps a backend course record into the shape the sidebar expects.
+ * GET /courses returns a plain array with tutorsRequired/assignedTutors.
  */
 function mapApiCourse(c) {
   return {
     id: c.id,
     code: c.courseCode,
     name: c.courseName,
-    req: c.requiredTutors,
-    budget: c.budgetHours,
-    rate: c.hourlyRate,
-    assignedCount: c.assignedCount,
+    req: c.tutorsRequired,
+    assignedCount: c.assignedTutors,
   };
 }
 
@@ -75,13 +74,13 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart,
       } ${isMutating ? "opacity-50 pointer-events-none" : ""}`}
     >
       {tutor.clash && (
-        <div className="absolute -top-2 -right-2 bg-clash-bg text-white rounded-full p-1 shadow-sm">
+        <div className="absolute -top-2 -right-2 bg-clash-bg text-on-clash-bg rounded-full p-1 shadow-sm">
           <span className="material-symbols-outlined text-[16px]">error</span>
         </div>
       )}
       {onRemove && (
         <button
-          className="absolute -top-1.5 -right-1.5 bg-urgent-orange text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-sm hover:bg-urgent-orange/80 z-10"
+          className="absolute -top-1.5 -right-1.5 bg-urgent-orange text-on-urgent-orange rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-sm hover:bg-urgent-orange/80 z-10"
           onClick={(e) => { e.stopPropagation(); onRemove(tutor); }}
           tabIndex={isFocused ? 0 : -1}
           title="Remove tutor"
@@ -159,6 +158,7 @@ export default function Organiser() {
   const [fetchError, setFetchError] = useState(null);
   const [dragOverPool, setDragOverPool] = useState(null);
   const [mutatingId, setMutatingId] = useState(null);
+  const [autoAssigning, setAutoAssigning] = useState(false);
   const [focus, setFocus] = useState({ pool: "available", index: 0 });
   const [notice, setNotice] = useState(null);
   const cardRefs = useRef({});
@@ -178,8 +178,8 @@ export default function Organiser() {
         const coursesRes = await api.get("/courses");
         if (cancelled) return;
 
-        if (coursesRes.status === 200 && coursesRes.data?.courses) {
-          const mappedCourses = coursesRes.data.courses.map(mapApiCourse);
+        if (coursesRes.status === 200 && Array.isArray(coursesRes.data)) {
+          const mappedCourses = coursesRes.data.map(mapApiCourse);
           setCourses(mappedCourses);
           // Auto-select the first course on initial load only
           if (mappedCourses.length > 0 && selectedCourse == null) {
@@ -268,8 +268,8 @@ export default function Organiser() {
   async function refetchCourses() {
     try {
       const res = await api.get("/courses");
-      if (res.status === 200 && res.data?.courses) {
-        setCourses(res.data.courses.map(mapApiCourse));
+      if (res.status === 200 && Array.isArray(res.data)) {
+        setCourses(res.data.map(mapApiCourse));
       }
     } catch {
       // Keep the current sidebar counts
@@ -331,9 +331,9 @@ export default function Organiser() {
           // as the 409 requiredTutors cap arrive here rather than in catch.
           const message = res?.data?.message;
           if (res.status === 409 && message) {
-            setNotice({ title: "Maximum required tutors reached", message });
+            setNotice({ title: "Maximum required tutors reached", message, footnote: "The tutor remains in the available tutors list for this course." });
           } else if (message) {
-            setNotice({ title: "Could not assign tutor", message });
+            setNotice({ title: "Could not assign tutor", message, footnote: "The tutor remains in the available tutors list for this course." });
           }
           return;
         }
@@ -380,6 +380,57 @@ export default function Organiser() {
       setNotice({ title: "Action failed", message: message || "Network error. Please try again." });
     } finally {
       setMutatingId(null);
+    }
+  }
+
+  // One-click fill: the server assigns the top-ranked available applicants
+  // until the course's requiredTutors cap is reached and reports anyone it
+  // had to skip (and why) so the organiser can follow up manually.
+  async function handleAutoAssign() {
+    if (!course) return;
+
+    setAutoAssigning(true);
+    try {
+      const res = await api.post("/allocation/auto-assign", { courseId: selectedCourse });
+      if (res.status !== 200) {
+        // The axios instance resolves every HTTP status, so refusals (e.g. the
+        // 409 requiredTutors cap) arrive here rather than in catch.
+        setNotice({
+          title: "Auto-Assign failed",
+          message: res?.data?.message || "The server could not complete auto-assignment.",
+        });
+        return;
+      }
+
+      const assigned = res.data?.assigned ?? [];
+      const skipped = res.data?.skipped ?? [];
+
+      await Promise.all([refetchPools(selectedCourse), refetchCourses()]);
+
+      const names = assigned.map((tutor) => tutor.name).join(", ");
+      setNotice({
+        title: assigned.length > 0 ? "Auto-Assign complete" : "No tutors were allocated",
+        message:
+          assigned.length > 0
+            ? `Allocated ${assigned.length} tutor${assigned.length === 1 ? "" : "s"} to ${course.code}: ${names}.${
+                skipped.length > 0 ? ` ${skipped.length} applicant${skipped.length === 1 ? "" : "s"} skipped.` : ""
+              }`
+            : skipped.length > 0
+              ? "Every available applicant failed a check — see the reasons below."
+              : "There are no available applicants for this course right now.",
+        details: skipped.map((s) => `${s.name} — ${s.reason}`),
+        icon: assigned.length > 0 ? "check_circle" : "error",
+        iconClass: assigned.length > 0 ? "text-trust-blue" : "text-urgent-orange",
+        footnote:
+          skipped.length > 0
+            ? `Skipped tutors stay in the available pool for ${course.code}.`
+            : null,
+      });
+    } catch (err) {
+      const message = err?.response?.data?.message;
+      setNotice({ title: "Auto-Assign failed", message: message || "Network error. Please try again." });
+    } finally {
+      setAutoAssigning(false);
     }
   }
 
@@ -461,6 +512,20 @@ export default function Organiser() {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm">
+            {coursesLoading &&
+              [0, 1, 2].map((card) => (
+                <div
+                  key={card}
+                  className="animate-pulse p-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest"
+                >
+                  <div className="flex justify-between items-start mb-stack-sm">
+                    <div className="h-5 w-24 rounded bg-surface-container-high" />
+                    <div className="h-5 w-12 rounded bg-surface-container-high/60" />
+                  </div>
+                  <div className="h-4 w-40 rounded bg-surface-container-high/60 mb-stack-sm" />
+                  <div className="h-1.5 w-full rounded-full bg-surface-container-high/60" />
+                </div>
+              ))}
             {courses.map((c) => {
               const isActive = c.id === selectedCourse;
               const allocatedCount = c.assignedCount ?? (isActive ? allocatedTutors.length : 0);
@@ -480,8 +545,8 @@ export default function Organiser() {
                   <div className="flex justify-between items-start mb-stack-sm">
                     <h3 className={`font-body-lg text-body-lg font-bold ${isActive ? "text-primary" : "text-on-surface"}`}>{c.code}</h3>
                     <span
-                      className={`px-2 py-1 rounded font-data-mono text-data-mono text-xs text-white ${
-                        isLow ? "bg-urgent-orange" : isActive ? "bg-trust-blue" : "bg-surface-variant text-on-surface-variant"
+                      className={`px-2 py-1 rounded font-data-mono text-data-mono text-xs ${
+                        isLow ? "bg-urgent-orange text-on-urgent-orange" : isActive ? "bg-trust-blue text-on-trust-blue" : "bg-surface-variant text-on-surface-variant"
                       }`}
                     >
                       Req: {c.req}
@@ -514,20 +579,31 @@ export default function Organiser() {
               </p>
             </div>
             <div className="flex gap-stack-sm">
-              <button className="bg-surface-container-high text-on-surface px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:bg-surface-variant transition-colors">
-                Auto-Assign
+              <button
+                onClick={handleAutoAssign}
+                disabled={autoAssigning || !course || allocatedTutors.length >= (course?.req ?? 0)}
+                className="bg-surface-container-high text-on-surface px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:bg-surface-variant transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {autoAssigning ? "Assigning…" : "Auto-Assign"}
               </button>
-              <button className="bg-primary text-white px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
+              <button className="bg-primary text-on-primary px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity">
                 Save Changes
               </button>
             </div>
           </div>
           {loading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
-                <p className="font-body-sm text-on-surface-variant mt-stack-sm">Loading available tutors...</p>
-              </div>
+            <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg" aria-hidden="true">
+              {[0, 1].map((pool) => (
+                <div key={pool} className="flex-1 min-w-0 space-y-stack-sm">
+                  <div className="animate-pulse h-4 w-40 rounded bg-surface-container-high" />
+                  {[0, 1, 2, 3].map((row) => (
+                    <div
+                      key={row}
+                      className="animate-pulse h-14 rounded-lg bg-surface-container-low border border-surface-variant"
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : fetchError ? (
             <div className="flex-1 flex items-center justify-center">
@@ -578,9 +654,9 @@ export default function Organiser() {
         </div>
       </div>
 
-      {/* Max-reached / failure dialog: shown when the server refuses an
-          assignment (e.g. requiredTutors cap reached). The affected tutor
-          stays in the available pool — the rollback already restored them. */}
+      {/* Result dialog: server refusals (e.g. requiredTutors cap reached — the
+          affected tutor stays in the available pool, the rollback already
+          restored them) and Auto-Assign run summaries. */}
       {notice && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -594,7 +670,9 @@ export default function Organiser() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-stack-md mb-stack-md">
-              <span className="material-symbols-outlined text-urgent-orange text-3xl shrink-0">error</span>
+              <span className={`material-symbols-outlined ${notice.iconClass ?? "text-urgent-orange"} text-3xl shrink-0`}>
+                {notice.icon ?? "error"}
+              </span>
               <div>
                 <h3 id="organiser-notice-title" className="font-headline-md text-headline-md text-on-surface mb-unit">
                   {notice.title}
@@ -602,9 +680,18 @@ export default function Organiser() {
                 <p className="font-body-md text-on-surface-variant">{notice.message}</p>
               </div>
             </div>
-            <p className="font-body-sm text-outline mb-stack-md">
-              The tutor remains in the available tutors list for this course.
-            </p>
+            {notice.details?.length > 0 && (
+              <ul className="mb-stack-md space-y-1">
+                {notice.details.map((line, index) => (
+                  <li key={index} className="font-body-sm text-on-surface-variant">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {notice.footnote && (
+              <p className="font-body-sm text-outline mb-stack-md">{notice.footnote}</p>
+            )}
             <div className="flex justify-end">
               <button
                 onClick={() => setNotice(null)}

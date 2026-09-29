@@ -112,7 +112,24 @@ const CourseDetails = () => {
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
         {isLoading && !course && (
-          <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading course...</p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter" aria-hidden="true">
+            <div className="lg:col-span-4 animate-pulse bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
+              <div className="h-4 w-28 rounded bg-surface-container-high mb-stack-lg" />
+              <div className="space-y-stack-lg">
+                {[0, 1, 2].map((row) => (
+                  <div key={row} className="space-y-unit">
+                    <div className="h-3 w-16 rounded bg-surface-container-high" />
+                    <div className="h-4 rounded bg-surface-container-high/60" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-8 animate-pulse bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento space-y-stack-md">
+              <div className="h-4 w-32 rounded bg-surface-container-high" />
+              <div className="h-24 rounded bg-surface-container-high/60" />
+              <div className="h-24 rounded bg-surface-container-high/60" />
+            </div>
+          </div>
         )}
 
         {course && (
@@ -120,7 +137,7 @@ const CourseDetails = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
               {/* Course details — left column */}
               <div className="lg:col-span-4">
-                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
                   <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                     <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                       Course Details
@@ -193,7 +210,7 @@ const CourseDetails = () => {
 
               {/* Tutoring slots — right column */}
               <div className="lg:col-span-8">
-                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col h-[500px]">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
                   <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                     <div>
                       <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">

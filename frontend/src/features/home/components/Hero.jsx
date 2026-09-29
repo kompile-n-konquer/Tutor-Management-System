@@ -48,7 +48,7 @@ export default function Hero() {
           </p>
 
           {/* Early-access capture */}
-          <div className="pt-4 flex flex-col items-center gap-3 w-full max-w-md mx-auto">
+          {/* <div className="pt-4 flex flex-col items-center gap-3 w-full max-w-md mx-auto">
             {status.requested ? (
               <div
                 role="status"
@@ -90,7 +90,7 @@ export default function Hero() {
               </form>
             )}
             <p className="text-[11px] text-outline font-label-caps">Join 150+ tutors currently on the waitlist.</p>
-          </div>
+          </div> */}
 
           {/* Trust badges */}
           <div className="pt-6 flex flex-wrap items-center justify-center gap-6 text-xs text-on-surface-variant font-label-caps">

@@ -43,8 +43,27 @@ export default function OnboardingHub() {
   if (authLoading || loadingData) {
     return (
       <AppLayout title="Onboarding">
-        <div className="flex items-center justify-center p-stack-lg">
-          <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+        <div
+          className="p-stack-md md:p-margin-page max-w-container-max mx-auto w-full space-y-gutter"
+          aria-hidden="true"
+        >
+          <div className="space-y-stack-sm">
+            <div className="animate-pulse h-12 w-72 max-w-full rounded bg-surface-container-high" />
+            <div className="animate-pulse h-5 w-96 max-w-full rounded bg-surface-container-high/60" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+            {[0, 1].map((card) => (
+              <div
+                key={card}
+                className="animate-pulse bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento space-y-stack-md"
+              >
+                <div className="h-6 w-44 rounded bg-surface-container-high" />
+                <div className="h-4 rounded bg-surface-container-high/60" />
+                <div className="h-4 w-3/4 rounded bg-surface-container-high/60" />
+                <div className="h-9 rounded bg-surface-container-high/60" />
+              </div>
+            ))}
+          </div>
         </div>
       </AppLayout>
     );
@@ -66,7 +85,7 @@ export default function OnboardingHub() {
         {/* ── Role option cards ─────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
           {/* Become a Tutor */}
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-stack-sm mb-stack-md">
                 <span className="material-symbols-outlined text-3xl text-primary">assignment_ind</span>
@@ -109,7 +128,7 @@ export default function OnboardingHub() {
           </div>
 
           {/* Become a Lecturer */}
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-stack-sm mb-stack-md">
                 <span className="material-symbols-outlined text-3xl text-secondary">school</span>
@@ -137,7 +156,7 @@ export default function OnboardingHub() {
 
         {/* ── Application history ───────────────────────────────────── */}
         {applications.length > 0 && (
-          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+          <div className="bg-surface-container-lowest p-stack-lg rounded-xl border border-outline-variant shadow-bento">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-md">Your Applications</h3>
             <div className="space-y-stack-sm">
               {applications.map((app) => (

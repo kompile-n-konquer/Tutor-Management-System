@@ -1,15 +1,20 @@
 // Mock the Prisma client before requiring the controller
 jest.mock('../prisma/client', () => ({
+  user: { findUnique: jest.fn() },
   course: { findMany: jest.fn() },
 }));
 
 const prisma = require('../prisma/client');
-const { getAllCourses } = require('../controllers/courses');
+const { getCourses } = require('../controllers/courses');
 
 // catchAsync does not `return` the inner promise — flushMicrotasks waits
 // for the background async work to settle before assertions run.
 function flushMicrotasks() {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+function mockReq() {
+  return { user: { user_id: 'uid-123' } };
 }
 
 function mockRes() {
@@ -22,111 +27,157 @@ function mockRes() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Most tests exercise the staff path — an organiser requesting the full
+  // registry. Tests that need another role override this mock.
+  prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
 });
 
-describe('getAllCourses', () => {
-  test('returns courses mapped to the expected shape', async () => {
+describe('getCourses', () => {
+  test('returns a plain array of courses with allocation progress fields', async () => {
     prisma.course.findMany.mockResolvedValue([
       {
         id: 1,
         courseCode: 'CS101',
         courseName: 'Intro to Programming',
         minimumMark: 50,
-        requiredTutors: 5,
-        budgetHours: 40,
-        hourlyRate: 150,
-        lecturerId: 10,
-        _count: { assignments: 3 },
-        lecturer: { user: { firstName: 'Kgaogelo', lastName: 'Mabuza' } },
+        tutorsRequired: 5,
+        createdAt: new Date('2026-09-10T00:00:00.000Z'),
+        acceptingApplications: true,
+        user: { id: 10, firstName: 'Kgaogelo', lastName: 'Mabuza', email: 'kgaogelo@wits.ac.za' },
+        _count: { assignments: 2, slots: 4, applications: 7 },
       },
       {
         id: 2,
         courseCode: 'MATH202',
         courseName: 'Discrete Mathematics',
         minimumMark: 60,
-        requiredTutors: 2,
-        budgetHours: 20,
-        hourlyRate: 160,
-        lecturerId: 11,
-        _count: { assignments: 0 },
-        lecturer: { user: { firstName: 'Alice', lastName: 'Smith' } },
+        tutorsRequired: 3,
+        createdAt: new Date('2026-09-11T00:00:00.000Z'),
+        acceptingApplications: false,
+        user: { id: 11, firstName: 'Alice', lastName: 'Smith', email: 'alice@wits.ac.za' },
+        _count: { assignments: 0, slots: 2, applications: 1 },
       },
     ]);
 
-    const req = {};
     const res = mockRes();
     const next = jest.fn();
 
-    await getAllCourses(req, res, next);
+    await getCourses(mockReq(), res, next);
     await flushMicrotasks();
 
     expect(prisma.course.findMany).toHaveBeenCalledTimes(1);
 
-    // Verify ordering and include shape
+    // Newest courses first, with the lecturer and per-relation counts included
     const callArgs = prisma.course.findMany.mock.calls[0][0];
-    expect(callArgs.orderBy).toEqual({ courseCode: 'asc' });
-    expect(callArgs.include._count).toEqual({ select: { assignments: true } });
+    expect(callArgs.orderBy).toEqual({ createdAt: 'desc' });
+    expect(callArgs.include.user).toEqual({ select: { id: true, firstName: true, lastName: true, email: true } });
+    expect(callArgs.include._count).toEqual({ select: { assignments: true, slots: true, applications: true } });
 
-    expect(res.json).toHaveBeenCalledWith({
-      courses: [
-        expect.objectContaining({
-          id: 1,
-          courseCode: 'CS101',
-          courseName: 'Intro to Programming',
-          requiredTutors: 5,
-          budgetHours: 40,
-          hourlyRate: 150,
-          assignedCount: 3,
-          lecturer: 'Kgaogelo Mabuza',
-        }),
-        expect.objectContaining({
-          id: 2,
-          courseCode: 'MATH202',
-          assignedCount: 0,
-          lecturer: 'Alice Smith',
-        }),
-      ],
-    });
+    // The frontend (ViewAllCourses, Organiser board, global search) consumes a
+    // plain array — not a { courses } wrapper.
+    const body = res.json.mock.calls[0][0];
+    expect(Array.isArray(body)).toBe(true);
+    expect(body).toEqual([
+      expect.objectContaining({
+        id: 1,
+        courseCode: 'CS101',
+        courseName: 'Intro to Programming',
+        minimumMark: 50,
+        tutorsRequired: 5,
+        acceptingApplications: true,
+        lecturer: { id: 10, firstName: 'Kgaogelo', lastName: 'Mabuza', email: 'kgaogelo@wits.ac.za' },
+        slotsCount: 4,
+        applicationsCount: 7,
+        assignedTutors: 2,
+        tutorsMissing: 3,
+        isAllocated: true,
+      }),
+      expect.objectContaining({
+        id: 2,
+        courseCode: 'MATH202',
+        assignedTutors: 0,
+        tutorsMissing: 3,
+        isAllocated: false,
+      }),
+    ]);
+    expect(res.status).toHaveBeenCalledWith(200);
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('handles null lecturer gracefully', async () => {
+  test('never reports negative tutorsMissing when a course is overstaffed', async () => {
     prisma.course.findMany.mockResolvedValue([
       {
         id: 3,
         courseCode: 'CS305',
         courseName: 'Database Systems',
         minimumMark: 55,
-        requiredTutors: 4,
-        budgetHours: 35,
-        hourlyRate: 155,
-        lecturerId: 99,
-        _count: { assignments: 1 },
-        lecturer: null,
+        tutorsRequired: 1,
+        createdAt: new Date('2026-09-12T00:00:00.000Z'),
+        acceptingApplications: false,
+        user: null,
+        _count: { assignments: 3, slots: 2, applications: 4 },
       },
     ]);
 
     const res = mockRes();
     const next = jest.fn();
 
-    await getAllCourses({}, res, next);
+    await getCourses(mockReq(), res, next);
     await flushMicrotasks();
 
     const body = res.json.mock.calls[0][0];
-    expect(body.courses[0].lecturer).toBeNull();
+    expect(body[0].assignedTutors).toBe(3);
+    expect(body[0].tutorsMissing).toBe(0);
+    expect(body[0].isAllocated).toBe(true);
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('returns empty array when no courses exist', async () => {
+  test('returns an empty array when no courses exist', async () => {
     prisma.course.findMany.mockResolvedValue([]);
 
     const res = mockRes();
     const next = jest.fn();
 
-    await getAllCourses({}, res, next);
+    await getCourses(mockReq(), res, next);
     await flushMicrotasks();
 
-    expect(res.json).toHaveBeenCalledWith({ courses: [] });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith([]);
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('returns 404 when the requesting user does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourses(mockReq(), res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404 }),
+    );
+    expect(prisma.course.findMany).not.toHaveBeenCalled();
+  });
+
+  test.each(['STUDENT', 'TUTOR'])(
+    'returns an empty list for a %s — the registry is staff-only data',
+    async (role) => {
+      prisma.user.findUnique.mockResolvedValue({ id: 5, role });
+
+      const res = mockRes();
+      const next = jest.fn();
+
+      await getCourses(mockReq(), res, next);
+      await flushMicrotasks();
+
+      // The catalogue is never queried for applicants — they see open
+      // opportunities through GET /applications instead.
+      expect(prisma.course.findMany).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith([]);
+      expect(next).not.toHaveBeenCalled();
+    },
+  );
 });

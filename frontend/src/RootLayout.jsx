@@ -1,14 +1,16 @@
 import { Outlet } from "react-router-dom";
 import AuthProvider from "./features/context/AuthProvider";
+import ThemeProvider from "./features/context/ThemeProvider";
 
 const RootLayout = () => {
   return (
-    <AuthProvider>
-      <main>
-        <Outlet />
-      </main>
-    </AuthProvider>
-    
+    <ThemeProvider>
+      <AuthProvider>
+        <main>
+          <Outlet />
+        </main>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

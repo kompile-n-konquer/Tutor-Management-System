@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 const STATUS_STYLES = {
   DRAFT: 'bg-surface-variant text-on-surface-variant',
   SUBMITTED: 'bg-trust-blue/10 text-trust-blue',
-  APPROVED: 'bg-green-600/10 text-green-700',
+  APPROVED: 'bg-success/10 text-success',
   REJECTED: 'bg-error/10 text-error',
 };
 
@@ -78,7 +78,20 @@ const Timesheets = () => {
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
           {isLoading && !loaded ? (
-            <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading timesheets...</p>
+            <div className="space-y-stack-sm py-stack-sm" aria-hidden="true">
+              {[0, 1, 2, 3].map((row) => (
+                <div
+                  key={row}
+                  className="animate-pulse flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-sm"
+                >
+                  <div className="h-4 w-28 rounded bg-surface-container-high" />
+                  <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-24 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-16 rounded bg-surface-container-high/60" />
+                  <div className="h-6 w-24 rounded bg-surface-container-high ml-auto" />
+                </div>
+              ))}
+            </div>
           ) : timesheets.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               {isTutor

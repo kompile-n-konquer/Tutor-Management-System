@@ -91,8 +91,17 @@ export default function ApplicationReview() {
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar p-stack-sm space-y-stack-sm">
               {loading ? (
-                <div className="text-center py-stack-lg">
-                  <span className="material-symbols-outlined text-3xl text-primary animate-spin">progress_activity</span>
+                <div className="space-y-stack-sm" aria-hidden="true">
+                  {[0, 1, 2].map((card) => (
+                    <div
+                      key={card}
+                      className="animate-pulse p-stack-md rounded-lg border border-surface-variant bg-surface-container-lowest space-y-stack-sm"
+                    >
+                      <div className="h-5 w-36 rounded bg-surface-container-high" />
+                      <div className="h-4 w-48 rounded bg-surface-container-high/60" />
+                      <div className="h-3 w-28 rounded bg-surface-container-high/60" />
+                    </div>
+                  ))}
                 </div>
               ) : applications.length === 0 ? (
                 <p className="text-center font-body-sm text-on-surface-variant py-stack-lg">
@@ -149,11 +158,27 @@ export default function ApplicationReview() {
 
           {/* ── Detail panel ──────────────────────────────────────────── */}
           <div className="flex-1 bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden flex flex-col">
-            {!selected || !detail ? (
+            {!selected ? (
               <div className="flex-1 flex items-center justify-center">
                 <p className="font-body-sm text-on-surface-variant">
                   Select an application to review.
                 </p>
+              </div>
+            ) : !detail ? (
+              <div className="flex-1 p-stack-lg space-y-gutter" aria-hidden="true">
+                <div className="animate-pulse flex items-center gap-stack-md">
+                  <div className="w-12 h-12 rounded-full bg-surface-container-high" />
+                  <div className="space-y-stack-sm">
+                    <div className="h-6 w-48 rounded bg-surface-container-high" />
+                    <div className="h-4 w-56 rounded bg-surface-container-high/60" />
+                  </div>
+                </div>
+                <div className="animate-pulse space-y-stack-md">
+                  <div className="h-4 w-40 rounded bg-surface-container-high" />
+                  <div className="h-4 rounded bg-surface-container-high/60" />
+                  <div className="h-4 rounded bg-surface-container-high/60" />
+                  <div className="h-4 w-2/3 rounded bg-surface-container-high/60" />
+                </div>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto p-stack-lg space-y-gutter">
@@ -343,7 +368,7 @@ export default function ApplicationReview() {
                       <button
                         onClick={() => handleReview(detail.id, "APPROVE")}
                         disabled={isActing}
-                        className="bg-trust-blue text-white px-6 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-unit"
+                        className="bg-trust-blue text-on-trust-blue px-6 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-unit"
                       >
                         <span className="material-symbols-outlined text-[18px]">check_circle</span>
                         {isActing ? "Processing..." : "Approve"}

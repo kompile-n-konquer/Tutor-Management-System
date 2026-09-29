@@ -55,6 +55,34 @@ module.exports = {
         "clash-bg": "#FF69B4",
         "trust-blue": "#1E90FF",
         "urgent-orange": "#FF8C00",
+
+        // Landing page palette — the TutorFlow purple brightened for vivid
+        // accents, with deeper OLED-style darks for the landing dark surfaces.
+        brand: {
+          50: "#fcf5ff",
+          100: "#f3e8ff",
+          200: "#e9d5ff",
+          300: "#c77dff",
+          400: "#a855f7",
+          500: "#8b2fd9",
+          600: "#7e22ce",
+          700: "#5b21b6",
+          800: "#4c1d95",
+          900: "#380052",
+          950: "#230034",
+        },
+        ink: {
+          600: "#3b2a63",
+          700: "#251347",
+          800: "#150a2e",
+          900: "#0a0418",
+          950: "#04010b",
+        },
+      },
+      boxShadow: {
+        "glow-brand": "0 0 45px -8px rgba(126, 34, 206, 0.45)",
+        "glow-amber": "0 0 45px -8px rgba(253, 139, 0, 0.4)",
+        "glow-soft": "0 12px 40px -12px rgba(56, 0, 82, 0.28)",
       },
       borderRadius: {
         DEFAULT: "0.125rem",

@@ -16,6 +16,8 @@ export const NAV_LINKS = [
   // Not yet built — flagged in the page-to-role mapping phase as a structural gap:
   // { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"] },
   { to: "/organiser", icon: "dashboard", label: "Organiser Board", roles: ["organiser"], section: "main" },
+  // Organiser-only system configuration (claim policy, rates, PDF template).
+  { to: "/configurations", icon: "tune", label: "Configurations", roles: ["organiser"], section: "main" },
   { to: "/application-review", icon: "fact_check", label: "Applications", roles: ["organiser"], section: "general" },
   { to: "/swap-review", icon: "swap_horiz", label: "Swap Requests", roles: ["organiser"], section: "general" },
   { to: "/organiser-analytics", icon: "analytics", label: "Analytics", roles: ["organiser"], section: "main" },

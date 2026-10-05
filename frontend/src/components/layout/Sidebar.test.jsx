@@ -40,8 +40,15 @@ describe('Sidebar — role-aware navigation rail', () => {
     renderSidebar('organiser');
 
     expect(screen.getByText('Organiser Board')).toBeInTheDocument();
+    expect(screen.getByText('Configurations')).toBeInTheDocument();
     expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
+  });
+
+  test('tutors do not see the organiser-only configurations link', () => {
+    renderSidebar('tutor');
+
+    expect(screen.queryByText('Configurations')).not.toBeInTheDocument();
   });
 
   test('lecturers also see the conflict-resolution button', () => {

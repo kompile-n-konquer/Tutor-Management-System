@@ -30,6 +30,7 @@ import TimesheetDetails from './features/timesheets/TimesheetDetails.jsx';
 import Applications from './features/applications/Applications.jsx';
 import OpportunityDetails from './features/applications/OpportunityDetails.jsx';
 import Settings from './features/settings/Settings.jsx';
+import Configurations from './features/settings/Configurations.jsx';
 import LecturerView from './features/lecturer-view/LecturerView.jsx';
 import AdminView from './features/admin-view/AdminView.jsx';
 import OnboardingHub from './features/onboarding/OnboardingHub.jsx';
@@ -74,6 +75,7 @@ const router = createBrowserRouter([
         ],
       },
       { path: 'settings', element: <Settings /> },
+      { path: 'configurations', element: <Configurations /> },
       {
         path: 'courses',
         children: [

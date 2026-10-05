@@ -1,11 +1,13 @@
 // Mock the Prisma client before requiring the controller
 jest.mock('../prisma/client', () => ({
   user: { findUnique: jest.fn() },
-  course: { findMany: jest.fn() },
+  course: { findMany: jest.fn(), findUnique: jest.fn() },
+  timesheet: { groupBy: jest.fn() },
+  systemSetting: { findMany: jest.fn() },
 }));
 
 const prisma = require('../prisma/client');
-const { getCourses } = require('../controllers/courses');
+const { getCourses, getCourse } = require('../controllers/courses');
 
 // catchAsync does not `return` the inner promise — flushMicrotasks waits
 // for the background async work to settle before assertions run.
@@ -30,6 +32,9 @@ beforeEach(() => {
   // Most tests exercise the staff path — an organiser requesting the full
   // registry. Tests that need another role override this mock.
   prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
+  // getCourse aggregates — no approved timesheets and no configured rates by default
+  prisma.timesheet.groupBy.mockResolvedValue([]);
+  prisma.systemSetting.findMany.mockResolvedValue([]);
 });
 
 describe('getCourses', () => {
@@ -202,4 +207,143 @@ describe('getCourses', () => {
       expect(next).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('getCourse', () => {
+  test("derives each tutor's spent amount, claimed hours and claims from approved timesheets", async () => {
+    prisma.course.findUnique.mockResolvedValue({
+      id: 1,
+      courseCode: 'CS101',
+      courseName: 'Intro to Programming',
+      minimumMark: 50,
+      tutorsRequired: 2,
+      acceptingApplications: true,
+      createdAt: new Date('2026-09-10T00:00:00.000Z'),
+      user: { id: 10, firstName: 'Kgaogelo', lastName: 'Mabuza', email: 'kgaogelo@wits.ac.za' },
+      slots: [
+        { id: 1, dayOfWeek: 0, timeSlotId: 3, venue: null, sessionType: null, timeSlot: { startMinute: 480, endMinute: 525 } },
+      ],
+      assignments: [
+        {
+          userId: 7,
+          semester: 'Semester 2 - 2026',
+          user: { firstName: 'Thabo', lastName: 'Molefe', email: 'thabo@wits.ac.za', yearOfStudy: '3rd year' },
+        },
+        {
+          userId: 8,
+          semester: 'Semester 2 - 2026',
+          user: { firstName: 'Riya', lastName: 'Naidoo', email: 'riya@wits.ac.za', yearOfStudy: 'honours' },
+        },
+      ],
+      _count: { applications: 7 },
+    });
+    // Thabo has three approved timesheets totalling 12 hours; Riya has none.
+    prisma.timesheet.groupBy.mockResolvedValue([
+      { userId: 7, _count: { _all: 3 }, _sum: { totalHours: 12 } },
+    ]);
+    // Only the 3rd-year rate is configured (R150/h) — the honours rate is unset,
+    // so an honours tutor cannot have spent anything yet.
+    prisma.systemSetting.findMany.mockResolvedValue([
+      { key: 'HOURLY_RATE_3RD_YEAR', value: '150' },
+    ]);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourse({ params: { courseId: '1' } }, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.timesheet.groupBy).toHaveBeenCalledWith({
+      by: ['userId'],
+      where: { userId: { in: [7, 8] }, status: 'APPROVED' },
+      _count: { _all: true },
+      _sum: { totalHours: true },
+    });
+
+    const body = res.json.mock.calls[0][0];
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(next).not.toHaveBeenCalled();
+
+    // One 45-minute slot rounds up to a single claimable hour
+    expect(body.claimableHours).toBe(1);
+    expect(body.assignedCount).toBe(2);
+    expect(body.assignedTutors).toEqual([
+      {
+        userId: 7,
+        tutorName: 'Thabo Molefe',
+        tutorEmail: 'thabo@wits.ac.za',
+        semester: 'Semester 2 - 2026',
+        claimedHours: 12,
+        claims: 3,
+        spent: 1800, // 12 hours x R150
+      },
+      {
+        userId: 8,
+        tutorName: 'Riya Naidoo',
+        tutorEmail: 'riya@wits.ac.za',
+        semester: 'Semester 2 - 2026',
+        claimedHours: 0,
+        claims: 0,
+        spent: 0,
+      },
+    ]);
+  });
+
+  test('skips the timesheet aggregation entirely when the course has no tutors', async () => {
+    prisma.course.findUnique.mockResolvedValue({
+      id: 2,
+      courseCode: 'MATH202',
+      courseName: 'Discrete Mathematics',
+      minimumMark: 60,
+      tutorsRequired: 1,
+      acceptingApplications: false,
+      createdAt: new Date('2026-09-11T00:00:00.000Z'),
+      user: null,
+      slots: [],
+      assignments: [],
+      _count: { applications: 0 },
+    });
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourse({ params: { courseId: '2' } }, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.timesheet.groupBy).not.toHaveBeenCalled();
+    const body = res.json.mock.calls[0][0];
+    expect(body.assignedTutors).toEqual([]);
+    expect(body.assignedCount).toBe(0);
+    expect(body.tutorsMissing).toBe(1);
+    expect(body.isAllocated).toBe(false);
+  });
+
+  test('returns 404 when the course does not exist', async () => {
+    prisma.course.findUnique.mockResolvedValue(null);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourse({ params: { courseId: '999' } }, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404 }),
+    );
+    expect(prisma.timesheet.groupBy).not.toHaveBeenCalled();
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when the courseId is not a number', async () => {
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCourse({ params: { courseId: 'abc' } }, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+    expect(prisma.course.findUnique).not.toHaveBeenCalled();
+  });
 });

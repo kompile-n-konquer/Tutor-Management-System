@@ -85,6 +85,10 @@ const CourseDetails = () => {
       minute: '2-digit',
     });
 
+  // Money display — whole rands without decimals, cents otherwise (1800 -> "1 800")
+  const formatAmount = (value) =>
+    Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
   return (
     <AppLayout role="lecturer" title="Courses">
       <div className="p-gutter md:p-margin-page">
@@ -238,7 +242,8 @@ const CourseDetails = () => {
               </div>
             </div>
 
-            {/* Allocated Tutors — full width at bottom */}
+            {/* Allocated Tutors — full width at bottom. Spent amounts derive from
+                approved timesheets (hours x the tutor's year-of-study rate). */}
             <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
               <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
                 Allocated Tutors
@@ -254,6 +259,9 @@ const CourseDetails = () => {
                       <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                         <th className="py-stack-sm px-stack-md">Tutor</th>
                         <th className="py-stack-sm px-stack-md">Semester</th>
+                        <th className="py-stack-sm px-stack-md">Hours Claimed</th>
+                        <th className="py-stack-sm px-stack-md">Claims</th>
+                        <th className="py-stack-sm px-stack-md">Spent</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-variant font-body-md">
@@ -264,6 +272,15 @@ const CourseDetails = () => {
                             <p className="font-body-sm text-outline mt-1">{tutor.tutorEmail}</p>
                           </td>
                           <td className="py-stack-sm px-stack-md">{tutor.semester}</td>
+                          <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                            {tutor.claimedHours}h
+                          </td>
+                          <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                            {tutor.claims}
+                          </td>
+                          <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                            R{formatAmount(tutor.spent)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

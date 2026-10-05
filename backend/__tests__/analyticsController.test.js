@@ -5,7 +5,8 @@ jest.mock('../prisma/client', () => ({
   session: { groupBy: jest.fn() },
   roleApplication: { groupBy: jest.fn() },
   application: { groupBy: jest.fn() },
-  timesheet: { groupBy: jest.fn() },
+  timesheet: { groupBy: jest.fn(), findMany: jest.fn() },
+  systemSetting: { findUnique: jest.fn(), findMany: jest.fn() },
 }));
 
 const prisma = require('../prisma/client');
@@ -43,6 +44,10 @@ beforeEach(() => {
   prisma.application.groupBy.mockResolvedValue([]);
   prisma.timesheet.groupBy.mockResolvedValue([]);
   prisma.user.findMany.mockResolvedValue([]);
+  // No approved timesheets, no configured rates and no monthly budget by default
+  prisma.timesheet.findMany.mockResolvedValue([]);
+  prisma.systemSetting.findMany.mockResolvedValue([]);
+  prisma.systemSetting.findUnique.mockResolvedValue(null);
 });
 
 describe('getOrganiserAnalytics', () => {
@@ -110,6 +115,20 @@ describe('getOrganiserAnalytics', () => {
       { id: 1, firstName: 'Thabo', lastName: 'Molefe' },
       { id: 2, firstName: 'Riya', lastName: 'Naidoo' },
     ]);
+    // Spending inputs — one approved-timesheet query, the rate rows and the budget row.
+    // The 3rd-year rate is R150/h; the other years are unset, so those tutors spend R0.
+    const now = new Date();
+    const monthsAgo = (n) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - n, 10));
+    prisma.timesheet.findMany.mockResolvedValue([
+      { totalHours: 10, approvedAt: monthsAgo(2), user: { yearOfStudy: '3rd year' } },
+      { totalHours: 5, approvedAt: monthsAgo(0), user: { yearOfStudy: '3rd year' } },
+      { totalHours: 6, approvedAt: monthsAgo(0), user: { yearOfStudy: 'honours' } }, // rate unset -> R0
+      { totalHours: 8, approvedAt: monthsAgo(13), user: { yearOfStudy: '3rd year' } }, // outside the 12-month window
+    ]);
+    prisma.systemSetting.findMany.mockResolvedValue([
+      { key: 'HOURLY_RATE_3RD_YEAR', value: '150' },
+    ]);
+    prisma.systemSetting.findUnique.mockResolvedValue({ key: 'MONTHLY_BUDGET', value: '150000' });
 
     const res = mockRes();
     const next = jest.fn();
@@ -178,6 +197,28 @@ describe('getOrganiserAnalytics', () => {
       { userId: 1, approvedHours: 10, submittedHours: 0, name: 'Thabo Molefe' },
       { userId: 2, approvedHours: 6, submittedHours: 3, name: 'Riya Naidoo' },
     ]);
+
+    // Spending: only approved timesheets count, priced at the tutor's year-of-study
+    // rate, bucketed by approval month over a rolling 12-month window.
+    expect(prisma.timesheet.findMany).toHaveBeenCalledWith({
+      where: { status: 'APPROVED', approvedAt: { not: null } },
+      select: {
+        totalHours: true,
+        approvedAt: true,
+        user: { select: { yearOfStudy: true } },
+      },
+    });
+    expect(body.spending.monthlyBudget).toBe(150000);
+    expect(body.spending.months).toHaveLength(12);
+    const monthKey = (date) =>
+      `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+    // Newest month last: the current month holds R750, two months back R1500.
+    expect(body.spending.months[11]).toEqual({ month: monthKey(now), amount: 750 });
+    expect(body.spending.months[9]).toEqual({ month: monthKey(monthsAgo(2)), amount: 1500 });
+    // Months without approvals — and the one 13 months back — contribute nothing.
+    expect(body.spending.months[10].amount).toBe(0);
+    expect(body.spending.months[0].amount).toBe(0);
+    expect(body.spending.months.some((month) => month.amount === 1200)).toBe(false);
   });
 
   test('reports a zero sign-off rate before any timesheet enters review', async () => {

@@ -2,7 +2,7 @@ const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const path = require('path');
 const fs = require('fs');
-const { TUTOR_MONTHLY_CLAIMABLE_HOURS, TUTOR_EVENT_CLAIM_MONTHS, HOURLY_RATE_KEYS, PDF_TEMPLATE_KEY } = require('../utils/systemSettings');
+const { TUTOR_MONTHLY_CLAIMABLE_HOURS, TUTOR_EVENT_CLAIM_MONTHS, HOURLY_RATE_KEYS, PDF_TEMPLATE_KEY, MONTHLY_BUDGET } = require('../utils/systemSettings');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
@@ -36,12 +36,15 @@ exports.getSettings = catchAsync(async (req, res, next) => {
 
   // PDF template filename (null when none uploaded)
   const pdfTemplateFilename = byKey[PDF_TEMPLATE_KEY] || null;
+  // Monthly budget (null when the organiser has not set one)
+  const monthlyBudget = byKey[MONTHLY_BUDGET];
 
   res.status(200).json({
     tutorMonthlyClaimableHours: monthlyHours === undefined ? null : Number(monthlyHours),
     tutorEventClaimMonths: claimMonths === undefined ? null : Number(claimMonths),
     hourlyRates,
     pdfTemplateFilename,
+    monthlyBudget: monthlyBudget === undefined ? null : Number(monthlyBudget),
   });
 });
 
@@ -131,6 +134,52 @@ exports.updateTutorEventClaimMonths = catchAsync(async (req, res, next) => {
 
 // Maximum hourly rate in ZAR — a sanity bound so a typo cannot set R99 999/h
 const MAX_HOURLY_RATE = 5000;
+// Maximum monthly budget in ZAR — a sanity bound so a typo cannot set R99 999 999
+const MAX_MONTHLY_BUDGET = 100000000;
+
+// Sets the monthly budget — the amount (in ZAR) the school plans to spend per
+// month on all tutors and courses. Spent amounts are derived from approved
+// timesheets (hours x the tutor's year-of-study hourly rate), never stored.
+exports.updateMonthlyBudget = catchAsync(async (req, res, next) => {
+  const firebaseUid = req.user.user_id;
+
+  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  const role = user.role.toUpperCase();
+  if (role !== 'ORGANISER' && role !== 'ADMIN') {
+    const error = new Error('Only an organiser or admin can set the monthly budget');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  const { monthlyBudget } = req.body;
+  const parsedBudget = Number(monthlyBudget);
+  if (
+    monthlyBudget === undefined ||
+    monthlyBudget === null ||
+    monthlyBudget === '' ||
+    Number.isNaN(parsedBudget) ||
+    parsedBudget < 0 ||
+    parsedBudget > MAX_MONTHLY_BUDGET
+  ) {
+    const error = new Error(`monthlyBudget must be a number between 0 and ${MAX_MONTHLY_BUDGET}`);
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  await prisma.systemSetting.upsert({
+    where: { key: MONTHLY_BUDGET },
+    update: { value: String(parsedBudget) },
+    create: { key: MONTHLY_BUDGET, value: String(parsedBudget) },
+  });
+
+  res.status(200).json({ monthlyBudget: parsedBudget });
+});
 
 exports.updateHourlyRates = catchAsync(async (req, res, next) => {
   const firebaseUid = req.user.user_id;

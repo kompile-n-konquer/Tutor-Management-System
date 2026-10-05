@@ -1,5 +1,6 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { getHourlyRates, getMonthlyBudget } = require('../utils/systemSettings');
 
 // Collapses a Prisma groupBy result into a plain { STATUS: count } map so the
 // response shape is stable even when a status currently has no rows.
@@ -11,6 +12,14 @@ const countByStatus = (groups) =>
 
 const hoursByStatus = (groups, status) =>
   groups.find((group) => group.status === status)?._sum?.totalHours ?? 0;
+
+// "YYYY-MM" key of a date's UTC month — approvals are bucketed by the month
+// they happened in
+const monthKey = (date) =>
+  `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+
+// Rounds a money figure to whole cents so float arithmetic never leaks into a response
+const roundToCents = (amount) => Math.round(amount * 100) / 100;
 
 // ── GET /analytics/organiser ────────────────────────────────────────────────
 // Live KPI aggregates for the organiser analytics page: staffing coverage,
@@ -46,6 +55,9 @@ exports.getOrganiserAnalytics = catchAsync(async (req, res, next) => {
     courseApplicationGroups,
     timesheetGroups,
     workloadGroups,
+    approvedTimesheets,
+    hourlyRates,
+    monthlyBudget,
   ] = await Promise.all([
     prisma.user.count({ where: { role: 'TUTOR' } }),
     prisma.user.count({ where: { role: 'LECTURER' } }),
@@ -76,6 +88,19 @@ exports.getOrganiserAnalytics = catchAsync(async (req, res, next) => {
       where: { status: { in: ['APPROVED', 'SUBMITTED'] } },
       _sum: { totalHours: true },
     }),
+    // Approved timesheets are the money the school has spent: each contributes
+    // its totalHours x the tutor's year-of-study hourly rate, bucketed by the
+    // month it was approved — the same derivation as the timesheet PDF total
+    prisma.timesheet.findMany({
+      where: { status: 'APPROVED', approvedAt: { not: null } },
+      select: {
+        totalHours: true,
+        approvedAt: true,
+        user: { select: { yearOfStudy: true } },
+      },
+    }),
+    getHourlyRates(),
+    getMonthlyBudget(),
   ]);
 
   const sessionCounts = countByStatus(sessionGroups);
@@ -126,6 +151,26 @@ exports.getOrganiserAnalytics = catchAsync(async (req, res, next) => {
         b.submittedHours - a.submittedHours ||
         a.name.localeCompare(b.name),
     );
+
+  // ── Monthly spending ──
+  // Spend is derived, never stored. A tutor without a configured year-of-study
+  // rate contributes R0, matching the PDF export's blank amount.
+  const spendByMonth = new Map();
+  approvedTimesheets.forEach((timesheet) => {
+    const rate = hourlyRates[timesheet.user?.yearOfStudy] ?? 0;
+    const amount = (timesheet.totalHours ?? 0) * rate;
+    const key = monthKey(new Date(timesheet.approvedAt));
+    spendByMonth.set(key, (spendByMonth.get(key) ?? 0) + amount);
+  });
+
+  // A rolling 12-month window ending with the current month, zero-filled so
+  // the chart shows gaps rather than skipping months entirely
+  const spendingMonths = [];
+  for (let i = 11; i >= 0; i -= 1) {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = monthKey(date);
+    spendingMonths.push({ month: key, amount: roundToCents(spendByMonth.get(key) ?? 0) });
+  }
 
   res.status(200).json({
     totals: {
@@ -178,5 +223,9 @@ exports.getOrganiserAnalytics = catchAsync(async (req, res, next) => {
       },
     },
     workload,
+    spending: {
+      monthlyBudget,
+      months: spendingMonths,
+    },
   });
 });

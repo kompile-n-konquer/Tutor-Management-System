@@ -13,6 +13,8 @@ import AppearanceSettings from "./AppearanceSettings";
 const MAX_MONTHLY_HOURS = 744;
 // The event claim window can span at most two years of past events
 const MAX_CLAIM_MONTHS = 24;
+// Sanity bound on the monthly budget in ZAR — mirrors the backend validation
+const MAX_MONTHLY_BUDGET = 100000000;
 
 const YEARS_OF_STUDY = ['3rd year', 'honours', 'masters', 'phd'];
 const RATE_LABELS = {
@@ -36,6 +38,9 @@ const Settings = () => {
   const [ratesSaved, setRatesSaved] = useState(false);
   const [pdfTemplateName, setPdfTemplateName] = useState(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [monthlyBudget, setMonthlyBudget] = useState(""); // string so the Input stays controllable
+  const [savedMonthlyBudget, setSavedMonthlyBudget] = useState(null);
+  const [budgetSaved, setBudgetSaved] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -68,6 +73,9 @@ const Settings = () => {
         setHourlyRates(nextRates);
         setSavedRates(rates);
         setPdfTemplateName(response.data.pdfTemplateFilename || null);
+        const budget = response.data.monthlyBudget ?? null;
+        setMonthlyBudget(budget === null ? "" : String(budget));
+        setSavedMonthlyBudget(budget);
       } else {
         setError("Could not load the settings. Please refresh the page.");
       }
@@ -99,6 +107,17 @@ const Settings = () => {
     parsedMonths <= MAX_CLAIM_MONTHS;
   const monthsChanged = monthsEntered && parsedMonths !== savedClaimMonths;
   const monthsHasChanges = (monthsEntered && savedClaimMonths === null) || monthsChanged;
+
+  // Monthly budget validation and dirty check — money may include cents
+  const parsedBudget = Number(monthlyBudget);
+  const budgetEntered = monthlyBudget !== "";
+  const budgetValid =
+    budgetEntered &&
+    !Number.isNaN(parsedBudget) &&
+    parsedBudget >= 0 &&
+    parsedBudget <= MAX_MONTHLY_BUDGET;
+  const budgetChanged = budgetEntered && parsedBudget !== savedMonthlyBudget;
+  const budgetHasChanges = (budgetEntered && savedMonthlyBudget === null) || budgetChanged;
 
   // Hourly rates validation and dirty check
   const ratesValid = YEARS_OF_STUDY.every((year) => {
@@ -178,6 +197,22 @@ const Settings = () => {
       URL.revokeObjectURL(url);
     } else {
       setError('Could not download the template. Please try again.');
+    }
+  };
+
+  const handleSaveBudget = async () => {
+    setBudgetSaved(false);
+    setError("");
+
+    const response = await execute(() =>
+      api.put("/settings/monthly-budget", { monthlyBudget: parsedBudget })
+    );
+
+    if (response && response.status === 200) {
+      setSavedMonthlyBudget(response.data.monthlyBudget);
+      setBudgetSaved(true);
+    } else {
+      setError(response?.data?.message || "Could not save the monthly budget. Please try again.");
     }
   };
 
@@ -365,8 +400,10 @@ const Settings = () => {
               </div>
             </div>
 
-            {/* PDF Template Card — full width */}
-            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
+            {/* PDF Template + Monthly Budget — fill the row side by side */}
+            <div className="flex flex-wrap items-stretch gap-gutter">
+            {/* PDF Template Card */}
+            <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
               <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                 <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                   Timesheet PDF Template
@@ -421,6 +458,50 @@ const Settings = () => {
                   <span className="ml-3 font-body-sm text-outline">Uploading...</span>
                 )}
               </div>
+            </div>
+
+            {/* Monthly Budget Card */}
+            <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
+              <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
+                <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+                  Monthly Budget
+                </h3>
+                <p className="font-body-sm text-outline mt-1">
+                  The amount (in ZAR) the school plans to spend per month on all tutors
+                  and courses. Spending is measured against it on the analytics page.
+                </p>
+              </div>
+
+              <Input
+                labelText="Budget per month (R)"
+                type="number"
+                icon="account_balance_wallet"
+                placeholder="e.g. 150000"
+                value={monthlyBudget}
+                onChange={(event) => {
+                  setBudgetSaved(false);
+                  setMonthlyBudget(event.target.value);
+                }}
+              />
+
+              {budgetSaved && (
+                <p className="mt-gutter font-body-sm text-primary flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  Budget saved successfully.
+                </p>
+              )}
+
+              <div className="mt-gutter flex items-center gap-4">
+                <Button
+                  onClick={handleSaveBudget}
+                  disabled={!budgetValid || !budgetHasChanges}
+                  loading={isLoading}
+                  className="min-w-40"
+                >
+                  Save Budget
+                </Button>
+              </div>
+            </div>
             </div>
           </div>
           ) : (

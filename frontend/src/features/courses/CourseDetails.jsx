@@ -146,7 +146,8 @@ const CourseDetails = () => {
                       Core information about this course.
                     </p>
                   </div>
-                  <div className="flex-1 space-y-6">
+                  {/* Tight spacing keeps all detail rows inside the fixed card height */}
+                  <div className="flex-1 space-y-3">
                     <div>
                       <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Added</p>
                       <p className="font-body-md text-on-surface mt-1 font-data-mono">{formatDate(course.createdAt)}</p>
@@ -162,6 +163,13 @@ const CourseDetails = () => {
                     <div>
                       <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Minimum Mark</p>
                       <p className="font-body-md text-on-surface mt-1 font-data-mono">{course.minimumMark}</p>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Claimable Hours</p>
+                      <p className="font-body-md text-on-surface mt-1">
+                        <span className="font-semibold font-data-mono">{course.claimableHours}</span>{' '}
+                        hour{course.claimableHours === 1 ? '' : 's'} per week
+                      </p>
                     </div>
                     <div>
                       <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">Tutors</p>

@@ -210,7 +210,9 @@ Responds `204`.
 
 ### `GET /courses`
 
-All courses with allocation progress (`assignedCount`, `tutorsRequired`, `lecturer` name).
+All courses with allocation progress (`assignedCount`, `tutorsRequired`, `lecturer` name) and the weekly
+`claimableHours` tutors can claim — every tutoring slot counts as at least one full hour, rounded up to
+whole hours. `GET /courses/:courseId` returns the same `claimableHours` alongside the full slot list.
 
 ### `POST /courses`
 

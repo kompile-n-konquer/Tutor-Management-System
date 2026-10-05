@@ -1,5 +1,14 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { slotHours } = require('../utils/claimRules');
+
+// Weekly hours a tutor can claim on a course: every tutoring slot counts as at least
+// one full hour, rounded up to whole hours (08:00-08:45 -> 1 hour), summed over the Mon-Fri slots
+const weeklyClaimableHours = (courseSlots) =>
+  courseSlots.reduce(
+    (total, slot) => total + slotHours(slot.timeSlot.startMinute, slot.timeSlot.endMinute),
+    0
+  );
 
 exports.getTimeSlots = catchAsync(async (req, res, next) => {
   const timeSlots = await prisma.timeSlot.findMany({
@@ -121,7 +130,9 @@ exports.getCourses = catchAsync(async (req, res, next) => {
     orderBy: { createdAt: 'desc' },
     include: {
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
-      _count: { select: { assignments: true, slots: true, applications: true } },
+      // Slots ride along so each course's claimable hours can be summed
+      slots: { include: { timeSlot: true } },
+      _count: { select: { assignments: true, applications: true } },
     },
   });
 
@@ -136,7 +147,8 @@ exports.getCourses = catchAsync(async (req, res, next) => {
       createdAt: course.createdAt,
       acceptingApplications: course.acceptingApplications,
       lecturer: course.user,
-      slotsCount: course._count.slots,
+      slotsCount: course.slots.length,
+      claimableHours: weeklyClaimableHours(course.slots),
       applicationsCount: course._count.applications,
       assignedTutors,
       tutorsMissing: Math.max(course.tutorsRequired - assignedTutors, 0),
@@ -203,6 +215,7 @@ exports.getCourse = catchAsync(async (req, res, next) => {
       venue: slot.venue,
       sessionType: slot.sessionType,
     })),
+    claimableHours: weeklyClaimableHours(course.slots),
     assignedTutors,
     assignedCount,
     tutorsMissing: Math.max(course.tutorsRequired - assignedCount, 0),

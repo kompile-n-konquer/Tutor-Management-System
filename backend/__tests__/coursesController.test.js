@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 describe('getCourses', () => {
-  test('returns a plain array of courses with allocation progress fields', async () => {
+  test('returns a plain array of courses with allocation progress and claimable-hours fields', async () => {
     prisma.course.findMany.mockResolvedValue([
       {
         id: 1,
@@ -44,7 +44,14 @@ describe('getCourses', () => {
         createdAt: new Date('2026-09-10T00:00:00.000Z'),
         acceptingApplications: true,
         user: { id: 10, firstName: 'Kgaogelo', lastName: 'Mabuza', email: 'kgaogelo@wits.ac.za' },
-        _count: { assignments: 2, slots: 4, applications: 7 },
+        // Four slots — three 45-minute and one 90-minute — claim 5 rounded-up hours
+        slots: [
+          { timeSlot: { startMinute: 480, endMinute: 525 } },
+          { timeSlot: { startMinute: 525, endMinute: 570 } },
+          { timeSlot: { startMinute: 600, endMinute: 645 } },
+          { timeSlot: { startMinute: 660, endMinute: 750 } },
+        ],
+        _count: { assignments: 2, applications: 7 },
       },
       {
         id: 2,
@@ -55,7 +62,12 @@ describe('getCourses', () => {
         createdAt: new Date('2026-09-11T00:00:00.000Z'),
         acceptingApplications: false,
         user: { id: 11, firstName: 'Alice', lastName: 'Smith', email: 'alice@wits.ac.za' },
-        _count: { assignments: 0, slots: 2, applications: 1 },
+        // Two 45-minute slots — claim 2 rounded-up hours
+        slots: [
+          { timeSlot: { startMinute: 480, endMinute: 525 } },
+          { timeSlot: { startMinute: 540, endMinute: 585 } },
+        ],
+        _count: { assignments: 0, applications: 1 },
       },
     ]);
 
@@ -67,11 +79,12 @@ describe('getCourses', () => {
 
     expect(prisma.course.findMany).toHaveBeenCalledTimes(1);
 
-    // Newest courses first, with the lecturer and per-relation counts included
+    // Newest courses first, with the lecturer, tutoring slots and per-relation counts included
     const callArgs = prisma.course.findMany.mock.calls[0][0];
     expect(callArgs.orderBy).toEqual({ createdAt: 'desc' });
     expect(callArgs.include.user).toEqual({ select: { id: true, firstName: true, lastName: true, email: true } });
-    expect(callArgs.include._count).toEqual({ select: { assignments: true, slots: true, applications: true } });
+    expect(callArgs.include.slots).toEqual({ include: { timeSlot: true } });
+    expect(callArgs.include._count).toEqual({ select: { assignments: true, applications: true } });
 
     // The frontend (ViewAllCourses, Organiser board, global search) consumes a
     // plain array — not a { courses } wrapper.
@@ -87,6 +100,7 @@ describe('getCourses', () => {
         acceptingApplications: true,
         lecturer: { id: 10, firstName: 'Kgaogelo', lastName: 'Mabuza', email: 'kgaogelo@wits.ac.za' },
         slotsCount: 4,
+        claimableHours: 5,
         applicationsCount: 7,
         assignedTutors: 2,
         tutorsMissing: 3,
@@ -95,6 +109,8 @@ describe('getCourses', () => {
       expect.objectContaining({
         id: 2,
         courseCode: 'MATH202',
+        slotsCount: 2,
+        claimableHours: 2,
         assignedTutors: 0,
         tutorsMissing: 3,
         isAllocated: false,
@@ -115,7 +131,12 @@ describe('getCourses', () => {
         createdAt: new Date('2026-09-12T00:00:00.000Z'),
         acceptingApplications: false,
         user: null,
-        _count: { assignments: 3, slots: 2, applications: 4 },
+        // A 45-minute and a 60-minute slot both round up to one hour each
+        slots: [
+          { timeSlot: { startMinute: 480, endMinute: 525 } },
+          { timeSlot: { startMinute: 600, endMinute: 660 } },
+        ],
+        _count: { assignments: 3, applications: 4 },
       },
     ]);
 
@@ -129,6 +150,7 @@ describe('getCourses', () => {
     expect(body[0].assignedTutors).toBe(3);
     expect(body[0].tutorsMissing).toBe(0);
     expect(body[0].isAllocated).toBe(true);
+    expect(body[0].claimableHours).toBe(2);
     expect(next).not.toHaveBeenCalled();
   });
 

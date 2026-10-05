@@ -6,6 +6,7 @@ import api from '../../utils/axiosInstance';
 import useAsync from '../../hooks/useAsync';
 import useAuth from '../../hooks/useAuth';
 import ErrorMessage from '../../components/error-message/ErrorMessage';
+import TimetableUploadCard from '../../components/timetable-upload/TimetableUploadCard';
 import { formatSessionDate, formatSessionTimeRange } from '../../utils/formatSession';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -29,6 +30,7 @@ const EditTimetable = () => {
   const [sessions, setSessions] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [appliedInfo, setAppliedInfo] = useState('');
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -159,6 +161,25 @@ const EditTimetable = () => {
     goBack();
   };
 
+  // Adds the slots extracted from the uploaded timetable PDF to the grid.
+  // Locked slots keep their locked state and the change still goes through
+  // Save Changes, so nothing is written without an explicit review.
+  const handleApplyExtracted = (extractedSlots) => {
+    setSaveError('');
+    setAppliedInfo(
+      `Added ${extractedSlots.length} slot${extractedSlots.length === 1 ? '' : 's'} from your timetable PDF — review the grid and save.`,
+    );
+    setGrid((prev) => {
+      const next = JSON.parse(JSON.stringify(prev));
+      extractedSlots.forEach(({ dayOfWeek, timeSlotId }) => {
+        if (next[timeSlotId]?.[dayOfWeek] === 'empty') {
+          next[timeSlotId][dayOfWeek] = 'available';
+        }
+      });
+      return next;
+    });
+  };
+
   const renderSlotLabel = (status) => {
     if (status === 'available') {
       return (
@@ -266,6 +287,17 @@ const EditTimetable = () => {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* ── Uploaded timetable PDF (same reusable card as on the Profile page) ── */}
+        <div className="mt-gutter">
+          {appliedInfo && (
+            <p className="mb-stack-sm font-body-sm text-primary flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              {appliedInfo}
+            </p>
+          )}
+          <TimetableUploadCard onApply={handleApplyExtracted} />
         </div>
 
         {/* ── Upcoming sessions (tutors only) ── */}

@@ -120,7 +120,7 @@ const COURSES = [
     accepting: true, lecturer: 'sarahV', createdDaysAgo: 70,
     slots: [
       { day: 0, start: 480, venue: 'CHW 3', sessionType: 'Tutorial' }, // Mon 08:00
-      { day: 2, start: 600, venue: 'CB 24', sessionType: 'Lab' },      // Wed 10:00
+      { day: 2, start: 615, venue: 'CB 24', sessionType: 'Lab' },      // Wed 10:15
     ],
   },
   {
@@ -128,15 +128,15 @@ const COURSES = [
     accepting: true, lecturer: 'sarahV', createdDaysAgo: 40,
     slots: [
       { day: 1, start: 540, venue: 'CHW 3', sessionType: 'Tutorial' }, // Tue 09:00
-      { day: 3, start: 780, venue: 'FNB 110', sessionType: 'Lab' },    // Thu 13:00
+      { day: 3, start: 855, venue: 'FNB 110', sessionType: 'Lab' },    // Thu 14:15
     ],
   },
   {
     code: 'MATH2002', name: 'Discrete Mathematics', minimumMark: 60, tutorsRequired: 3,
     accepting: true, lecturer: 'james', createdDaysAgo: 60,
     slots: [
-      { day: 0, start: 660, venue: 'MEB 302', sessionType: 'Tutorial' }, // Mon 11:00
-      { day: 2, start: 840, venue: 'MEB 302', sessionType: 'Tutorial' }, // Wed 14:00
+      { day: 0, start: 675, venue: 'MEB 302', sessionType: 'Tutorial' }, // Mon 11:15
+      { day: 2, start: 915, venue: 'MEB 302', sessionType: 'Tutorial' }, // Wed 15:15
     ],
   },
   {
@@ -144,7 +144,7 @@ const COURSES = [
     accepting: false, lecturer: 'james', createdDaysAgo: 90, // fully staffed — process closed
     slots: [
       { day: 0, start: 540, venue: 'MEB 201', sessionType: 'Tutorial' }, // Mon 09:00
-      { day: 3, start: 900, venue: 'MEB 201', sessionType: 'Tutorial' }, // Thu 15:00
+      { day: 3, start: 975, venue: 'MEB 201', sessionType: 'Tutorial' }, // Thu 16:15
     ],
   },
   {
@@ -152,29 +152,40 @@ const COURSES = [
     accepting: true, lecturer: 'james', createdDaysAgo: 7, // freshly opened — 0 applicants, 0 tutors
     slots: [
       { day: 1, start: 480, venue: 'PHY LAB 1', sessionType: 'Lab' },  // Tue 08:00
-      { day: 4, start: 600, venue: 'PHY 100', sessionType: 'Tutorial' }, // Fri 10:00
+      { day: 4, start: 615, venue: 'PHY 100', sessionType: 'Tutorial' }, // Fri 10:15
     ],
   },
 ];
 
-// Hourly availability grid rows (minutes from midnight): 08:00 – 17:00
-const TIME_SLOTS = [480, 540, 600, 660, 720, 780, 840, 900, 960];
+// Teaching periods of the official Wits weekly timetable (minutes from
+// midnight) — the same rows the uploaded timetable PDF contains. The
+// BREAK/LUNCH rows between them are intentionally not selectable slots.
+const TIME_SLOTS = [
+  [480, 525],  // 08:00-08:45
+  [540, 585],  // 09:00-09:45
+  [615, 660],  // 10:15-11:00
+  [675, 720],  // 11:15-12:00
+  [750, 795],  // 12:30-13:15
+  [855, 900],  // 14:15-15:00
+  [915, 960],  // 15:15-16:00
+  [975, 1020], // 16:15-17:00
+];
 
 // Weekly availability ([dayOfWeek, slot start minute]) — every applicant's
 // availability covers all the tutoring slots of the courses they applied to,
 // exactly like the real apply flow enforces.
 const AVAILABILITY = {
-  alex: [[0, 480], [0, 540], [0, 600], [1, 480], [2, 600], [3, 900], [4, 480]],
-  marcus: [[0, 480], [0, 540], [1, 540], [2, 600], [2, 840], [3, 900]],
-  sarahJ: [[0, 660], [0, 720], [2, 840], [3, 480]],
-  david: [[0, 540], [0, 660], [1, 480], [2, 840], [3, 900], [4, 600]],
-  priya: [[0, 660], [1, 540], [2, 840], [3, 780], [4, 480]],
-  thabo: [[0, 480], [0, 660], [1, 480], [1, 540], [2, 600], [2, 840], [3, 780], [4, 600]],
-  lerato: [[0, 660], [1, 480], [1, 540], [2, 840], [3, 780], [4, 600]],
-  nomsa: [[1, 480], [1, 540], [3, 780], [4, 600]],
-  sipho: [[0, 480], [1, 480], [2, 600], [4, 600]],
-  refilwe: [[0, 480], [0, 660], [2, 600]], // just enough to apply as a tutor
-  sizwe: [[0, 660], [2, 840]],
+  alex: [[0, 480], [0, 540], [0, 615], [1, 480], [2, 615], [3, 975], [4, 480]],
+  marcus: [[0, 480], [0, 540], [1, 540], [2, 615], [2, 915], [3, 975]],
+  sarahJ: [[0, 675], [0, 750], [2, 915], [3, 480]],
+  david: [[0, 540], [0, 675], [1, 480], [2, 915], [3, 975], [4, 615]],
+  priya: [[0, 675], [1, 540], [2, 915], [3, 855], [4, 480]],
+  thabo: [[0, 480], [0, 675], [1, 480], [1, 540], [2, 615], [2, 915], [3, 855], [4, 615]],
+  lerato: [[0, 675], [1, 480], [1, 540], [2, 915], [3, 855], [4, 615]],
+  nomsa: [[1, 480], [1, 540], [3, 855], [4, 615]],
+  sipho: [[0, 480], [1, 480], [2, 615], [4, 615]],
+  refilwe: [[0, 480], [0, 675], [2, 615]], // just enough to apply as a tutor
+  sizwe: [[0, 675], [2, 915]],
   // kabelo and zanele have no availability — the onboarding hub then shows the
   // "configure your availability first" prerequisite state.
 };
@@ -539,13 +550,13 @@ async function main() {
   console.log('\n⏰  Creating time slots...\n');
 
   const timeSlots = {};
-  for (const start of TIME_SLOTS) {
+  for (const [start, end] of TIME_SLOTS) {
     const slot = await prisma.timeSlot.create({
-      data: { startMinute: start, endMinute: start + 60 },
+      data: { startMinute: start, endMinute: end },
     });
     timeSlots[start] = slot;
   }
-  console.log(`    ✓ ${TIME_SLOTS.length} hourly slots (08:00–17:00)`);
+  console.log(`    ✓ ${TIME_SLOTS.length} teaching periods (official Wits timetable grid)`);
 
   // ── 5. Courses + course slots ──
   console.log('\n📚  Creating courses...\n');

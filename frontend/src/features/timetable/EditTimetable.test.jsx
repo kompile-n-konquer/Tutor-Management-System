@@ -236,6 +236,54 @@ describe('EditTimetable — weekly availability editor', () => {
     expect(await screen.findByText('profile-page')).toBeInTheDocument();
   });
 
+  test('applies the slots extracted from the timetable PDF and saves them', async () => {
+    mockGet.mockImplementation((url) =>
+      url === '/availability'
+        ? Promise.resolve({ status: 200, data: LOAD_DATA })
+        : url === '/availability/timetable-pdf'
+        ? Promise.resolve({
+            status: 200,
+            data: {
+              timetablePdf: {
+                originalName: 'my-timetable.pdf',
+                sizeBytes: 204800,
+                uploadedAt: '2026-10-01T10:00:00.000Z',
+                extractedSlots: [{ dayOfWeek: 2, timeSlotId: 1 }],
+              },
+            },
+          })
+        : Promise.resolve({ status: 200, data: { sessions: [] } }),
+    );
+    mockPut.mockResolvedValue({ status: 200 });
+
+    renderEditTimetable();
+    await screen.findByText('08:00-08:45');
+
+    // The card shows the uploaded PDF and its apply action (the editor passes
+    // an onApply handler to the reusable card).
+    expect(await screen.findByText('my-timetable.pdf')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to My Timetable' }));
+
+    // Wednesday flips on and the info line asks for a review before saving.
+    expect(
+      await screen.findByText('Added 1 slot from your timetable PDF — review the grid and save.'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Available')).toHaveLength(3); // legend + Monday + Wednesday
+    expect(screen.getByRole('button', { name: 'Save Changes' })).not.toBeDisabled();
+
+    // Saving writes the pre-existing and the extracted availability together.
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() =>
+      expect(mockPut).toHaveBeenCalledWith('/availability', {
+        availability: [
+          { dayOfWeek: 0, timeSlotId: 1 },
+          { dayOfWeek: 2, timeSlotId: 1 },
+        ],
+      }),
+    );
+    expect(await screen.findByText('profile-page')).toBeInTheDocument();
+  });
+
   test('lists an upcoming session with its excuse note for tutors', async () => {
     mockGet.mockImplementation((url) =>
       url === '/availability'
@@ -310,6 +358,8 @@ describe('EditTimetable — weekly availability editor', () => {
     mockGet.mockImplementation((url) =>
       url === '/availability'
         ? Promise.resolve({ status: 200, data: LOAD_DATA })
+        : url === '/availability/timetable-pdf'
+        ? Promise.resolve({ status: 404, data: {} })
         : Promise.reject(new Error(`Unexpected GET ${url}`)),
     );
 

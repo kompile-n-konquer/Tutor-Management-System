@@ -33,6 +33,7 @@ model User {
   swapRequestsSent     SwapRequest[] @relation("SwapRequestsSent")
   swapRequestsReceived SwapRequest[] @relation("SwapRequestsReceived")
   volunteerRequests SessionVolunteer[]
+  timetablePdf      TimetablePdf?
 }
 
 // Join table between User (role TUTOR) and Course — one row records that a user
@@ -93,6 +94,23 @@ model TimeSlot {
   courseSlots  CourseSlot[]
 
   @@unique([startMinute, endMinute])
+}
+
+// A user's uploaded PDF timetable (e.g. their class timetable). The file lives
+// on disk in backend/uploads/ like the claim-form template; this row keeps the
+// metadata and the availability extracted from the PDF so the upload persists
+// across devices. One row per user — a new upload replaces the old file.
+model TimetablePdf {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  filename       String
+  originalName   String
+  sizeBytes      Int
+  extractedSlots String   @default("[]") @db.NVarChar(Max) // JSON [{ dayOfWeek, timeSlotId }] — SQL Server has no Prisma Json type
+  cellContents   String?  @db.NVarChar(Max) // JSON of the raw per-cell text, kept so extraction can be re-calibrated without re-uploading
+  uploadedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id])
 }
 
 model Availability {

@@ -30,10 +30,10 @@ const TIME_SLOTS = [
 
 const USER_PROFILE = { firstName: 'Alex', lastName: 'Mercer', email: 'alex.mercer@wits.ac.za' };
 
-// Profile loads three endpoints: /availability (the grid), the role's
-// sessions feed (/sessions/mine or /sessions/volunteered) and /users/:uid
-// (personal info). Route the axios mock per URL so each test controls every
-// response independently.
+// Profile loads three endpoints: /availability (the grid), /users/:uid
+// (personal info) and /availability/timetable-pdf (the upload card's
+// metadata, where 404 means nothing has been uploaded yet). Route the axios
+// mock per URL so each test controls every response independently.
 const mockApi = ({
   slots = TIME_SLOTS,
   availability = [],
@@ -41,10 +41,7 @@ const mockApi = ({
   includeLockedSlots = true,
   availabilityStatus = 200,
   profile = USER_PROFILE,
-  mineStatus = 200,
-  mineSessions = [],
-  volunteeredStatus = 200,
-  volunteeredData = { sessions: [] },
+  timetablePdf = null,
 } = {}) =>
   mockGet.mockImplementation((url) => {
     if (url === '/availability') {
@@ -61,14 +58,13 @@ const mockApi = ({
           : { status: availabilityStatus, data: {} },
       );
     }
-    if (url === '/sessions/mine') {
-      return Promise.resolve({ status: mineStatus, data: { sessions: mineSessions } });
-    }
-    if (url === '/sessions/volunteered') {
-      return Promise.resolve({ status: volunteeredStatus, data: volunteeredData });
-    }
     if (url === `/users/${authState.currentUser?.uid}`) {
       return Promise.resolve(profile ? { status: 200, data: profile } : { status: 404, data: {} });
+    }
+    if (url === '/availability/timetable-pdf') {
+      return Promise.resolve(
+        timetablePdf ? { status: 200, data: { timetablePdf } } : { status: 404, data: {} },
+      );
     }
     return Promise.reject(new Error(`Unexpected GET ${url}`));
   });
@@ -219,157 +215,39 @@ describe('Profile — tutor profile with the availability grid', () => {
     expect(screen.queryByText('Locked')).not.toBeInTheDocument();
   });
 
-  describe('sessions section', () => {
-    test('shows the generic User badge and no sessions section when the role is unknown', async () => {
-      roleState.value = null;
-      mockApi();
-
-      renderProfile();
-
-      expect(await screen.findByText('User')).toBeInTheDocument();
-      expect(screen.queryByText('Scheduled Sessions')).not.toBeInTheDocument();
-      expect(screen.queryByText('Volunteer Work')).not.toBeInTheDocument();
-      // Roles without a sessions feed never touch either endpoint.
-      expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
-      expect(mockGet).not.toHaveBeenCalledWith('/sessions/volunteered');
-    });
-
-    test('lists upcoming tutor sessions with one status chip per session', async () => {
-      mockApi({
-        mineSessions: [
-          {
-            id: 'e1-2026-09-15',
-            status: 'UNASSIGNED',
-            date: '2026-09-15',
-            course: { courseCode: 'COMS3005', courseName: 'Software Design' },
-            courseSlot: { venue: 'Room 204', timeSlot: { startMinute: 480, endMinute: 570 } },
-          },
-          {
-            id: 'e1-2026-09-16',
-            status: 'PENDING',
-            date: '2026-09-16',
-            course: { courseCode: 'COMS3007', courseName: 'Machine Learning' },
-            courseSlot: { timeSlot: { startMinute: 600, endMinute: 660 } },
-          },
-          {
-            id: 'e1-2026-09-17',
-            status: 'SCHEDULED',
-            date: '2026-09-17',
-            course: { courseName: 'Operating Systems' },
-          },
+  test('shows the uploaded timetable PDF with its detected free slots', async () => {
+    mockApi({
+      timetablePdf: {
+        originalName: 'my-timetable.pdf',
+        sizeBytes: 204800,
+        uploadedAt: '2026-10-01T10:00:00.000Z',
+        extractedSlots: [
+          { dayOfWeek: 0, timeSlotId: 3 },
+          { dayOfWeek: 1, timeSlotId: 3 },
         ],
-      });
-
-      renderProfile();
-
-      expect(await screen.findByText('Scheduled Sessions')).toBeInTheDocument();
-      expect(screen.getByText('Your upcoming tutoring sessions.')).toBeInTheDocument();
-      expect(screen.getByText('3 sessions')).toBeInTheDocument();
-      // Excused (awaiting a volunteer), volunteer pending, and leading.
-      expect(screen.getByText('Excused')).toBeInTheDocument();
-      expect(screen.getByText('Volunteer pending')).toBeInTheDocument();
-      expect(screen.getByText('You lead')).toBeInTheDocument();
-      expect(screen.getByText('COMS3005')).toBeInTheDocument();
-      expect(screen.getByText('Room 204')).toBeInTheDocument();
-      // Em dashes: the phone and year-of-study placeholders plus the missing
-      // course code.
-      expect(screen.getAllByText('—')).toHaveLength(3);
+      },
     });
 
-    test('hides the section when every session is in the past', async () => {
-      mockApi({
-        mineSessions: [
-          {
-            id: 'e1-2026-09-01',
-            status: 'SCHEDULED',
-            date: '2026-09-01',
-            course: { courseCode: 'COMS3005', courseName: 'Software Design' },
-          },
-        ],
-      });
+    renderProfile();
 
-      renderProfile();
+    expect(await screen.findByText('Timetable PDF')).toBeInTheDocument();
+    expect(screen.getByText('my-timetable.pdf')).toBeInTheDocument();
+    expect(screen.getByText(/200 KB/)).toBeInTheDocument();
+    expect(screen.getByText('Detected 2 free slots in this PDF.')).toBeInTheDocument();
+    // With a PDF on file the upload label becomes a replace action.
+    expect(screen.getByText('Replace Timetable')).toBeInTheDocument();
+    // The profile has no grid to apply to — the card links to the editor
+    // next to the availability header button.
+    expect(screen.getAllByText('Edit Timetable')).toHaveLength(2);
+  });
 
-      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
-      expect(screen.queryByText('Scheduled Sessions')).not.toBeInTheDocument();
-    });
+  test('falls back to a generic User badge when the role is unknown', async () => {
+    roleState.value = null;
+    mockApi();
 
-    test('ignores a non-200 tutor sessions feed', async () => {
-      mockApi({ mineStatus: 500 });
+    renderProfile();
 
-      renderProfile();
-
-      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
-      expect(screen.queryByText('Scheduled Sessions')).not.toBeInTheDocument();
-    });
-
-    test("lists a student's approved volunteered session", async () => {
-      roleState.value = 'student';
-      mockApi({
-        volunteeredData: {
-          sessions: [
-            {
-              id: 1,
-              volunteerStatus: 'APPROVED',
-              date: '2026-09-15',
-              course: { courseCode: 'COMS3005', courseName: 'Software Design' },
-              courseSlot: { venue: 'Room 204', timeSlot: { startMinute: 480, endMinute: 570 } },
-            },
-          ],
-        },
-      });
-
-      renderProfile();
-
-      expect(await screen.findByText('Volunteer Work')).toBeInTheDocument();
-      expect(screen.getByText('Sessions you have volunteered for.')).toBeInTheDocument();
-      expect(screen.getByText('1 session')).toBeInTheDocument();
-      expect(screen.getByText('Approved')).toBeInTheDocument();
-      expect(mockGet).toHaveBeenCalledWith('/sessions/volunteered');
-      expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
-    });
-
-    test('marks volunteered sessions that are not approved yet as pending', async () => {
-      roleState.value = 'student';
-      mockApi({
-        volunteeredData: {
-          sessions: [
-            {
-              id: 2,
-              volunteerStatus: 'PENDING',
-              date: '2026-09-16',
-              course: { courseCode: 'COMS3007', courseName: 'Machine Learning' },
-            },
-          ],
-        },
-      });
-
-      renderProfile();
-
-      expect(await screen.findByText('Volunteer Work')).toBeInTheDocument();
-      // The chip is a span — the academic history card also says "Pending".
-      expect(screen.getByText('Pending', { selector: 'span' })).toBeInTheDocument();
-    });
-
-    test('tolerates a volunteered feed without a sessions key', async () => {
-      roleState.value = 'student';
-      mockApi({ volunteeredData: {} });
-
-      renderProfile();
-
-      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
-      expect(screen.queryByText('Volunteer Work')).not.toBeInTheDocument();
-    });
-
-    test('ignores a non-200 volunteered feed', async () => {
-      roleState.value = 'student';
-      mockApi({ volunteeredStatus: 500, volunteeredData: {} });
-
-      renderProfile();
-
-      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
-      expect(screen.queryByText('Volunteer Work')).not.toBeInTheDocument();
-    });
+    expect(await screen.findByText('User')).toBeInTheDocument();
   });
 
   describe('delete account', () => {

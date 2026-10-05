@@ -47,6 +47,10 @@ describe('routes wiring', () => {
     expect(routeTable(availabilityRouter)).toEqual([
       { path: '/', methods: ['get'], handlers: 2 },
       { path: '/', methods: ['put'], handlers: 2 },
+      { path: '/timetable-pdf', methods: ['get'], handlers: 2 },
+      { path: '/timetable-pdf', methods: ['put'], handlers: 4 }, // auth + multer + upload-error conversion + controller
+      { path: '/timetable-pdf/download', methods: ['get'], handlers: 2 },
+      { path: '/timetable-pdf', methods: ['delete'], handlers: 2 },
     ]);
   });
 

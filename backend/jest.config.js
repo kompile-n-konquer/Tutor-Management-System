@@ -11,6 +11,9 @@ module.exports = {
     'routes/**/*.js',
     'utils/**/*.js',
     '!**/__tests__/**',
+    // Thin pdfjs I/O adapter — verified against a real PDF by the fixture script,
+    // its output shape is unit-tested through the timetablePdf util
+    '!utils/pdfTextReader.js',
   ],
   coverageDirectory: 'coverage',
   // Coverage gates run in CI via `npm run test:coverage`.
@@ -40,6 +43,8 @@ module.exports = {
     './routes/sessions.js': { statements: 90, branches: 90, functions: 90, lines: 90 },
     './utils/catchAsync.js': { statements: 90, branches: 90, functions: 90, lines: 90 },
     './utils/claimRules.js': { statements: 90, branches: 85, functions: 90, lines: 90 },
+    './controllers/timetablePdf.js': { statements: 90, branches: 90, functions: 90, lines: 90 },
+    './utils/timetablePdf.js': { statements: 90, branches: 90, functions: 90, lines: 90 },
   },
   verbose: true,
 };

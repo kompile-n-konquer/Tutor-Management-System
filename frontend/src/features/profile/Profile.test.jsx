@@ -230,8 +230,11 @@ describe('Profile — tutor profile with the availability grid', () => {
 
     renderProfile();
 
-    expect(await screen.findByText('Timetable PDF')).toBeInTheDocument();
-    expect(screen.getByText('my-timetable.pdf')).toBeInTheDocument();
+    // The 'Timetable PDF' header renders synchronously on mount, so waiting on
+    // it says nothing about the metadata fetch — anchor on the filename, which
+    // only appears once GET /availability/timetable-pdf has resolved.
+    expect(await screen.findByText('my-timetable.pdf')).toBeInTheDocument();
+    expect(screen.getByText('Timetable PDF')).toBeInTheDocument();
     expect(screen.getByText(/200 KB/)).toBeInTheDocument();
     expect(screen.getByText('Detected 2 free slots in this PDF.')).toBeInTheDocument();
     // With a PDF on file the upload label becomes a replace action.

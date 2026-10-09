@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 // Shared mutable auth state so each test can pick the signed-in role.
@@ -23,16 +23,25 @@ import { NAV_LINKS, FOOTER_LINKS } from "../../config/navConfig";
 // overlay drawer; the prefers-color-scheme probe from ThemeProvider stays
 // false either way.
 function setViewport({ desktop }) {
-  window.matchMedia = vi.fn((query) => ({
-    matches: desktop && query.includes("min-width"),
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
+  // One MediaQueryList per query, like a real browser — the layout subscribes
+  // to its query once and reacts to later "change" events.
+  const queries = {};
+  window.matchMedia = vi.fn((query) => {
+    if (!queries[query]) {
+      queries[query] = {
+        matches: desktop && query.includes("min-width"),
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      };
+    }
+    return queries[query];
+  });
+  return queries;
 }
 
 // Renders the current route so tests can prove a sidebar link both navigates
@@ -71,6 +80,29 @@ describe("AppLayout docked sidebar (md+)", () => {
   afterEach(() => {
     delete window.matchMedia;
     document.documentElement.className = "";
+  });
+
+  test("responds to the viewport shrinking below md without a remount", () => {
+    const queries = setViewport({ desktop: true });
+    renderLayout();
+
+    const sidebar = sidebarElement();
+    expect(sidebar).toHaveClass("translate-x-0");
+
+    // The layout listens for live media-query changes: resizing below the md
+    // breakpoint swaps the docked panel for the hidden overlay drawer.
+    const mql = queries["(min-width: 768px)"];
+    const changeListener = mql.addEventListener.mock.calls
+      .filter(([event]) => event === "change")
+      .map(([, handler]) => handler)[0];
+    expect(changeListener).toBeTypeOf("function");
+
+    act(() => changeListener({ matches: false }));
+
+    expect(sidebarElement()).toHaveClass("-translate-x-full");
+    expect(sidebarElement()).toHaveAttribute("inert");
+    expect(contentColumn()).toHaveClass("ml-0");
+    expect(menuButton()).toHaveAttribute("aria-expanded", "false");
   });
 
   test("renders the docked sidebar expanded and grouped into sections", () => {

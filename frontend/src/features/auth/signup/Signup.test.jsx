@@ -41,6 +41,7 @@ const renderSignup = () =>
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/tutor-dashboard" element={<div>tutor-dashboard-page</div>} />
+        <Route path="/volunteer" element={<div>volunteer-page</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -122,5 +123,43 @@ describe('Signup — Firebase account + backend profile creation', () => {
     expect(await screen.findByText('An account with this email already exists.')).toBeInTheDocument();
     expect(mockPost).not.toHaveBeenCalled();
     expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+  });
+
+  test('keeps the user on the form when the backend profile creation fails', async () => {
+    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-7' } });
+    mockPost.mockResolvedValue({ status: 400 });
+    renderSignup();
+
+    fillSignupForm();
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/users', expect.anything()));
+    expect(mockRefreshRole).not.toHaveBeenCalled();
+    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
+  });
+
+  test('sends a profile without a role to the student home', async () => {
+    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-8' } });
+    mockPost.mockResolvedValue({ status: 201 });
+    mockRefreshRole.mockResolvedValue(null);
+    renderSignup();
+
+    fillSignupForm();
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    expect(await screen.findByText('volunteer-page')).toBeInTheDocument();
+  });
+
+  test('maps an unknown role to the volunteer fallback route', async () => {
+    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-9' } });
+    mockPost.mockResolvedValue({ status: 201 });
+    mockRefreshRole.mockResolvedValue({ role: 'MYSTERY' });
+    renderSignup();
+
+    fillSignupForm();
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    expect(await screen.findByText('volunteer-page')).toBeInTheDocument();
   });
 });

@@ -162,4 +162,39 @@ describe('VolunteerView — tutor view of unassigned sessions (#37)', () => {
       await screen.findByText('Could not submit your volunteer request. Please try again later.'),
     ).toBeInTheDocument();
   });
+
+  test('falls back to a generic error when the load fails without a message', async () => {
+    mockGet.mockResolvedValue({ status: 500, data: {} });
+
+    renderVolunteerView();
+
+    expect(
+      await screen.findByText('Could not load volunteer opportunities. Please try again later.'),
+    ).toBeInTheDocument();
+  });
+
+  test('falls back to a generic error when volunteering fails without a message', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: [makeSession()] });
+    mockPost.mockResolvedValue({ status: 400, data: {} });
+
+    renderVolunteerView();
+    fireEvent.click(await screen.findByRole('button', { name: /apply to volunteer/i }));
+
+    expect(
+      await screen.findByText('Could not submit your volunteer request. Please try again later.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('CS101 — Intro to Programming')).toBeInTheDocument();
+  });
+
+  test('labels a one-hour session in the singular', async () => {
+    mockGet.mockResolvedValue({
+      status: 200,
+      data: [makeSession({ courseSlot: { timeSlot: { startMinute: 600, endMinute: 660 } } })],
+    });
+
+    renderVolunteerView();
+
+    expect(await screen.findByText('CS101 — Intro to Programming')).toBeInTheDocument();
+    expect(screen.getByText('1 Hour')).toBeInTheDocument();
+  });
 });

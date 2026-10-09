@@ -58,6 +58,7 @@ const primeGet = () => {
 describe('Configurations — organiser-only system settings page', () => {
   beforeEach(() => {
     authState.currentUser = { role: 'organiser' };
+    authState.loading = false;
     navigateMock.mockClear();
     apiMock.get.mockReset();
     apiMock.put.mockReset();
@@ -175,5 +176,239 @@ describe('Configurations — organiser-only system settings page', () => {
     expect(body).toBeInstanceOf(FormData);
     expect(config.headers['Content-Type']).toBe('multipart/form-data');
     expect(await screen.findByText('new-template.pdf')).toBeInTheDocument();
+  });
+
+  test('admins can open the page like organisers', async () => {
+    authState.currentUser = { role: 'admin' };
+    renderConfigurations();
+    await act(async () => {});
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: /max claimable hours/i })).toBeInTheDocument();
+  });
+
+  test('signed-out visitors are redirected to the login page', async () => {
+    authState.currentUser = null;
+    renderConfigurations();
+    await act(async () => {});
+
+    expect(navigateMock).toHaveBeenCalledWith('/login');
+    expect(
+      screen.queryByRole('heading', { name: /max claimable hours/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('saving the event claim window PUTs the new month count', async () => {
+    apiMock.put.mockResolvedValueOnce({
+      status: 200,
+      data: { tutorEventClaimMonths: 6 },
+    });
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.change(screen.getByDisplayValue('3'), { target: { value: '6' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Changes' })[1]);
+    await act(async () => {});
+
+    expect(apiMock.put).toHaveBeenCalledWith('/settings/tutor-event-claim-months', {
+      tutorEventClaimMonths: 6,
+    });
+    const notes = await screen.findAllByText(/setting saved successfully/i);
+    expect(notes.length).toBeGreaterThan(0);
+  });
+
+  test('surfaces the server message when saving the claim window fails', async () => {
+    apiMock.put.mockImplementation((url) =>
+      url === '/settings/tutor-event-claim-months'
+        ? Promise.resolve({ status: 400, data: { message: 'Window too wide.' } })
+        : Promise.resolve({ status: 200, data: {} }),
+    );
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.change(screen.getByDisplayValue('3'), { target: { value: '6' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Changes' })[1]);
+    await act(async () => {});
+
+    expect(await screen.findByText('Window too wide.')).toBeInTheDocument();
+  });
+
+  test('shows the fallback error when saving the monthly hours is rejected', async () => {
+    apiMock.put.mockResolvedValue({ status: 400, data: {} });
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.change(screen.getByDisplayValue('40'), { target: { value: '50' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Changes' })[0]);
+    await act(async () => {});
+
+    expect(
+      await screen.findByText('Could not save the setting. Please try again.'),
+    ).toBeInTheDocument();
+  });
+
+  test('surfaces the fallback error when saving the rates fails', async () => {
+    settingsData.hourlyRates = { '3rd year': 120 };
+    apiMock.put.mockResolvedValue({ status: 500, data: {} });
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.change(screen.getByDisplayValue('120'), { target: { value: '130' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Rates' }));
+    await act(async () => {});
+
+    expect(
+      await screen.findByText('Could not save hourly rates. Please try again.'),
+    ).toBeInTheDocument();
+  });
+
+  test('shows an error when the settings fail to load', async () => {
+    apiMock.get.mockResolvedValue({ status: 500, data: {} });
+    renderConfigurations();
+    await act(async () => {});
+
+    expect(
+      await screen.findByText('Could not load the settings. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
+
+  test('downloads the template through the authenticated client', async () => {
+    settingsData.pdfTemplateFilename = 'claim-form.pdf';
+    URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    await act(async () => {});
+
+    expect(apiMock.get).toHaveBeenCalledWith('/settings/pdf-template', { responseType: 'blob' });
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    clickSpy.mockRestore();
+  });
+
+  test('shows an error when the template download fails', async () => {
+    settingsData.pdfTemplateFilename = 'claim-form.pdf';
+    apiMock.get.mockImplementation((url) =>
+      url === '/settings'
+        ? Promise.resolve({
+            status: 200,
+            data: { ...settingsData, hourlyRates: { ...settingsData.hourlyRates } },
+          })
+        : Promise.resolve({ status: 500, data: {} }),
+    );
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    await act(async () => {});
+
+    expect(
+      await screen.findByText('Could not download the template. Please try again.'),
+    ).toBeInTheDocument();
+  });
+
+  test('ignores a file input change without a file and surfaces upload failures', async () => {
+    settingsData.pdfTemplateFilename = 'claim-form.pdf';
+    apiMock.put.mockResolvedValue({ status: 500, data: {} });
+    apiMock.delete.mockResolvedValue({ status: 500, data: {} });
+    const { container } = renderConfigurations();
+    await act(async () => {});
+
+    // No file selected — nothing is sent.
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [] } });
+    expect(apiMock.put).not.toHaveBeenCalled();
+
+    // A failed upload keeps the old template and shows the fallback error.
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+      target: { files: [new File(['template'], 't.pdf', { type: 'application/pdf' })] },
+    });
+    await act(async () => {});
+    expect(
+      await screen.findByText('Could not upload the PDF template. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('claim-form.pdf')).toBeInTheDocument();
+
+    // A failed removal keeps the template too.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await act(async () => {});
+    expect(
+      await screen.findByText('Could not remove the PDF template.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('claim-form.pdf')).toBeInTheDocument();
+  });
+
+  test('out-of-range values keep the save buttons disabled', async () => {
+    renderConfigurations();
+    await act(async () => {});
+
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Changes' });
+    expect(saveButtons[0]).toBeDisabled(); // unchanged value
+    const hoursInput = screen.getByPlaceholderText('e.g. 60');
+    fireEvent.change(hoursInput, { target: { value: '800' } }); // above 744
+    expect(saveButtons[0]).toBeDisabled();
+    fireEvent.change(hoursInput, { target: { value: '12.5' } }); // not whole
+    expect(saveButtons[0]).toBeDisabled();
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. 3'), { target: { value: '25' } }); // above 24
+    expect(saveButtons[1]).toBeDisabled();
+  });
+
+  test('rate fields start clean with server nulls and reject invalid amounts', async () => {
+    settingsData.hourlyRates = { '3rd year': null, honours: null, masters: null, phd: null };
+    renderConfigurations();
+    await act(async () => {});
+
+    const saveRates = screen.getByRole('button', { name: 'Save Rates' });
+    expect(saveRates).toBeDisabled(); // nothing changed yet
+
+    const firstRate = screen.getAllByPlaceholderText('e.g. 150')[0];
+    fireEvent.change(firstRate, { target: { value: '-5' } });
+    expect(saveRates).toBeDisabled(); // negative rates are invalid
+
+    fireEvent.change(firstRate, { target: { value: '150' } });
+    expect(saveRates).not.toBeDisabled();
+  });
+
+  test('renders nothing while the auth state is still loading', () => {
+    authState.loading = true;
+    const { container } = renderConfigurations();
+
+    expect(container).toBeEmptyDOMElement();
+    expect(apiMock.get).not.toHaveBeenCalled();
+  });
+
+  test('leaves the fields blank when the server returns null settings', async () => {
+    settingsData.tutorMonthlyClaimableHours = null;
+    settingsData.tutorEventClaimMonths = null;
+    settingsData.hourlyRates = null;
+    renderConfigurations();
+    await act(async () => {});
+
+    expect(screen.queryByDisplayValue(/./)).not.toBeInTheDocument();
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Changes' });
+    expect(saveButtons[0]).toBeDisabled();
+    expect(saveButtons[1]).toBeDisabled();
+  });
+
+  test('shows the fallback error when the claim window save fails without a message', async () => {
+    apiMock.put.mockImplementation((url) =>
+      url === '/settings/tutor-event-claim-months'
+        ? Promise.resolve({ status: 400, data: {} })
+        : Promise.resolve({ status: 200, data: {} }),
+    );
+    renderConfigurations();
+    await act(async () => {});
+
+    fireEvent.change(screen.getByDisplayValue('3'), { target: { value: '6' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Changes' })[1]);
+    await act(async () => {});
+
+    expect(
+      await screen.findByText('Could not save the setting. Please try again.'),
+    ).toBeInTheDocument();
   });
 });

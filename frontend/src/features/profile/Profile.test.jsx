@@ -80,6 +80,8 @@ const renderProfile = () =>
       <MemoryRouter initialEntries={['/profile']}>
         <Routes>
           <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/edit" element={<div>profile-edit-page</div>} />
+          <Route path="/timetable/edit" element={<div>timetable-edit-page</div>} />
           <Route path="/login" element={<div>login-page</div>} />
           <Route path="/" element={<div>home-page</div>} />
         </Routes>
@@ -112,6 +114,26 @@ describe('Profile — tutor profile with the availability grid', () => {
 
     expect(container).toBeEmptyDOMElement();
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('the pencil opens the profile editor', async () => {
+    mockApi();
+
+    renderProfile();
+
+    expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Edit personal info'));
+    expect(screen.getByText('profile-edit-page')).toBeInTheDocument();
+  });
+
+  test('the availability header opens the timetable editor', async () => {
+    mockApi();
+
+    renderProfile();
+
+    expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Timetable' }));
+    expect(screen.getByText('timetable-edit-page')).toBeInTheDocument();
   });
 
   test('redirects to the login page when nobody is signed in', async () => {

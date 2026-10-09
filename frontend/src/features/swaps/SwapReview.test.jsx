@@ -260,4 +260,56 @@ describe('SwapReview — organiser approval of session swaps', () => {
 
     expect(await screen.findByText('That action failed. Please try again.')).toBeInTheDocument();
   });
+
+  test('renders nothing while the auth state is still loading', () => {
+    authState.loading = true;
+
+    const { container } = renderSwapReview();
+
+    expect(container).toBeEmptyDOMElement();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('stays in the loading state when the swaps request throws', async () => {
+    mockGet.mockRejectedValue(new Error('network down'));
+
+    renderSwapReview();
+
+    // The hook swallows the throw and the loaded flag stays unset, so every
+    // table keeps its loading placeholder and no error banner appears.
+    expect(await screen.findAllByText('Loading...')).toHaveLength(3);
+    expect(
+      screen.queryByText('Something went wrong! Please try again later.'),
+    ).not.toBeInTheDocument();
+  });
+
+  test('shows a generic message when a failed swap load carries none', async () => {
+    mockGet.mockResolvedValue({ status: 500, data: {} });
+
+    renderSwapReview();
+
+    expect(
+      await screen.findByText('Could not load swap requests. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
+
+  test('surfaces the failure of a rejection, with message and fallback', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: [makeSwap()] });
+    vi.spyOn(window, 'prompt').mockReturnValue('Not needed any more');
+
+    renderSwapReview();
+
+    mockPost.mockResolvedValue({
+      status: 409,
+      data: { message: 'The swap breaks the allocation constraints' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+    expect(
+      await screen.findByText('The swap breaks the allocation constraints'),
+    ).toBeInTheDocument();
+
+    mockPost.mockResolvedValue({ status: 500, data: {} });
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect(await screen.findByText('That action failed. Please try again.')).toBeInTheDocument();
+  });
 });

@@ -22,7 +22,7 @@ export default function Hero() {
           {/* Headline */}
           <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-extrabold text-on-surface tracking-tight leading-[1.12]">
             Tutoring made{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-900 via-brand-500 to-secondary-container">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-brand-500 to-secondary">
               easier.
             </span>
           </h1>

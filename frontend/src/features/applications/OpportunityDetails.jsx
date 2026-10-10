@@ -40,6 +40,7 @@ const OpportunityDetails = () => {
   const [grid, setGrid] = useState({});
   const [mark, setMark] = useState('');
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
   const canApply = role === 'student' || role === 'tutor';
@@ -80,10 +81,11 @@ const OpportunityDetails = () => {
       setGrid(
         buildGrid(slotsResponse.data, opportunityResponse.data.slots, opportunityResponse.data.lockedSlots)
       );
+      setError('');
     };
 
     loadOpportunity();
-  }, [currentUser, loading, canApply, courseId, execute]);
+  }, [currentUser, loading, canApply, courseId, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !canApply) return null;
@@ -145,7 +147,22 @@ const OpportunityDetails = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            {!opportunity && (
+              <Button
+                className="min-w-32"
+                onClick={() => {
+                  setError('');
+                  setReloadKey((key) => key + 1);
+                }}
+              >
+                Try again
+              </Button>
+            )}
+          </div>
+        )}
 
         {isLoading && !opportunity && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter" aria-hidden="true">

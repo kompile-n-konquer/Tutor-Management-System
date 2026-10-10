@@ -2,12 +2,15 @@ import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Home from './Home.jsx';
+import AuthOverlayProvider from '../auth/overlay/AuthOverlayProvider.jsx';
 
 const renderHome = () =>
   render(
-    <MemoryRouter>
-      <Home />
-    </MemoryRouter>,
+    <AuthOverlayProvider>
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>
+    </AuthOverlayProvider>,
   );
 
 describe('Home — public landing page', () => {

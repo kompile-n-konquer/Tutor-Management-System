@@ -31,7 +31,10 @@ describe('DashboardPreview', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Organiser' }));
     expect(screen.getByRole('tab', { name: 'Organiser' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
+    // The dead Resolve Conflicts button was removed from the real sidebar and
+    // from this replica of it.
+    expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
+    expect(screen.getByText('Organiser Board')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Lecturer' }));
     expect(screen.getByRole('tab', { name: 'Lecturer' })).toHaveAttribute('aria-selected', 'true');

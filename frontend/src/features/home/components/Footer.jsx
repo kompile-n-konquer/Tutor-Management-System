@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { useAuthOverlay } from "../../auth/overlay/AuthOverlayContext.js";
 
 const SECTION_LINKS = [
   { href: "#benefits", label: "Benefits" },
@@ -9,15 +9,18 @@ const SECTION_LINKS = [
 
 /**
  * Footer — dark OLED footer that keeps the original project credits
- * (COMS3011A — Software Design Project, Kompile and Konquer).
+ * (COMS3011A — Software Design Project, Kompile and Konquer). Portal Login
+ * opens the auth overlay instead of navigating away.
  */
 export default function Footer() {
+  const { openAuthOverlay } = useAuthOverlay();
+
   return (
     <footer className="bg-ink-950 text-white/50 text-xs py-12 border-t border-ink-700 mt-auto">
       <div className="max-w-container-max mx-auto px-margin-page space-y-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-brand-900 text-secondary-container flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-brand-900 text-amber-400 flex items-center justify-center">
               <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                 school
               </span>
@@ -31,9 +34,13 @@ export default function Footer() {
                 {link.label}
               </a>
             ))}
-            <Link to="/login" className="hover:text-white transition-colors">
+            <button
+              type="button"
+              onClick={() => openAuthOverlay("login")}
+              className="hover:text-white transition-colors"
+            >
               Portal Login
-            </Link>
+            </button>
           </div>
         </div>
 

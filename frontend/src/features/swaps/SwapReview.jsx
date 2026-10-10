@@ -32,11 +32,16 @@ const SwapReview = () => {
 
   const load = useCallback(async () => {
     const response = await execute(() => api.get('/swaps'));
-    if (!response) return;
+    if (!response) {
+      setError('Could not load swap requests. Please try again.');
+      setLoaded(true);
+      return;
+    }
     if (response.status !== 200) {
       setError(response?.data?.message || 'Could not load swap requests. Please refresh the page.');
     } else {
       setSwaps(response.data);
+      setError('');
     }
     setLoaded(true);
   }, [execute]);
@@ -172,7 +177,22 @@ const SwapReview = () => {
           </p>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                setLoaded(false);
+                load();
+              }}
+              className="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+            >
+              Try again
+            </button>
+          </div>
+        )}
         {actionError && <ErrorMessage>{actionError}</ErrorMessage>}
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md mb-gutter">
@@ -181,7 +201,7 @@ const SwapReview = () => {
           </h3>
           {!loaded ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading...</p>
-          ) : awaitingReview.length === 0 ? (
+          ) : !error && awaitingReview.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No agreed swaps are waiting for organiser approval.
             </p>
@@ -196,7 +216,7 @@ const SwapReview = () => {
           </h3>
           {!loaded ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading...</p>
-          ) : inProgress.length === 0 ? (
+          ) : !error && inProgress.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No swap requests are waiting for a tutor's response.
             </p>
@@ -209,7 +229,7 @@ const SwapReview = () => {
           <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-sm">History</h3>
           {!loaded ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">Loading...</p>
-          ) : decided.length === 0 ? (
+          ) : !error && decided.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No swap requests have been decided yet.
             </p>

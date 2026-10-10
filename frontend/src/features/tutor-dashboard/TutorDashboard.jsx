@@ -161,7 +161,7 @@ function SessionRow({ session, isExcusing, onExcuse, onCancel, onSubmit, isSubmi
 }
 
 export default function TutorDashboard() {
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser, loading: authLoading } = useAuth();
   const { isFirstVisit, markSeen } = useFirstVisit("tutor-dashboard");
 
   const [courses, setCourses] = useState([]);
@@ -170,6 +170,7 @@ export default function TutorDashboard() {
   const [weekScheduledHours, setWeekScheduledHours] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [excusingSessionId, setExcusingSessionId] = useState(null);
   const [excuseReason, setExcuseReason] = useState("");
   const [isExcusing, setIsExcusing] = useState(false);
@@ -178,7 +179,7 @@ export default function TutorDashboard() {
     try {
       const response = await api.get("/sessions/mine");
       if (response.status !== 200) {
-        setError(response.data?.message || "Could not load your sessions. Please try again later.");
+        setLoadError(response.data?.message || "Could not load your sessions. Please try again later.");
         return;
       }
       setCourses(response.data?.courses ?? []);
@@ -188,19 +189,25 @@ export default function TutorDashboard() {
       setMaxHoursPerWeek(response.data?.maxHoursPerWeek ?? null);
       setWeekScheduledHours(response.data?.weekScheduledHours ?? 0);
       setError("");
+      setLoadError("");
     } catch {
-      setError("Could not load your sessions. Please try again later.");
+      setLoadError("Could not load your sessions. Please try again later.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Wait for Firebase to restore the session before the first fetch — the
+    // axios interceptor reads auth.currentUser at request time and would
+    // otherwise send the request without a token (401 on hard refresh).
+    // (uid, not the user object — enrichment rebuilds the object identity).
+    if (authLoading || !currentUser?.uid) return;
     // Wrapped so no state updates run synchronously inside the effect.
     (async () => {
       await fetchMySessions();
     })();
-  }, [fetchMySessions]);
+  }, [authLoading, currentUser?.uid, fetchMySessions]);
 
   const startExcuse = (sessionId, reason = "") => {
     setExcusingSessionId(sessionId);
@@ -308,6 +315,26 @@ export default function TutorDashboard() {
           </div>
         )}
 
+        {/* Load failures stand alone — the empty state must never render
+            alongside them or it reads as "no assignments" when the load
+            actually failed. Excuse/validation errors keep using `error`. */}
+        {loadError && (
+          <div className="mb-stack-lg flex flex-wrap items-center gap-stack-md">
+            <div className="flex-1 min-w-64">
+              <ErrorMessage>{loadError}</ErrorMessage>
+            </div>
+            <Button
+              onClick={() => {
+                setIsLoading(true);
+                setLoadError("");
+                fetchMySessions();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="space-y-gutter" aria-hidden="true">
             {[0, 1].map((card) => (
@@ -325,7 +352,7 @@ export default function TutorDashboard() {
               </div>
             ))}
           </div>
-        ) : courses.length === 0 ? (
+        ) : loadError ? null : courses.length === 0 ? (
           <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
             <h2 className="font-headline-md text-headline-md text-on-surface mb-unit">
               No course assignments yet

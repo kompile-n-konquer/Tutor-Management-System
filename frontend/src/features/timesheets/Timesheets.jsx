@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
+import ErrorMessage from '../../components/error-message/ErrorMessage';
 import api from '../../utils/axiosInstance';
 import useAsync from '../../hooks/useAsync';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +21,7 @@ const Timesheets = () => {
 
   const [timesheets, setTimesheets] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const role = currentUser?.role?.toLowerCase();
   const isTutor = role === 'tutor' || role === 'student';
@@ -28,7 +30,12 @@ const Timesheets = () => {
   const loadTimesheets = useCallback(async () => {
     if (!currentUser) return;
     const res = await execute(() => (isTutor ? api.get('/timesheets') : api.get('/timesheets/pending-review')));
-    if (res && res.status === 200) setTimesheets(res.data);
+    if (res && res.status === 200) {
+      setTimesheets(res.data);
+      setLoadError('');
+    } else {
+      setLoadError(res?.data?.message || 'Could not load the timesheets. Please try again.');
+    }
     setLoaded(true);
   }, [currentUser, execute, isTutor]);
 
@@ -75,6 +82,21 @@ const Timesheets = () => {
           </div>
         </div>
 
+        {loadError && (
+          <div className="flex flex-wrap items-center justify-between gap-gutter">
+            <ErrorMessage>{loadError}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setLoadError('');
+                loadTimesheets();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
           {isLoading && !loaded ? (
             <div className="space-y-stack-sm py-stack-sm" aria-hidden="true">
@@ -91,7 +113,7 @@ const Timesheets = () => {
                 </div>
               ))}
             </div>
-          ) : timesheets.length === 0 ? (
+          ) : !loadError && timesheets.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               {isTutor
                 ? 'No timesheets yet. Click "Create Timesheet" to start one.'

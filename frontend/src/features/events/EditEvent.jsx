@@ -19,6 +19,7 @@ const EditEvent = () => {
   const [timeSlots, setTimeSlots] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const isLecturer = currentUser?.role?.toLowerCase() === 'lecturer';
 
@@ -63,10 +64,11 @@ const EditEvent = () => {
       setEvent(eventResponse.data);
       setCourses(coursesResponse.data);
       setTimeSlots(slotsResponse.data);
+      setError('');
     };
 
     loadEvent();
-  }, [currentUser, loading, isLecturer, id, execute]);
+  }, [currentUser, loading, isLecturer, id, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !isLecturer) return null;
@@ -102,7 +104,20 @@ const EditEvent = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
         {success && (
           <p className="font-body-md text-primary bg-primary/5 border border-primary/30 rounded-xl px-stack-md py-stack-sm mb-gutter">
             {success}

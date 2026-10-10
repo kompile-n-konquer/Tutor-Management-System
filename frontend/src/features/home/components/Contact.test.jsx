@@ -1,8 +1,17 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+
+// The overlay's SignupForm reads the auth context (provided globally in the
+// app by RootLayout) — stub the hook for these Navbar-level tests.
+vi.mock('../../auth/overlay/SignupForm.jsx', () => ({
+  default: () => <div data-testid="signup-form-stub" />,
+}));
+
 import Contact from './Contact.jsx';
 import Navbar from './Navbar.jsx';
+import AuthOverlayProvider from '../../auth/overlay/AuthOverlayProvider.jsx';
+import AuthOverlay from '../../auth/overlay/AuthOverlay.jsx';
 
 describe('Contact', () => {
   test('submits a message and lets the visitor start another one', () => {
@@ -34,12 +43,18 @@ describe('Contact', () => {
 });
 
 describe('Navbar', () => {
-  test('opens and closes the mobile navigation drawer', () => {
+  const renderNavbar = () =>
     render(
-      <MemoryRouter>
-        <Navbar />
-      </MemoryRouter>,
+      <AuthOverlayProvider>
+        <MemoryRouter>
+          <Navbar />
+          <AuthOverlay />
+        </MemoryRouter>
+      </AuthOverlayProvider>,
     );
+
+  test('opens and closes the mobile navigation drawer', () => {
+    renderNavbar();
 
     const menuButton = screen.getByRole('button', { name: 'Open menu' });
     fireEvent.click(menuButton);
@@ -50,14 +65,23 @@ describe('Navbar', () => {
     expect(screen.getByRole('button', { name: 'Open menu' })).toBeInTheDocument();
   });
 
-  test('keeps authentication links pointed at the real routes', () => {
-    render(
-      <MemoryRouter>
-        <Navbar />
-      </MemoryRouter>,
-    );
+  test('opens the auth overlay in place from the single Log In CTA', () => {
+    renderNavbar();
 
-    expect(screen.getByRole('link', { name: 'Log In' })).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: /Enter Portal/ })).toHaveAttribute('href', '/signup');
+    // The navbar has exactly one call-to-action — Log In. Sign-up lives
+    // inside the overlay, so there is no separate Enter Portal button.
+    expect(screen.queryByRole('button', { name: /Enter Portal/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument();
+
+    // Closing returns to the landing page, and the same CTA reopens the
+    // overlay. (Two buttons match "Log In" once the form is mounted, so
+    // target the navbar's.)
+    fireEvent.click(screen.getByRole('button', { name: /close authentication overlay/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Log In' })[0]);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

@@ -45,7 +45,6 @@ const TABS = [
     role: "organiser",
     title: "Tutor Management System",
     activeLabel: "Organiser Board",
-    showConflicts: true,
     user: { initials: "SO", name: "System Organiser", role: "Organiser" },
     sections: [
       ["Main Menu", ["Organiser Board", "Analytics"]],
@@ -59,7 +58,6 @@ const TABS = [
     role: "lecturer",
     title: "Timesheets",
     activeLabel: "Timesheets",
-    showConflicts: true,
     user: { initials: "JO", name: "James Okafor", role: "Lecturer" },
     sections: [
       ["Main Menu", ["Lecturer View"]],
@@ -235,13 +233,6 @@ export default function DashboardPreview() {
                   ))}
                 </div>
               </nav>
-
-              {tab.showConflicts && (
-                <div className="mx-2 mt-2 inline-flex items-center gap-2 self-start rounded-lg bg-urgent-orange text-on-urgent-orange px-3 py-2 font-label-caps text-[11px] font-bold">
-                  <span className="material-symbols-outlined text-[18px]">warning</span>
-                  Resolve Conflicts
-                </div>
-              )}
 
               <div className="mx-2 mt-2 flex items-center gap-2 rounded-lg bg-surface-container-low px-2 py-2">
                 <div className="w-8 h-8 rounded-full bg-sidebar-logo text-on-sidebar-logo shrink-0 flex items-center justify-center font-body-sm text-[11px] font-bold">

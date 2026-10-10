@@ -78,8 +78,11 @@ module.exports = {
         // Landing page palette — the TutorFlow purple brightened for vivid
         // accents, with deeper OLED-style darks for the landing dark surfaces.
         // Kept as plain hex (not CSS variables) so opacity suffixes such as
-        // bg-brand-500/20 keep working and the landing page looks the same in
-        // every theme.
+        // bg-brand-500/20 keep working — but they are STATIC and do NOT flip
+        // with the theme. Only use them on surfaces that are themselves static
+        // (dark banners, gradient covers, light chips); on theme-flipping
+        // surfaces use primary/secondary/on-* tokens so dark mode re-inks the
+        // text automatically.
         brand: {
           50: "#fcf5ff",
           100: "#f3e8ff",

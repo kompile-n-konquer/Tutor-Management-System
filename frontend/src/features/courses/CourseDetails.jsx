@@ -32,6 +32,7 @@ const CourseDetails = () => {
   const [timeSlots, setTimeSlots] = useState([]);
   const [grid, setGrid] = useState({});
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
   const canViewCourses = role === 'lecturer' || role === 'organiser';
@@ -68,10 +69,11 @@ const CourseDetails = () => {
       setCourse(courseResponse.data);
       setTimeSlots(slotsResponse.data);
       setGrid(buildGrid(slotsResponse.data, courseResponse.data.slots));
+      setError('');
     };
 
     loadCourse();
-  }, [currentUser, loading, canViewCourses, courseId, execute]);
+  }, [currentUser, loading, canViewCourses, courseId, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !canViewCourses) return null;
@@ -109,7 +111,20 @@ const CourseDetails = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
 
         {isLoading && !course && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter" aria-hidden="true">

@@ -87,7 +87,7 @@ export default function Contact() {
                       {row.label}
                     </div>
                     {row.href ? (
-                      <a href={row.href} className="text-sm font-semibold text-brand-900 hover:underline font-label-caps">
+                      <a href={row.href} className="text-sm font-semibold text-primary hover:underline font-label-caps">
                         {row.value}
                       </a>
                     ) : (
@@ -196,7 +196,7 @@ export default function Contact() {
                   className="w-full bg-brand-900 hover:bg-brand-800 text-white font-label-caps text-label-caps uppercase tracking-wider py-3.5 px-6 rounded-xl shadow-glow-brand transition-all active:scale-[0.99] flex items-center justify-center gap-2"
                 >
                   <span>Send Message</span>
-                  <span className="material-symbols-outlined text-secondary-container text-[18px]">send</span>
+                  <span className="material-symbols-outlined text-amber-400 text-[18px]">send</span>
                 </button>
               </form>
             )}

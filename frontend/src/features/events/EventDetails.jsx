@@ -52,6 +52,7 @@ const EventDetails = () => {
   const [timeSlots, setTimeSlots] = useState([]);
   const [grid, setGrid] = useState({});
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
   const canViewEvents = role === 'tutor' || role === 'lecturer' || role === 'organiser' || role === 'admin';
@@ -88,10 +89,11 @@ const EventDetails = () => {
       setEvent(eventResponse.data);
       setTimeSlots(slotsResponse.data);
       setGrid(buildGrid(slotsResponse.data, eventResponse.data.courseSlots));
+      setError('');
     };
 
     loadEvent();
-  }, [currentUser, loading, canViewEvents, id, execute]);
+  }, [currentUser, loading, canViewEvents, id, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !canViewEvents) return null;
@@ -120,7 +122,20 @@ const EventDetails = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
 
         {isLoading && !event && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter" aria-hidden="true">

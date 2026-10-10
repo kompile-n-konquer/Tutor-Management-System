@@ -13,7 +13,7 @@ export default function Commitment() {
           <div className="absolute -left-24 -top-24 w-72 h-72 rounded-[9999px] bg-brand-500/20 blur-3xl pointer-events-none" />
 
           <div className="relative z-10 max-w-3xl space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white/10 backdrop-blur-md border border-white/20 text-xs font-label-caps text-secondary-fixed uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white/10 backdrop-blur-md border border-white/20 text-xs font-label-caps text-amber-200 uppercase tracking-wider">
               <span>School of Computer Science &amp; Applied Mathematics</span>
             </div>
 
@@ -30,13 +30,13 @@ export default function Commitment() {
 
             <div className="pt-4 flex flex-wrap items-center gap-4">
               <a
-                className="bg-white hover:bg-secondary-fixed text-brand-950 font-label-caps font-bold text-xs uppercase tracking-wider py-3.5 px-6 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center gap-2"
+                className="bg-white hover:bg-amber-300 text-brand-950 font-label-caps font-bold text-xs uppercase tracking-wider py-3.5 px-6 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center gap-2"
                 href="https://www.wits.ac.za/csam/"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <span>Learn more about CSAM</span>
-                <span className="material-symbols-outlined text-secondary text-[18px]">open_in_new</span>
+                <span className="material-symbols-outlined text-amber-600 text-[18px]">open_in_new</span>
               </a>
             </div>
           </div>

@@ -191,10 +191,14 @@ export default function TutorDashboardContent({
   const coverNeededCount = upcomingSessions.filter((session) => session.status === "UNASSIGNED").length;
 
   // weekScheduledHours only counts sessions the tutor still leads, so excusing
-  // one lowers the card immediately. The bar turns orange past the weekly cap.
+  // one lowers the card immediately. The bar turns orange past the weekly cap —
+  // the approved application's, or the organiser's Max Claimable Hours setting
+  // when no approved application carries hours. With neither on file the card
+  // shows the hours alone — no "of —h", no bar.
+  const hasWeeklyCap = maxHoursPerWeek > 0;
   const weekBarPercent =
-    maxHoursPerWeek > 0 ? Math.min(100, Math.round((weekScheduledHours / maxHoursPerWeek) * 100)) : 0;
-  const isOverWeeklyCap = maxHoursPerWeek > 0 && weekScheduledHours > maxHoursPerWeek;
+    hasWeeklyCap ? Math.min(100, Math.round((weekScheduledHours / maxHoursPerWeek) * 100)) : 0;
+  const isOverWeeklyCap = hasWeeklyCap && weekScheduledHours > maxHoursPerWeek;
 
   const courseCodes = courses.map((course) => course.courseCode);
 
@@ -380,21 +384,27 @@ export default function TutorDashboardContent({
                   <span className="font-data-mono text-data-mono font-semibold text-primary">
                     {weekScheduledHours}h
                   </span>{" "}
-                  <span className="text-on-surface-variant">of {maxHoursPerWeek ?? "—"}h scheduled</span>
+                  <span className="text-on-surface-variant">
+                    {hasWeeklyCap ? `of ${maxHoursPerWeek}h scheduled` : "scheduled this week"}
+                  </span>
                 </p>
-                <div className="w-full bg-surface-container-high rounded-full h-1.5 mt-stack-sm mb-unit">
-                  <div
-                    className={`${isOverWeeklyCap ? "bg-urgent-orange" : "bg-primary"} h-1.5 rounded-full`}
-                    style={{ width: `${weekBarPercent}%` }}
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={maxHoursPerWeek ?? 0}
-                    aria-valuenow={weekScheduledHours}
-                    aria-label="Scheduled hours this week"
-                  />
-                </div>
+                {hasWeeklyCap && (
+                  <div className="w-full bg-surface-container-high rounded-full h-1.5 mt-stack-sm mb-unit">
+                    <div
+                      className={`${isOverWeeklyCap ? "bg-urgent-orange" : "bg-primary"} h-1.5 rounded-full`}
+                      style={{ width: `${weekBarPercent}%` }}
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={maxHoursPerWeek}
+                      aria-valuenow={weekScheduledHours}
+                      aria-label="Scheduled hours this week"
+                    />
+                  </div>
+                )}
                 <p className="font-body-sm text-body-sm text-outline">
-                  Across the sessions you lead, Monday to Sunday.
+                  {hasWeeklyCap
+                    ? "Across the sessions you lead, Monday to Sunday."
+                    : "No weekly hour limit is on file for you yet."}
                 </p>
               </section>
 

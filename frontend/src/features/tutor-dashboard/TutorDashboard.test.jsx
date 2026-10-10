@@ -156,6 +156,22 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
     expect(screen.getByText('of 10h scheduled')).toBeInTheDocument();
   });
 
+  test('shows the hours alone when no weekly cap is on file', async () => {
+    mockGet.mockResolvedValue({
+      status: 200,
+      data: makeFeed({ maxHoursPerWeek: null }),
+    });
+
+    renderDashboard();
+
+    // Without a cap there is no bar to draw — the card says so instead of
+    // showing "of —h scheduled" beside an empty progress track.
+    expect(await screen.findByText('2h')).toBeInTheDocument();
+    expect(screen.getByText('scheduled this week')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByText('No weekly hour limit is on file for you yet.')).toBeInTheDocument();
+  });
+
   test("drops sessions the API flags as not the tutor's own", async () => {
     mockGet.mockResolvedValue({
       status: 200,

@@ -186,6 +186,8 @@ describe('TutorDashboardContent', () => {
 
     expect(screen.getByText(/No sessions scheduled yet for COMS3005/)).toBeInTheDocument();
     expect(screen.getByText(/No sessions for you to lead right now/)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '0');
+    // No cap on file — the card drops the bar instead of an empty "—h" one.
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByText('No weekly hour limit is on file for you yet.')).toBeInTheDocument();
   });
 });

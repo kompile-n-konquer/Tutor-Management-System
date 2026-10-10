@@ -282,14 +282,20 @@ export default function TutorDashboard() {
     .flatMap((group) => group.sessions)
     .filter((session) => session.status === "UNASSIGNED").length;
 
-  // The backend sums the current Monday-to-Sunday week's hours server-side
-  // (weekScheduledHours) — only the sessions the tutor still leads, so
-  // excusing one lowers the card immediately. maxHoursPerWeek is the cap
-  // from their approved tutor application; the bar shows how much of it
-  // this week's sessions use, and turns orange once they exceed it.
+  // The backend sums the teaching week in focus server-side
+  // (weekScheduledHours) — the week of the tutor's next still-scheduled
+  // session, or the current week when nothing is ahead — matching the course
+  // rows, past days included. Only sessions the tutor still leads count, so
+  // excusing one lowers the card immediately. maxHoursPerWeek is the approved
+  // application's cap, or the organiser's Max Claimable Hours setting when no
+  // approved application carries hours; the bar shows how much of it the
+  // week's sessions use, and turns orange once they exceed it. With neither
+  // on file the card shows the hours alone instead of an empty bar against
+  // "—"h.
+  const hasWeeklyCap = maxHoursPerWeek > 0;
   const weekBarPercent =
-    maxHoursPerWeek > 0 ? Math.min(100, Math.round((weekScheduledHours / maxHoursPerWeek) * 100)) : 0;
-  const isOverWeeklyCap = maxHoursPerWeek > 0 && weekScheduledHours > maxHoursPerWeek;
+    hasWeeklyCap ? Math.min(100, Math.round((weekScheduledHours / maxHoursPerWeek) * 100)) : 0;
+  const isOverWeeklyCap = hasWeeklyCap && weekScheduledHours > maxHoursPerWeek;
 
   const firstName = userProfile?.firstName;
   const courseCodes = courses.map((course) => course.courseCode);
@@ -501,22 +507,26 @@ export default function TutorDashboard() {
                       {weekScheduledHours}h
                     </span>{" "}
                     <span className="text-on-surface-variant">
-                      of {maxHoursPerWeek ?? "—"}h scheduled
+                      {hasWeeklyCap ? `of ${maxHoursPerWeek}h scheduled` : "scheduled this week"}
                     </span>
                   </p>
-                  <div className="w-full bg-surface-container-high rounded-full h-1.5 mt-stack-sm mb-unit">
-                    <div
-                      className={`${isOverWeeklyCap ? "bg-urgent-orange" : "bg-primary"} h-1.5 rounded-full`}
-                      style={{ width: `${weekBarPercent}%` }}
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={maxHoursPerWeek ?? 0}
-                      aria-valuenow={weekScheduledHours}
-                      aria-label="Scheduled hours this week"
-                    />
-                  </div>
+                  {hasWeeklyCap && (
+                    <div className="w-full bg-surface-container-high rounded-full h-1.5 mt-stack-sm mb-unit">
+                      <div
+                        className={`${isOverWeeklyCap ? "bg-urgent-orange" : "bg-primary"} h-1.5 rounded-full`}
+                        style={{ width: `${weekBarPercent}%` }}
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={maxHoursPerWeek}
+                        aria-valuenow={weekScheduledHours}
+                        aria-label="Scheduled hours this week"
+                      />
+                    </div>
+                  )}
                   <p className="font-body-sm text-body-sm text-outline">
-                    Across the sessions you lead, Monday to Sunday.
+                    {hasWeeklyCap
+                      ? "Across the sessions you lead, Monday to Sunday."
+                      : "No weekly hour limit is on file for you yet."}
                   </p>
                 </section>
 

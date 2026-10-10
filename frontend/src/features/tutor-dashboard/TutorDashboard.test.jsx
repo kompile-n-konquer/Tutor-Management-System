@@ -3,9 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ThemeProvider from '../context/ThemeProvider.jsx';
 
-const { mockGet, mockPatch, authState, firstVisitState, mockMarkSeen } = vi.hoisted(() => ({
+const { mockGet, mockPatch, authState, firstVisitState, mockMarkSeen, mockNavigate } = vi.hoisted(() => ({
   mockGet: vi.fn(),
   mockPatch: vi.fn(),
+  mockNavigate: vi.fn(),
   authState: { userProfile: { firstName: 'Thabo' } },
   firstVisitState: { isFirstVisit: false },
   mockMarkSeen: vi.fn(),
@@ -32,6 +33,12 @@ vi.mock('../../hooks/useFirstVisit.js', () => ({
 // which would consume the per-call mock queues these tests rely on.
 vi.mock('../../components/search/GlobalSearch', () => ({
   default: () => null,
+}));
+// Navigation is spied so tests can assert where buttons route to, while
+// MemoryRouter/Link keep working through the real module.
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => mockNavigate,
 }));
 
 import TutorDashboard from './TutorDashboard.jsx';
@@ -306,6 +313,10 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       expect(await screen.findByText('Excused — awaiting volunteer')).toBeInTheDocument();
       // The inline form is closed again after a successful excuse.
       expect(screen.queryByLabelText(/reason for excusing yourself/i)).not.toBeInTheDocument();
+      // The excuse lands with a direct jump into the cover-offer flow.
+      expect(await screen.findByRole('status')).toHaveTextContent(/session excused/i);
+      fireEvent.click(screen.getByRole('button', { name: /set up cover/i }));
+      expect(mockNavigate).toHaveBeenCalledWith('/cover');
     });
 
     test('shows the server message when the excuse is rejected', async () => {

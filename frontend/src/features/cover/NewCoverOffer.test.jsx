@@ -48,7 +48,7 @@ const makeCandidate = (overrides = {}) => ({
 
 const stubGets = (sessions = [makeSession()], candidates = [makeCandidate()]) => {
   mockGet.mockImplementation((url) => {
-    if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: sessions });
+    if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: { sessions } });
     if (url === '/sessions/3/cover-candidates') {
       return Promise.resolve({
         status: 200,
@@ -227,7 +227,7 @@ describe('NewCoverOffer — offer an excused session to one tutor', () => {
 
   test('shows the server message when the candidates load fails', async () => {
     mockGet.mockImplementation((url) => {
-      if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: [makeSession()] });
+      if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: { sessions: [makeSession()] } });
       if (url === '/sessions/3/cover-candidates') {
         return Promise.resolve({ status: 500, data: { message: 'Constraints check failed' } });
       }

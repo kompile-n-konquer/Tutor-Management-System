@@ -51,7 +51,8 @@ const NewCoverOffer = () => {
       }
       // Only sessions still waiting for cover can be offered on — once an
       // offer is live the session is OFFERED, and PENDING awaits the lecturer.
-      const openSessions = response.data.filter((session) => session.status === 'UNASSIGNED');
+      // The mine feed is an object — dashboard fields plus the session ledger.
+      const openSessions = (response.data?.sessions ?? []).filter((session) => session.status === 'UNASSIGNED');
       setSessions(openSessions);
       if (preselectedSessionId && openSessions.some((s) => String(s.id) === preselectedSessionId)) {
         setSelectedSessionId(preselectedSessionId);

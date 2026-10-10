@@ -68,7 +68,8 @@ const Cover = () => {
         sessionsResponse?.data?.message || 'Could not load your sessions. Please refresh the page.'
       );
     } else {
-      setMySessions(sessionsResponse.data);
+      // The mine feed is an object — dashboard fields plus the session ledger.
+      setMySessions(sessionsResponse.data?.sessions ?? []);
     }
     setVolunteered(volunteeredResponse?.status === 200 ? volunteeredResponse.data?.sessions ?? [] : []);
     setLoaded(true);

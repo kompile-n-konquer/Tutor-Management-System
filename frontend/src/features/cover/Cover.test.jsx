@@ -56,7 +56,7 @@ const makeVolunteered = (overrides = {}) => ({
 // The page loads /sessions/mine and /sessions/volunteered together; dispatch by URL.
 const stubGets = ({ mine = [makeMineSession()], volunteered = [] } = {}) => {
   mockGet.mockImplementation((url) => {
-    if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: mine });
+    if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: { sessions: mine } });
     if (url === '/sessions/volunteered') {
       return Promise.resolve({ status: 200, data: { sessions: volunteered } });
     }
@@ -326,7 +326,7 @@ describe('Cover — directed cover-offer hub', () => {
 
   test('keeps the excuser sections working when the volunteered feed fails', async () => {
     mockGet.mockImplementation((url) => {
-      if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: [makeMineSession()] });
+      if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: { sessions: [makeMineSession()] } });
       return Promise.resolve({ status: 500, data: { message: 'Volunteer service down' } });
     });
 

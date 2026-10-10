@@ -20,6 +20,8 @@ const sessionState = (session) => {
         chip: "bg-urgent-orange/10 text-urgent-orange",
         label: "Excused — needs volunteer",
       };
+    case "OFFERED":
+      return { chip: "bg-secondary-fixed text-on-secondary-container", label: "Excused — offer pending" };
     case "PENDING":
       return { chip: "bg-trust-blue/10 text-trust-blue", label: "Cover requested" };
     default:

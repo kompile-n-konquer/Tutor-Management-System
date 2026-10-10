@@ -9,6 +9,8 @@ jest.mock('../prisma/client', () => ({
   roleApplication: { findFirst: jest.fn() },
   application: { findMany: jest.fn(), findFirst: jest.fn() },
   sessionVolunteer: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+  availability: { findMany: jest.fn() },
+  busyBlock: { findMany: jest.fn() },
   $transaction: jest.fn(),
 }));
 
@@ -21,6 +23,10 @@ const {
   getMyVolunteeredSessions,
   volunteerForSession,
   decideVolunteerRequest,
+  getCoverCandidates,
+  createCoverOffer,
+  respondToCoverOffer,
+  cancelCoverOffer,
 } = require('../controllers/sessions');
 
 // catchAsync does not `return` the inner promise, so the wrapped handler
@@ -656,6 +662,117 @@ describe('getMySessions', () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         courses: [expect.objectContaining({ courseCode: 'COMS1015', lecturerName: null })],
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('exposes the directed cover offer on the excuser\'s own session rows', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR', firstName: 'Thabo', lastName: 'Demotutor' });
+    prisma.roleApplication.findFirst.mockResolvedValue(null);
+    prisma.tutorAssignment.findMany.mockResolvedValue([]);
+    prisma.event.findMany.mockResolvedValue([]);
+
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+
+    prisma.session.findMany.mockResolvedValue([
+      {
+        id: 21,
+        date: nextMonday,
+        status: 'OFFERED',
+        excuseReason: 'Medical appointment',
+        courseSlotId: 31,
+        assignment: {
+          userId: 1,
+          courseId: 100,
+          course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        },
+        courseSlot: {
+          id: 31,
+          dayOfWeek: 0,
+          venue: 'Lab 2',
+          sessionType: 'Tutorial',
+          timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+        },
+        volunteerRequest: {
+          status: 'OFFERED',
+          userId: 7,
+          user: { firstName: 'Nina', lastName: 'Nominee' },
+        },
+      },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    // The excuser's ledger shows who they pointed the cover at and where the
+    // offer stands — the directed-cover counterpart of the volunteer state.
+    const sessions = res.json.mock.calls[0][0].sessions;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toEqual(
+      expect.objectContaining({
+        id: 21,
+        status: 'OFFERED',
+        volunteerRequest: { status: 'OFFERED', userId: 7, tutorName: 'Nina Nominee' },
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('serializes a cover request whose tutor relation is missing with a null name', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR', firstName: 'Thabo', lastName: 'Demotutor' });
+    prisma.roleApplication.findFirst.mockResolvedValue(null);
+    prisma.tutorAssignment.findMany.mockResolvedValue([]);
+    prisma.event.findMany.mockResolvedValue([]);
+
+    const nextMonday = new Date();
+    nextMonday.setUTCHours(0, 0, 0, 0);
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((((1 - nextMonday.getUTCDay()) % 7) + 7) % 7 || 7),
+    );
+
+    prisma.session.findMany.mockResolvedValue([
+      {
+        id: 22,
+        date: nextMonday,
+        status: 'PENDING',
+        excuseReason: 'Medical appointment',
+        courseSlotId: 31,
+        assignment: {
+          userId: 1,
+          courseId: 100,
+          course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        },
+        courseSlot: {
+          id: 31,
+          dayOfWeek: 0,
+          venue: 'Lab 2',
+          sessionType: 'Tutorial',
+          timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+        },
+        volunteerRequest: { status: 'PENDING', userId: 7, user: null },
+      },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    const sessions = res.json.mock.calls[0][0].sessions;
+    expect(sessions[0]).toEqual(
+      expect.objectContaining({
+        volunteerRequest: { status: 'PENDING', userId: 7, tutorName: null },
       }),
     );
     expect(next).not.toHaveBeenCalled();
@@ -1522,10 +1639,11 @@ describe('getMyVolunteeredSessions', () => {
     await getMyVolunteeredSessions(req, res, next);
     await flushMicrotasks();
 
-    // Only the tutor's own PENDING/APPROVED requests are listed, newest first.
+    // Only the tutor's own live requests are listed — directed offers still
+    // waiting on their response plus PENDING/APPROVED covers — newest first.
     expect(prisma.sessionVolunteer.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId: 1, status: { in: ['PENDING', 'APPROVED'] } },
+        where: { userId: 1, status: { in: ['OFFERED', 'PENDING', 'APPROVED'] } },
         orderBy: { createdAt: 'desc' },
       }),
     );
@@ -1705,6 +1823,35 @@ describe('volunteerForSession', () => {
     prisma.session.findUnique.mockResolvedValue(unassignedSession());
     prisma.application.findFirst.mockResolvedValue({ courseMark: 88, status: 'APPROVED' });
     prisma.sessionVolunteer.findUnique.mockResolvedValue({ id: 5, sessionId: 21, userId: 7, status: 'REJECTED' });
+    prisma.sessionVolunteer.update.mockResolvedValue({ id: 5, sessionId: 21, userId: 1, status: 'PENDING' });
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await volunteerForSession(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.sessionVolunteer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { sessionId: 21 },
+        data: expect.objectContaining({ userId: 1, status: 'PENDING' }),
+      }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+    expect(prisma.session.update).toHaveBeenCalledWith({
+      where: { id: 21 },
+      data: { status: 'PENDING' },
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('replaces a withdrawn cover offer so the session can be covered after all', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(unassignedSession());
+    prisma.application.findFirst.mockResolvedValue({ courseMark: 88, status: 'APPROVED' });
+    prisma.sessionVolunteer.findUnique.mockResolvedValue({ id: 5, sessionId: 21, userId: 7, status: 'CANCELLED' });
     prisma.sessionVolunteer.update.mockResolvedValue({ id: 5, sessionId: 21, userId: 1, status: 'PENDING' });
 
     const req = mockReq({ params: { id: '21' } });
@@ -2008,5 +2155,1005 @@ describe('decideVolunteerRequest', () => {
       expect.objectContaining({ statusCode: 404, message: expect.stringContaining('Session not found') }),
     );
     expect(prisma.session.update).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// getCoverCandidates — the appointed tutors an excused session can be offered to
+// ════════════════════════════════════════════════════════════════════════
+
+// An excused (UNASSIGNED) future session owned by tutor 1 — the shape the
+// directed-cover endpoints read: assignment, course slot with course + timeslot.
+function coverSession(overrides = {}) {
+  return {
+    id: 21,
+    date: new Date('2099-01-05T00:00:00.000Z'),
+    status: 'UNASSIGNED',
+    excuseReason: 'Medical appointment',
+    courseSlotId: 31,
+    assignment: { userId: 1, courseId: 100 },
+    courseSlot: {
+      id: 31,
+      dayOfWeek: 0,
+      venue: 'Lab 2',
+      sessionType: 'Tutorial',
+      timeSlotId: 3,
+      timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+      course: { id: 100, courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+    },
+    ...overrides,
+  };
+}
+
+describe('getCoverCandidates', () => {
+  test('returns 400 when the session id is invalid', async () => {
+    const req = mockReq({ params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Invalid session id' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the requesting user does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'User not found. Please check if the user exists' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the requesting user is not a tutor', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only tutors can view cover candidates' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the session does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Session not found. Please check if the session exists' }),
+    );
+    expect(prisma.tutorAssignment.findMany).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the session sits on another tutor\'s assignment', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(
+      coverSession({ assignment: { userId: 99, courseId: 100 } }),
+    );
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'You can only offer cover for your own excused sessions' }),
+    );
+    expect(prisma.tutorAssignment.findMany).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the session is not in the open pool', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(coverSession({ status: 'PENDING' }));
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session is not open for a directed cover offer' }),
+    );
+    expect(prisma.tutorAssignment.findMany).not.toHaveBeenCalled();
+  });
+
+  test('validates each appointed tutor and explains why they cannot cover', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(coverSession());
+    prisma.tutorAssignment.findMany.mockResolvedValue([
+      { user: { id: 7, firstName: 'Nina', lastName: 'Nominee', email: 'nina@example.com' } },
+      { user: { id: 8, firstName: null, lastName: null, email: 'ben@example.com' } },
+      { user: { id: 10, firstName: null, lastName: null, email: null } },
+    ]);
+    // 7 passes every check; 8 fails all three (availability, busy block and
+    // double-booking); 10 has no availability covering the session's slot.
+    prisma.availability.findMany.mockImplementation(({ where }) =>
+      Promise.resolve(where.userId === 7 ? [{ id: 1 }] : []),
+    );
+    prisma.busyBlock.findMany.mockImplementation(({ where }) =>
+      Promise.resolve(where.userId === 8 ? [{ startMinute: 500, endMinute: 600 }] : []),
+    );
+    prisma.session.findFirst.mockImplementation(({ where }) =>
+      Promise.resolve(where.assignment.userId === 8 ? { id: 99 } : null),
+    );
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    // The candidate pool is the course's other appointed, active tutors.
+    expect(prisma.tutorAssignment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          courseId: 100,
+          userId: { not: 1 },
+          user: { role: 'TUTOR', isActive: true },
+        },
+      }),
+    );
+
+    expect(res.json).toHaveBeenCalledWith({
+      session: expect.objectContaining({
+        id: 21,
+        date: new Date('2099-01-05T00:00:00.000Z'),
+        status: 'UNASSIGNED',
+        excuseReason: 'Medical appointment',
+        course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        courseSlot: expect.objectContaining({ id: 31, dayOfWeek: 0, venue: 'Lab 2' }),
+      }),
+      candidates: [
+        { userId: 7, name: 'Nina Nominee', email: 'nina@example.com', eligible: true, reasons: [] },
+        {
+          userId: 8,
+          name: 'ben@example.com',
+          email: 'ben@example.com',
+          eligible: false,
+          reasons: [
+            'the session falls outside their weekly availability',
+            'the session clashes with one of their busy blocks',
+            'it double-books them against another session on 2099-01-05',
+          ],
+        },
+        {
+          userId: 10,
+          name: 'Unknown tutor',
+          email: null,
+          eligible: false,
+          reasons: ['the session falls outside their weekly availability'],
+        },
+      ],
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('flags every candidate when the session has no matching timeslot', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(
+      coverSession({
+        courseSlot: {
+          ...coverSession().courseSlot,
+          timeSlotId: null,
+          timeSlot: null,
+        },
+      }),
+    );
+    prisma.tutorAssignment.findMany.mockResolvedValue([
+      { user: { id: 7, firstName: 'Nina', lastName: 'Nominee', email: 'nina@example.com' } },
+    ]);
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCoverCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidates: [
+          {
+            userId: 7,
+            name: 'Nina Nominee',
+            email: 'nina@example.com',
+            eligible: false,
+            reasons: ["COMS1015 has no tutoring timeslot on the session's day"],
+          },
+        ],
+      }),
+    );
+    // The time-range checks would be meaningless without a slot.
+    expect(prisma.availability.findMany).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// createCoverOffer — the excuser points the cover at one appointed tutor
+// ════════════════════════════════════════════════════════════════════════
+describe('createCoverOffer', () => {
+  // The requester (looked up by firebaseUid) and the nominee (looked up by id)
+  // share prisma.user.findUnique — resolve both shapes by the where-clause.
+  const requesterAndNominee = (
+    nominee = { id: 7, role: 'TUTOR', isActive: true, firstName: 'Nina', lastName: 'Nominee', email: 'nina@example.com' },
+  ) =>
+    prisma.user.findUnique.mockImplementation(({ where }) =>
+      Promise.resolve(where.firebaseUid ? { id: 1, role: 'TUTOR' } : nominee),
+    );
+
+  // A nominee who passes every practical cover check.
+  const nomineeIsValid = () => {
+    prisma.tutorAssignment.findFirst.mockResolvedValue({ id: 55, userId: 7, courseId: 100 });
+    prisma.availability.findMany.mockResolvedValue([{ id: 1 }]);
+    prisma.busyBlock.findMany.mockResolvedValue([]);
+    prisma.session.findFirst.mockResolvedValue(null);
+  };
+
+  test('returns 400 when the session id is invalid', async () => {
+    const req = mockReq({ params: { id: 'abc' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Invalid session id' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when nomineeId is not an integer', async () => {
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 'seven' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'nomineeId must be a valid integer' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the requesting user does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'User not found. Please check if the user exists' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the requesting user is not a tutor', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only tutors can offer a session to another tutor' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the nominated user does not exist', async () => {
+    requesterAndNominee(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'The nominated tutor must be an active tutor' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the nominee is not a tutor', async () => {
+    requesterAndNominee({ id: 7, role: 'STUDENT' });
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'The nominated tutor must be an active tutor' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the nominee is deactivated', async () => {
+    requesterAndNominee({ id: 7, role: 'TUTOR', isActive: false });
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'The nominated tutor must be an active tutor' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when the nominee is the requester themselves', async () => {
+    requesterAndNominee({ id: 1, role: 'TUTOR', isActive: true });
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 1 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'You cannot offer a session to yourself' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the session does not exist', async () => {
+    requesterAndNominee();
+    prisma.session.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Session not found. Please check if the session exists' }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the session sits on another tutor\'s assignment', async () => {
+    requesterAndNominee();
+    prisma.session.findUnique.mockResolvedValue(
+      coverSession({ assignment: { userId: 99, courseId: 100 } }),
+    );
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'You can only offer cover for your own excused sessions' }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the session is not in the open pool', async () => {
+    requesterAndNominee();
+    prisma.session.findUnique.mockResolvedValue(coverSession({ status: 'PENDING' }));
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session is not open for a directed cover offer' }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the session has already taken place', async () => {
+    requesterAndNominee();
+    prisma.session.findUnique.mockResolvedValue(
+      coverSession({ date: new Date('2000-01-01T00:00:00.000Z') }),
+    );
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has already taken place' }),
+    );
+    expect(prisma.tutorAssignment.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the nominee is not appointed to the course', async () => {
+    requesterAndNominee();
+    prisma.session.findUnique.mockResolvedValue(coverSession());
+    prisma.tutorAssignment.findFirst.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    // Taking a session over is an appointment — qualified outsiders are not
+    // enough, a tutor without a TutorAssignment for the course is refused.
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Nina Nominee is not allocated to COMS1015' }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 with the reasons when the nominee fails the cover checks', async () => {
+    requesterAndNominee();
+    prisma.session.findUnique.mockResolvedValue(coverSession());
+    prisma.tutorAssignment.findFirst.mockResolvedValue({ id: 55, userId: 7, courseId: 100 });
+    prisma.availability.findMany.mockResolvedValue([]);
+    prisma.busyBlock.findMany.mockResolvedValue([]);
+    prisma.session.findFirst.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: 'Nina Nominee cannot cover this session: the session falls outside their weekly availability',
+      }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when another cover request is already in progress', async () => {
+    requesterAndNominee();
+    nomineeIsValid();
+    prisma.session.findUnique.mockResolvedValue(coverSession());
+    prisma.sessionVolunteer.findUnique.mockResolvedValue({ id: 5, sessionId: 21, userId: 9, status: 'PENDING' });
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session already has a cover request in progress' }),
+    );
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('creates an OFFERED request and flips the session to OFFERED', async () => {
+    requesterAndNominee();
+    nomineeIsValid();
+    prisma.session.findUnique.mockResolvedValue(coverSession());
+    prisma.sessionVolunteer.findUnique.mockResolvedValue(null);
+    const record = { id: 5, sessionId: 21, userId: 7, status: 'OFFERED' };
+    prisma.sessionVolunteer.create.mockResolvedValue(record);
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.sessionVolunteer.create).toHaveBeenCalledWith({
+      data: { sessionId: 21, userId: 7, status: 'OFFERED' },
+    });
+    expect(prisma.session.update).toHaveBeenCalledWith({ where: { id: 21 }, data: { status: 'OFFERED' } });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(record);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('replaces a declined offer with the new nominee', async () => {
+    requesterAndNominee();
+    nomineeIsValid();
+    prisma.session.findUnique.mockResolvedValue(coverSession());
+    prisma.sessionVolunteer.findUnique.mockResolvedValue({ id: 5, sessionId: 21, userId: 9, status: 'REJECTED' });
+    prisma.sessionVolunteer.update.mockResolvedValue({ id: 5, sessionId: 21, userId: 7, status: 'OFFERED' });
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    // The dead record is reused (single cover request per session), refreshed
+    // with the new nominee and a new createdAt so the list orders correctly.
+    expect(prisma.sessionVolunteer.update).toHaveBeenCalledWith({
+      where: { sessionId: 21 },
+      data: { userId: 7, status: 'OFFERED', createdAt: expect.any(Date) },
+    });
+    expect(prisma.sessionVolunteer.create).not.toHaveBeenCalled();
+    expect(prisma.session.update).toHaveBeenCalledWith({ where: { id: 21 }, data: { status: 'OFFERED' } });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the unique constraint catches a racing offer', async () => {
+    requesterAndNominee();
+    prisma.$transaction.mockRejectedValueOnce(
+      Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+    );
+
+    const req = mockReq({ params: { id: '21' }, body: { nomineeId: 7 } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session already has a cover request in progress' }),
+    );
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// respondToCoverOffer — the nominated tutor accepts or declines
+// ════════════════════════════════════════════════════════════════════════
+
+// The session mid directed offer: tutor 1 excused it, tutor 7 was nominated.
+const offeredSession = (overrides = {}) => ({
+  id: 21,
+  status: 'OFFERED',
+  assignment: { userId: 1 },
+  volunteerRequest: { id: 5, sessionId: 21, userId: 7, status: 'OFFERED' },
+  ...overrides,
+});
+
+describe('respondToCoverOffer', () => {
+  test('returns 400 when the session id is invalid', async () => {
+    const req = mockReq({ params: { id: 'abc' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Invalid session id' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when the decision is not ACCEPT or DECLINE', async () => {
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'MAYBE' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'decision must be ACCEPT or DECLINE' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('treats a missing request body as an invalid decision', async () => {
+    const req = mockReq({ params: { id: '21' }, body: undefined });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'decision must be ACCEPT or DECLINE' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the requesting user does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'User not found. Please check if the user exists' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the requesting user is not a tutor', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'STUDENT' });
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only tutors can respond to cover offers' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the session does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Session not found. Please check if the session exists' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the session left the offered state', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession({ status: 'UNASSIGNED' }));
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has no cover offer awaiting a response' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the offer record disappeared', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession({ volunteerRequest: null }));
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has no cover offer awaiting a response' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the offer was already answered', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(
+      offeredSession({ volunteerRequest: { id: 5, sessionId: 21, userId: 7, status: 'PENDING' } }),
+    );
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has no cover offer awaiting a response' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the responder is not the nominee', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 99, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession());
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only the tutor the session was offered to can respond' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('accepting moves the request to PENDING for the lecturer', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession());
+    const record = { id: 5, sessionId: 21, userId: 7, status: 'PENDING' };
+    prisma.sessionVolunteer.update.mockResolvedValue(record);
+    const updatedSession = { id: 21, status: 'PENDING' };
+    prisma.session.update.mockResolvedValue(updatedSession);
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'ACCEPT' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    // The accepted offer reaches the exact same decision point as a
+    // self-volunteered request — decideVolunteerRequest takes it from here.
+    expect(prisma.sessionVolunteer.update).toHaveBeenCalledWith({
+      where: { sessionId: 21 },
+      data: { status: 'PENDING' },
+    });
+    expect(prisma.session.update).toHaveBeenCalledWith({
+      where: { id: 21 },
+      data: { status: 'PENDING' },
+    });
+    expect(res.json).toHaveBeenCalledWith({
+      decision: 'ACCEPT',
+      volunteerRequest: record,
+      session: updatedSession,
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('declining closes the offer and returns the session to the open pool', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession());
+    const record = { id: 5, sessionId: 21, userId: 7, status: 'REJECTED' };
+    prisma.sessionVolunteer.update.mockResolvedValue(record);
+    const updatedSession = { id: 21, status: 'UNASSIGNED' };
+    prisma.session.update.mockResolvedValue(updatedSession);
+
+    const req = mockReq({ params: { id: '21' }, body: { decision: 'DECLINE' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await respondToCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    // The declined record stays for history (replaceable) while other tutors
+    // can volunteer for the session again.
+    expect(prisma.sessionVolunteer.update).toHaveBeenCalledWith({
+      where: { sessionId: 21 },
+      data: { status: 'REJECTED' },
+    });
+    expect(prisma.session.update).toHaveBeenCalledWith({
+      where: { id: 21 },
+      data: { status: 'UNASSIGNED' },
+    });
+    expect(res.json).toHaveBeenCalledWith({
+      decision: 'DECLINE',
+      volunteerRequest: record,
+      session: updatedSession,
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// cancelCoverOffer — the excuser withdraws the offer before the nominee answers
+// ════════════════════════════════════════════════════════════════════════
+describe('cancelCoverOffer', () => {
+  test('returns 400 when the session id is invalid', async () => {
+    const req = mockReq({ params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Invalid session id' }),
+    );
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the requesting user does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'User not found. Please check if the user exists' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the requesting user is not a tutor', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'STUDENT' });
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only tutors can withdraw cover offers' }),
+    );
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the session does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Session not found. Please check if the session exists' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the session is no longer offered', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession({ status: 'PENDING' }));
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has no cover offer waiting for a response' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the offer record is missing', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession({ volunteerRequest: null }));
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has no cover offer waiting for a response' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the offer already moved past the nominee', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(
+      offeredSession({ volunteerRequest: { id: 5, sessionId: 21, userId: 7, status: 'PENDING' } }),
+    );
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    // Once accepted, the request sits with the lecturer and cannot be pulled
+    // back by the excuser.
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: 'This session has no cover offer waiting for a response' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the requester did not excuse the session', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 9, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession());
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only the tutor who excused this session can withdraw the offer' }),
+    );
+    expect(prisma.sessionVolunteer.update).not.toHaveBeenCalled();
+  });
+
+  test('withdrawing cancels the offer record and reopens the session', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.session.findUnique.mockResolvedValue(offeredSession());
+    const record = { id: 5, sessionId: 21, userId: 7, status: 'CANCELLED' };
+    prisma.sessionVolunteer.update.mockResolvedValue(record);
+    const updatedSession = { id: 21, status: 'UNASSIGNED' };
+    prisma.session.update.mockResolvedValue(updatedSession);
+
+    const req = mockReq({ params: { id: '21' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelCoverOffer(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.sessionVolunteer.update).toHaveBeenCalledWith({
+      where: { sessionId: 21 },
+      data: { status: 'CANCELLED' },
+    });
+    expect(prisma.session.update).toHaveBeenCalledWith({
+      where: { id: 21 },
+      data: { status: 'UNASSIGNED' },
+    });
+    expect(res.json).toHaveBeenCalledWith({ volunteerRequest: record, session: updatedSession });
+    expect(next).not.toHaveBeenCalled();
   });
 });

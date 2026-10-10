@@ -36,9 +36,8 @@ import OnboardingHub from './features/onboarding/OnboardingHub.jsx';
 import TutorApplication from './features/onboarding/TutorApplication.jsx';
 import LecturerApplication from './features/onboarding/LecturerApplication.jsx';
 import ApplicationReview from './features/onboarding/ApplicationReview.jsx';
-import Swaps from './features/swaps/Swaps.jsx';
-import NewSwap from './features/swaps/NewSwap.jsx';
-import SwapReview from './features/swaps/SwapReview.jsx';
+import Cover from './features/cover/Cover.jsx';
+import NewCoverOffer from './features/cover/NewCoverOffer.jsx';
 
 const router = createBrowserRouter([
   {
@@ -99,13 +98,12 @@ const router = createBrowserRouter([
       { path: 'onboarding/lecturer-application', element: <LecturerApplication /> },
       { path: 'application-review', element: <ApplicationReview /> },
       {
-        path: 'swaps',
+        path: 'cover',
         children: [
-          { index: true, element: <Swaps /> },
-          { path: 'new', element: <NewSwap /> },
+          { index: true, element: <Cover /> },
+          { path: 'new', element: <NewCoverOffer /> },
         ],
       },
-      { path: 'swap-review', element: <SwapReview /> },
       { path: '*', element: <ErrorPage /> },
     ],
   },

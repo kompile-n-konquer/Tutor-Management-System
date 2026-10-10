@@ -127,15 +127,17 @@ Legend for the **Access** column: 🔓 no token required, ✅ any authenticated 
 | POST | `/events` | LECTURER | Create an event on an own course |
 | GET | `/events/:id` | Role-scoped | Single event |
 | PUT | `/events/:id` | LECTURER (own course) | Update an event |
-| GET | `/swaps/my-sessions` | TUTOR | Own sessions available for swapping |
-| GET | `/swaps/candidates/:eventId` | TUTOR | Eligible swap partners for a session, with constraint verdicts |
-| GET | `/swaps` | TUTOR, ORGANISER, ADMIN | Swap requests (own for tutors, all for staff, `?status=` filter) |
-| POST | `/swaps` | TUTOR | Request a session swap (one-way or two-way) |
-| POST | `/swaps/:id/accept` | Recipient TUTOR | Agree to the trade |
-| POST | `/swaps/:id/decline` | Recipient TUTOR | Decline with an optional reason |
-| POST | `/swaps/:id/cancel` | Requester TUTOR | Withdraw a pending request |
-| POST | `/swaps/:id/approve` | ORGANISER, ADMIN | Approve — re-validates constraints, then moves the claims |
-| POST | `/swaps/:id/reject` | ORGANISER, ADMIN | Reject an agreed swap with an optional reason |
+| GET | `/sessions/unassigned` | ✅ | Excused sessions open for cover, filtered to courses the caller's mark qualifies for |
+| GET | `/sessions/mine` | ✅ | Own sessions with their excuse / offer / volunteer state |
+| GET | `/sessions/volunteered` | ✅ | Sessions the caller volunteered for or was offered as a directed cover |
+| GET | `/sessions/lecturer` | LECTURER | Own courses with the sessions in the excuse/cover lifecycle |
+| PATCH | `/sessions/:id/excuse` | Tutor (own session) | Excuse yourself — the session returns to the open pool |
+| POST | `/sessions/:id/volunteer` | Tutor | Volunteer to cover an excused session (goes to the lecturer) |
+| PATCH | `/sessions/:id/volunteer` | LECTURER | Approve/reject a pending cover request |
+| GET | `/sessions/:id/cover-candidates` | Tutor (own session) | Appointed tutors validated as covers, with blocking reasons |
+| POST | `/sessions/:id/cover-offer` | Tutor (own session) | Offer the excused session to one nominated tutor |
+| PATCH | `/sessions/:id/cover-offer` | Nominated tutor | Accept or decline a directed cover offer |
+| DELETE | `/sessions/:id/cover-offer` | Tutor (own session) | Withdraw an offer still waiting on the nominee |
 | GET | `/timesheets` | ✅ | Own timesheets |
 | GET | `/timesheets/pending-review` | LECTURER, ORGANISER, ADMIN | Submitted timesheets to review |
 | GET | `/timesheets/supervisors` | ✅ | Supervisor directory for entry forms |
@@ -347,41 +349,50 @@ approved.
 Renders an approved timesheet onto the uploaded PDF template and streams it back as
 `application/pdf`.
 
-## Session Swaps
+## Sessions & Directed Cover Offers
 
-Tutors trade claimed sessions (`TimesheetEntry` claims on events) peer-to-peer. The platform
-validates every swap against the same constraints used when a tutor is allocated — course
-allocation, availability coverage, busy blocks, double-booking and the monthly claimable-hours
-cap — and the organiser gives the final approval before any session moves.
+Future dated sessions follow one coverage lifecycle. A tutor excuses themselves from a session
+they no longer attend, which returns it to the open pool; cover then reaches it either through
+the volunteer view or through a **directed cover offer** — the excusing tutor nominates one
+specific appointed tutor. Either way the course's lecturer gives the final approval and the
+session is re-pointed at the covering tutor. No pay changes hands at offer time: the covering
+tutor claims the session through their timesheet after it takes place.
 
-Status flow: `PENDING` → (recipient accepts) → `ACCEPTED` → (organiser approves) → `APPROVED`.
-The recipient can decline and the organiser can reject (both land on `REJECTED`), and the
-requester can `CANCEL` while the request is still `PENDING`.
+Status flow: `SCHEDULED` → (excuse) → `UNASSIGNED` → (nominee accepts, or a volunteer applies) →
+`PENDING` → (lecturer approves) → `SCHEDULED`. A declined or withdrawn offer returns the session
+to `UNASSIGNED`.
 
-### `GET /swaps/my-sessions` / `GET /swaps/candidates/:eventId`
+### `GET /sessions/:id/cover-candidates`
 
-Tutor-only. The first lists the caller's swappable sessions (pending claimed events). The second
-returns every other tutor allocated to the same course with an `eligible` flag, the blocking
-constraint `reasons`, and that tutor's own swappable sessions (for two-way trades).
+Tutor-only, on one of their own excused sessions. Returns every tutor appointed to the session's
+course with an `eligible` flag and the blocking constraint `reasons` — availability coverage,
+busy blocks, double-booking on the session's date, or the course having no tutoring slot on that
+day.
 
-### `POST /swaps`
+### `POST /sessions/:id/cover-offer`
 
-Body: `{ "recipientId": 20, "requesterEventId": 100, "recipientEventId": 200, "reason": "…" }`.
-`recipientEventId` is optional — omit it for a one-way handover. Every constraint violation
-returns `403` with the reasons; a session with a live request returns `409`.
+Body: `{ "nomineeId": 20 }`. Inside one transaction the server re-checks that the session is the
+caller's own excused one and has not taken place, that the nominee is appointed to the course and
+passes the same constraint checks, and that no other cover request is live for the session.
+Constraint failures return `403` with the reasons; a session already offered or covered returns
+`409`. Success marks the session `OFFERED`.
 
-### `POST /swaps/:id/accept|decline|cancel`
+### `PATCH /sessions/:id/cover-offer`
 
-Recipient-side responses and the requester's withdrawal, each allowed only while the request is
-`PENDING`. Declining and rejecting accept an optional free-text `reason`.
+Body: `{ "decision": "ACCEPT" }` or `{ "decision": "DECLINE" }`. Only the nominated tutor can
+respond while the offer is live. Accepting moves the request to `PENDING` for the lecturer — the
+same review an open volunteer request goes through; declining records the refusal and reopens the
+session.
 
-### `POST /swaps/:id/approve|reject`
+### `DELETE /sessions/:id/cover-offer`
 
-Organiser/admin review of `ACCEPTED` requests. Approval re-validates constraints against current
-data — when anything no longer passes, the failure returns `409` and nothing moves. On success
-the session's claim (the unique `TimesheetEntry.eventId` row) is transferred to the receiving
-tutor's newest draft timesheet (a fresh draft is opened when none exists) and both affected
-timesheet totals are recomputed, all inside one transaction.
+Only the tutor who excused the session can withdraw an offer that still awaits the nominee.
+
+### Claiming a covered session
+
+Once approved, only the covering tutor may claim the past event through their timesheet: the
+claim endpoint refuses (`409`) any attempt by the tutor who excused themselves to claim a session
+another tutor covered through the volunteer flow.
 
 ## Settings
 
@@ -411,5 +422,5 @@ The API integrates with two external services over HTTPS:
    verified server-side with the Firebase Admin SDK; account deactivation propagates back by
    disabling the Firebase account.
 2. **Resend (email delivery)** — transactional notification emails (assignment added/removed,
-   timesheet approved/rejected, swap requested/responded/reviewed) are sent through the Resend
+   timesheet approved/rejected) are sent through the Resend
    HTTP API, with every attempt recorded and de-duplicated in the `EmailLog` table.

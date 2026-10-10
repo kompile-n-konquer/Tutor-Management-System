@@ -55,10 +55,13 @@ const sessionSlotMeta = (session) =>
   [session.courseSlot?.venue, session.courseSlot?.sessionType].filter(Boolean).join(" · ");
 
 // SCHEDULED sessions carry no state chip — the "You lead" line is their status.
-// Only excused and volunteered sessions get a chip.
+// Only excused, offered and volunteered sessions get a chip.
 const stateChipFor = (session) => {
   if (session.status === "UNASSIGNED") {
     return { className: "bg-urgent-orange/10 text-urgent-orange", label: "Excused — awaiting volunteer" };
+  }
+  if (session.status === "OFFERED") {
+    return { className: "bg-secondary-fixed text-on-secondary-container", label: "Cover offer sent" };
   }
   if (session.status === "PENDING") {
     return { className: "bg-trust-blue/10 text-trust-blue", label: "Volunteer pending" };

@@ -5,7 +5,10 @@ const { dayOfWeekFor, deriveTimes } = require('../utils/claimRules');
 // Session lifecycle:
 //   SCHEDULED  — derived from an Event on the tutor's assigned course (never stored)
 //   UNASSIGNED — the tutor excused themselves, the session is open for volunteers
-//   PENDING    — a student volunteered and is awaiting approval (see SessionVolunteer)
+//   OFFERED    — the excusing tutor pointed the cover at one appointed tutor, who
+//                has not responded yet (a directed cover offer)
+//   PENDING    — a cover request (volunteer or accepted directed offer) is
+//                awaiting the lecturer's approval (see SessionVolunteer)
 //
 // Lecturers schedule tutoring exclusively through Events (controllers/events.js):
 // a tutor's upcoming sessions are derived at read time from the events on their
@@ -43,6 +46,86 @@ const sessionHours = (session) => {
   if (durationMinutes <= 0) return 0;
   return Math.round((durationMinutes / 60) * 10) / 10;
 };
+
+// "Jane Doe" — falls back to the email when name parts are missing. Used in
+// the human-readable reasons of cover validation failures.
+const tutorDisplayName = (user) =>
+  [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || 'Unknown tutor';
+
+const formatDay = (date) => new Date(date).toISOString().split('T')[0];
+
+const rangesOverlap = (a, b) => a.startMinute < b.endMinute && b.startMinute < a.endMinute;
+
+// Validates that `tutor` could cover `session` — the same practical constraints
+// any replacement tutor must satisfy, applied to the concrete session (course
+// slot: day, timeslot and minute range):
+//   1. their weekly availability covers the session's course slot
+//   2. none of their busy blocks overlap the session's times
+//   3. they lead no other session that double-books the same date+time
+// Returns human-readable failure reasons — empty means eligible.
+const validateCoverCandidate = async (session, tutor) => {
+  const reasons = [];
+  const { course, dayOfWeek, timeSlotId, timeSlot } = session.courseSlot;
+
+  if (!timeSlot) {
+    reasons.push(`${course.courseCode} has no tutoring timeslot on the session's day`);
+    return reasons; // the checks below need the session's time range
+  }
+  const slot = { startMinute: timeSlot.startMinute, endMinute: timeSlot.endMinute };
+
+  // 1. weekly availability covers the session's slot
+  const availability = await prisma.availability.findMany({
+    where: { userId: tutor.id, dayOfWeek, timeSlotId },
+    select: { id: true },
+  });
+  if (availability.length === 0) {
+    reasons.push('the session falls outside their weekly availability');
+  }
+
+  // 2. busy blocks clashing with the session's times
+  const busyBlocks = await prisma.busyBlock.findMany({ where: { userId: tutor.id, dayOfWeek } });
+  if (busyBlocks.some((block) => rangesOverlap(block, slot))) {
+    reasons.push('the session clashes with one of their busy blocks');
+  }
+
+  // 3. double-booking against another session they already lead
+  const overlappingSession = await prisma.session.findFirst({
+    where: {
+      id: { not: session.id },
+      date: session.date,
+      status: 'SCHEDULED',
+      assignment: { userId: tutor.id },
+      courseSlot: {
+        timeSlot: { startMinute: { lt: slot.endMinute }, endMinute: { gt: slot.startMinute } },
+      },
+    },
+  });
+  if (overlappingSession) {
+    reasons.push(`it double-books them against another session on ${formatDay(session.date)}`);
+  }
+
+  return reasons;
+};
+
+// The session shape the directed-cover pages render (mirrors the tutor
+// dashboard's rows): course code/name plus the slot and its time range.
+const serializeCoverSession = (session) => ({
+  id: session.id,
+  date: session.date,
+  status: session.status,
+  excuseReason: session.excuseReason ?? null,
+  course: {
+    courseCode: session.courseSlot.course.courseCode,
+    courseName: session.courseSlot.course.courseName,
+  },
+  courseSlot: {
+    id: session.courseSlot.id,
+    dayOfWeek: session.courseSlot.dayOfWeek,
+    venue: session.courseSlot.venue,
+    sessionType: session.courseSlot.sessionType,
+    timeSlot: session.courseSlot.timeSlot,
+  },
+});
 
 exports.getUnassignedSessions = catchAsync(async (req, res, next) => {
   const requestingUser = await prisma.user.findUnique({
@@ -191,6 +274,12 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
           timeSlot: true,
         },
       },
+      // The cover lifecycle attached to the row: the excusing tutor's own view
+      // of who they pointed the cover at (directed cover offer) and the state
+      // of that request.
+      volunteerRequest: {
+        include: { user: { select: { firstName: true, lastName: true } } },
+      },
     },
     orderBy: [{ date: 'asc' }, { id: 'asc' }],
   });
@@ -225,6 +314,7 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
         date: event.date,
         status: 'SCHEDULED',
         excuseReason: null,
+        volunteerRequest: null,
         ownerId: userId,
         courseId: event.course.id,
         ledBy: tutorName,
@@ -246,6 +336,15 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
       date: session.date,
       status: session.status,
       excuseReason: session.excuseReason,
+      volunteerRequest: session.volunteerRequest
+        ? {
+            status: session.volunteerRequest.status,
+            userId: session.volunteerRequest.userId,
+            tutorName: session.volunteerRequest.user
+              ? `${session.volunteerRequest.user.firstName} ${session.volunteerRequest.user.lastName}`
+              : null,
+          }
+        : null,
       ownerId: session.assignment.userId,
       courseId: session.assignment.courseId,
       // Every ledger row belongs to the requesting tutor — they lead it.
@@ -364,6 +463,7 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
       date: occurrence.date,
       status: occurrence.status,
       excuseReason: occurrence.excuseReason,
+      volunteerRequest: occurrence.volunteerRequest ?? null,
       // isMine — every row of this feed sits on the requesting tutor's own
       // assignment: they are the one expected to run it and the only one who
       // can excuse it. Kept in the payload so consumers can filter defensively.
@@ -640,12 +740,13 @@ exports.getMyVolunteeredSessions = catchAsync(async (req, res, next) => {
     return next(createHttpError(404, 'User not found. Please check if the user exists'));
   }
 
-  // Every SessionVolunteer record for this user whose status has not been
-  // rejected — PENDING means awaiting approval, APPROVED means confirmed.
+  // Every SessionVolunteer record for this user that still matters: OFFERED
+  // means a directed cover offer awaits their response, PENDING awaits the
+  // lecturer's approval, APPROVED means confirmed.
   const volunteerRecords = await prisma.sessionVolunteer.findMany({
     where: {
       userId: requestingUser.id,
-      status: { in: ['PENDING', 'APPROVED'] },
+      status: { in: ['OFFERED', 'PENDING', 'APPROVED'] },
     },
     include: {
       session: {
@@ -739,8 +840,10 @@ exports.volunteerForSession = catchAsync(async (req, res, next) => {
         throw createHttpError(403, 'Your course mark does not meet the minimum for this course');
       }
 
+      // A record left behind by a rejected request or a withdrawn directed
+      // offer is history only — the next cover request replaces it.
       const existingRequest = await tx.sessionVolunteer.findUnique({ where: { sessionId } });
-      if (existingRequest && existingRequest.status !== 'REJECTED') {
+      if (existingRequest && !['REJECTED', 'CANCELLED'].includes(existingRequest.status)) {
         throw createHttpError(409, 'Another tutor has already volunteered for this session');
       }
 
@@ -769,9 +872,11 @@ exports.volunteerForSession = catchAsync(async (req, res, next) => {
   }
 });
 
-// The course's lecturer decides on a PENDING cover request. Approval re-points
-// the session at the volunteer's TutorAssignment (created for the course when
-// they never had one), so the volunteer takes the excusing tutor's place.
+// The course's lecturer decides on a PENDING cover request — raised either by
+// a student volunteer or by an accepted directed cover offer; both reach the
+// same decision point. Approval re-points the session at the covering tutor's
+// TutorAssignment (created for the course when they never had one), so the
+// covering tutor takes the excusing tutor's place.
 exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
   const sessionId = parseSessionId(req.params.id);
   if (!sessionId) {
@@ -818,7 +923,8 @@ exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
 
     if (decision === 'REJECTED') {
       // The rejected record stays for history; the session returns to the open
-      // pool, and the next volunteer replaces the record (see volunteerForSession).
+      // pool, and the next cover request (a volunteer or a directed offer)
+      // replaces the record (see volunteerForSession).
       await tx.sessionVolunteer.update({
         where: { sessionId },
         data: { status: 'REJECTED' },
@@ -854,6 +960,329 @@ exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
       data: { assignmentId: coverAssignment.id, status: 'SCHEDULED' },
     });
     return { decision, session: updatedSession, assignmentId: coverAssignment.id };
+  });
+
+  res.json(result);
+});
+
+// ── Directed cover offers ─────────────────────────────────────────────────────
+// The excusing tutor may point the cover at one specific tutor instead of
+// leaving the session in the open pool. The nominee must be an active tutor
+// appointed to the course (taking the session over is an appointment, not just
+// a scheduling act) and must pass the same practical checks any replacement
+// tutor must satisfy. The nominee accepts or declines first; only then does the request reach
+// the lecturer, who decides exactly as for a self-volunteered request. No
+// claim/pay row moves anywhere — the covering tutor claims the event after it
+// happens, and the excusing tutor is blocked from claiming it (timesheets).
+
+// GET /:id/cover-candidates — the appointed tutors for an excused session,
+// each validated with human-readable reasons.
+exports.getCoverCandidates = catchAsync(async (req, res, next) => {
+  const sessionId = parseSessionId(req.params.id);
+  if (!sessionId) {
+    return next(createHttpError(400, 'Invalid session id'));
+  }
+
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+  if (requestingUser.role !== 'TUTOR') {
+    return next(createHttpError(403, 'Only tutors can view cover candidates'));
+  }
+
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    include: {
+      assignment: { select: { userId: true } },
+      courseSlot: {
+        include: {
+          course: { select: { id: true, courseCode: true, courseName: true } },
+          timeSlot: true,
+        },
+      },
+    },
+  });
+  if (!session) {
+    return next(createHttpError(404, 'Session not found. Please check if the session exists'));
+  }
+  if (session.assignment.userId !== requestingUser.id) {
+    return next(createHttpError(403, 'You can only offer cover for your own excused sessions'));
+  }
+  if (session.status !== 'UNASSIGNED') {
+    return next(createHttpError(409, 'This session is not open for a directed cover offer'));
+  }
+
+  // Every other active tutor appointed to the same course is a potential cover.
+  const assignments = await prisma.tutorAssignment.findMany({
+    where: {
+      courseId: session.courseSlot.course.id,
+      userId: { not: requestingUser.id },
+      user: { role: 'TUTOR', isActive: true },
+    },
+    include: { user: true },
+  });
+
+  const candidates = [];
+  for (const assignment of assignments) {
+    const tutor = assignment.user;
+    const reasons = await validateCoverCandidate(session, tutor);
+    candidates.push({
+      userId: tutor.id,
+      name: tutorDisplayName(tutor),
+      email: tutor.email,
+      eligible: reasons.length === 0,
+      reasons,
+    });
+  }
+
+  res.json({ session: serializeCoverSession(session), candidates });
+});
+
+// POST /:id/cover-offer — the excuser offers the session to one appointed
+// tutor. The session leaves the open pool while the nominee decides.
+exports.createCoverOffer = catchAsync(async (req, res, next) => {
+  const sessionId = parseSessionId(req.params.id);
+  if (!sessionId) {
+    return next(createHttpError(400, 'Invalid session id'));
+  }
+
+  const { nomineeId } = req.body || {};
+  const parsedNomineeId = Number(nomineeId);
+  if (!Number.isInteger(parsedNomineeId)) {
+    return next(createHttpError(400, 'nomineeId must be a valid integer'));
+  }
+
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+  if (requestingUser.role !== 'TUTOR') {
+    return next(createHttpError(403, 'Only tutors can offer a session to another tutor'));
+  }
+
+  const nominee = await prisma.user.findUnique({ where: { id: parsedNomineeId } });
+  if (!nominee || nominee.role !== 'TUTOR' || !nominee.isActive) {
+    return next(createHttpError(404, 'The nominated tutor must be an active tutor'));
+  }
+  if (nominee.id === requestingUser.id) {
+    return next(createHttpError(400, 'You cannot offer a session to yourself'));
+  }
+
+  // Excusing only happens for future sessions, but a stale UNASSIGNED row can
+  // still age past its date — it must not collect offers anymore.
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  try {
+    // The offer record and the session status flip happen atomically. The
+    // unique constraint on SessionVolunteer.sessionId keeps a single request
+    // per session while it is open (or awaiting the lecturer's decision).
+    const offer = await prisma.$transaction(async (tx) => {
+      const session = await tx.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          assignment: { select: { userId: true } },
+          courseSlot: {
+            include: {
+              course: { select: { id: true, courseCode: true } },
+              timeSlot: true,
+            },
+          },
+        },
+      });
+      if (!session) {
+        throw createHttpError(404, 'Session not found. Please check if the session exists');
+      }
+      if (session.assignment.userId !== requestingUser.id) {
+        throw createHttpError(403, 'You can only offer cover for your own excused sessions');
+      }
+      if (session.status !== 'UNASSIGNED') {
+        throw createHttpError(409, 'This session is not open for a directed cover offer');
+      }
+      if (session.date.getTime() < todayStart.getTime()) {
+        throw createHttpError(409, 'This session has already taken place');
+      }
+
+      // The nominee must be an appointed tutor for the course the session sits
+      // on — taking it over is an appointment, so qualified outsiders are not
+      // enough (same gate as any other cover tutor).
+      const appointment = await tx.tutorAssignment.findFirst({
+        where: { userId: nominee.id, courseId: session.courseSlot.course.id },
+      });
+      if (!appointment) {
+        throw createHttpError(
+          403,
+          `${tutorDisplayName(nominee)} is not allocated to ${session.courseSlot.course.courseCode}`,
+        );
+      }
+
+      const reasons = await validateCoverCandidate(session, nominee);
+      if (reasons.length > 0) {
+        throw createHttpError(
+          403,
+          `${tutorDisplayName(nominee)} cannot cover this session: ${reasons.join('; ')}`,
+        );
+      }
+
+      const existingRequest = await tx.sessionVolunteer.findUnique({ where: { sessionId } });
+      if (existingRequest && !['REJECTED', 'CANCELLED'].includes(existingRequest.status)) {
+        throw createHttpError(409, 'This session already has a cover request in progress');
+      }
+
+      // OFFERED on purpose: the nominee decides before the lecturer is asked.
+      const record = existingRequest
+        ? await tx.sessionVolunteer.update({
+            where: { sessionId },
+            data: { userId: nominee.id, status: 'OFFERED', createdAt: new Date() },
+          })
+        : await tx.sessionVolunteer.create({
+            data: { sessionId, userId: nominee.id, status: 'OFFERED' },
+          });
+
+      await tx.session.update({ where: { id: sessionId }, data: { status: 'OFFERED' } });
+
+      return record;
+    });
+
+    res.status(201).json(offer);
+  } catch (error) {
+    // P2002 is the unique-constraint failure raised when another offer raced us.
+    if (error.code === 'P2002') {
+      return next(createHttpError(409, 'This session already has a cover request in progress'));
+    }
+    throw error;
+  }
+});
+
+// PATCH /:id/cover-offer — the nominated tutor accepts or declines. Accepting
+// moves the request to the lecturer's queue; declining returns the session to
+// the open pool.
+exports.respondToCoverOffer = catchAsync(async (req, res, next) => {
+  const sessionId = parseSessionId(req.params.id);
+  if (!sessionId) {
+    return next(createHttpError(400, 'Invalid session id'));
+  }
+
+  const { decision } = req.body || {};
+  if (decision !== 'ACCEPT' && decision !== 'DECLINE') {
+    return next(createHttpError(400, 'decision must be ACCEPT or DECLINE'));
+  }
+
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+  if (requestingUser.role !== 'TUTOR') {
+    return next(createHttpError(403, 'Only tutors can respond to cover offers'));
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const session = await tx.session.findUnique({
+      where: { id: sessionId },
+      include: { volunteerRequest: true },
+    });
+    if (!session) {
+      throw createHttpError(404, 'Session not found. Please check if the session exists');
+    }
+    if (
+      session.status !== 'OFFERED' ||
+      !session.volunteerRequest ||
+      session.volunteerRequest.status !== 'OFFERED'
+    ) {
+      throw createHttpError(409, 'This session has no cover offer awaiting a response');
+    }
+    if (session.volunteerRequest.userId !== requestingUser.id) {
+      throw createHttpError(403, 'Only the tutor the session was offered to can respond');
+    }
+
+    if (decision === 'DECLINE') {
+      // The declined record stays for history (replaceable, like a rejected
+      // volunteer request); the session returns to the open pool.
+      const record = await tx.sessionVolunteer.update({
+        where: { sessionId },
+        data: { status: 'REJECTED' },
+      });
+      const updatedSession = await tx.session.update({
+        where: { id: sessionId },
+        data: { status: 'UNASSIGNED' },
+      });
+      return { decision, volunteerRequest: record, session: updatedSession };
+    }
+
+    // Accepted: the cover request now waits for the course lecturer — the same
+    // decision point a self-volunteered request reaches (see
+    // decideVolunteerRequest, which needs no distinction between the two).
+    const record = await tx.sessionVolunteer.update({
+      where: { sessionId },
+      data: { status: 'PENDING' },
+    });
+    const updatedSession = await tx.session.update({
+      where: { id: sessionId },
+      data: { status: 'PENDING' },
+    });
+    return { decision, volunteerRequest: record, session: updatedSession };
+  });
+
+  res.json(result);
+});
+
+// DELETE /:id/cover-offer — the excuser withdraws the offer while it still
+// waits on the nominee. Once accepted the request sits with the lecturer and
+// cannot be pulled back.
+exports.cancelCoverOffer = catchAsync(async (req, res, next) => {
+  const sessionId = parseSessionId(req.params.id);
+  if (!sessionId) {
+    return next(createHttpError(400, 'Invalid session id'));
+  }
+
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    return next(createHttpError(404, 'User not found. Please check if the user exists'));
+  }
+  if (requestingUser.role !== 'TUTOR') {
+    return next(createHttpError(403, 'Only tutors can withdraw cover offers'));
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const session = await tx.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        assignment: { select: { userId: true } },
+        volunteerRequest: true,
+      },
+    });
+    if (!session) {
+      throw createHttpError(404, 'Session not found. Please check if the session exists');
+    }
+    if (
+      session.status !== 'OFFERED' ||
+      !session.volunteerRequest ||
+      session.volunteerRequest.status !== 'OFFERED'
+    ) {
+      throw createHttpError(409, 'This session has no cover offer waiting for a response');
+    }
+    if (session.assignment.userId !== requestingUser.id) {
+      throw createHttpError(403, 'Only the tutor who excused this session can withdraw the offer');
+    }
+
+    const record = await tx.sessionVolunteer.update({
+      where: { sessionId },
+      data: { status: 'CANCELLED' },
+    });
+    const updatedSession = await tx.session.update({
+      where: { id: sessionId },
+      data: { status: 'UNASSIGNED' },
+    });
+    return { volunteerRequest: record, session: updatedSession };
   });
 
   res.json(result);

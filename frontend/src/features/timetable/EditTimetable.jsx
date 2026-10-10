@@ -292,9 +292,11 @@ const EditTimetable = () => {
                 const chip =
                   session.status === 'UNASSIGNED'
                     ? { cls: 'bg-urgent-orange/10 text-urgent-orange', label: 'Excused' }
-                    : session.status === 'PENDING'
-                      ? { cls: 'bg-trust-blue/10 text-trust-blue', label: 'Volunteer pending' }
-                      : { cls: 'bg-primary/10 text-primary', label: 'You lead' };
+                    : session.status === 'OFFERED'
+                      ? { cls: 'bg-secondary-fixed text-on-secondary-container', label: 'Cover offer sent' }
+                      : session.status === 'PENDING'
+                        ? { cls: 'bg-trust-blue/10 text-trust-blue', label: 'Volunteer pending' }
+                        : { cls: 'bg-primary/10 text-primary', label: 'You lead' };
 
                 return (
                   <div

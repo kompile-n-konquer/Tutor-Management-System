@@ -19,7 +19,7 @@ const routeTable = (router) =>
     }));
 
 describe('routes wiring', () => {
-  test('sessions routes expose the excuse/volunteer endpoints behind auth', () => {
+  test('sessions routes expose the excuse/volunteer/cover endpoints behind auth', () => {
     expect(routeTable(sessionsRouter)).toEqual([
       { path: '/unassigned', methods: ['get'], handlers: 2 }, // auth + controller
       { path: '/mine', methods: ['get'], handlers: 2 },
@@ -28,6 +28,10 @@ describe('routes wiring', () => {
       { path: '/:id/excuse', methods: ['patch'], handlers: 2 },
       { path: '/:id/volunteer', methods: ['post'], handlers: 2 },
       { path: '/:id/volunteer', methods: ['patch'], handlers: 3 }, // auth + lecturer gate + controller
+      { path: '/:id/cover-candidates', methods: ['get'], handlers: 2 },
+      { path: '/:id/cover-offer', methods: ['post'], handlers: 2 },
+      { path: '/:id/cover-offer', methods: ['patch'], handlers: 2 },
+      { path: '/:id/cover-offer', methods: ['delete'], handlers: 2 },
     ]);
   });
 

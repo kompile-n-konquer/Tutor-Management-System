@@ -232,6 +232,26 @@ describe('timesheet workflow — creation, review, corrections', () => {
       expect(review.tutorName).toBe('Thabo Nkosi');
       expect(review.tutorEmail).toBe('thabo@wits.ac.za');
     });
+
+    test('returns the global submitted queue with every entry for an organiser', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 4, role: 'ORGANISER' });
+      prisma.timesheet.findMany.mockResolvedValue([
+        {
+          ...makeTimesheet({ status: 'SUBMITTED' }),
+          user: { firstName: 'Alex', lastName: 'Mercer', email: 'alex@wits.ac.za' },
+          entries: [makeEntry({ supervisorId: 9 }), makeEntry({ id: 72, supervisorId: 6 })],
+        },
+      ]);
+
+      await getPendingReview(req, res, next);
+
+      expect(prisma.timesheet.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status: 'SUBMITTED' } }),
+      );
+      const [review] = res.json.mock.calls[0][0];
+      expect(review.entries).toHaveLength(2);
+      expect(review.tutorName).toBe('Alex Mercer');
+    });
   });
 
   describe('getSupervisors', () => {
@@ -792,6 +812,22 @@ describe('timesheet workflow — creation, review, corrections', () => {
       await approveEntry(req, res, next);
 
       expectHttpError(next, 403, 'You can only approve entries where you are the supervisor');
+    });
+
+    test('lets an organiser approve an entry assigned to another supervisor', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 4, role: 'ORGANISER' });
+      prisma.timesheet.findUnique.mockResolvedValue(makeTimesheet({ status: 'SUBMITTED' }));
+      prisma.timesheetEntry.findFirst.mockResolvedValue({ id: 7, supervisorId: 9 });
+      prisma.timesheetEntry.update.mockResolvedValue({});
+      prisma.timesheetEntry.findMany.mockResolvedValue([{ status: 'PENDING' }]);
+
+      await approveEntry(req, res, next);
+
+      expect(prisma.timesheetEntry.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: { status: 'APPROVED' },
+      });
+      expect(res.json).toHaveBeenCalledWith({ message: 'Entry approved', allApproved: false });
     });
 
     test('approves one entry while others are still pending', async () => {

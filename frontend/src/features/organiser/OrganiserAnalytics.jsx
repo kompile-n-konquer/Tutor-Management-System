@@ -145,7 +145,7 @@ export default function OrganiserAnalytics() {
 
   return (
     <AppLayout title="Tutor Management System">
-      <div className="p-margin-page max-w-container-max mx-auto w-full">
+      <div className="p-gutter md:p-margin-page max-w-container-max mx-auto w-full">
         {/* Header */}
         <div className="mb-stack-lg flex flex-wrap items-start justify-between gap-gutter">
           <div className="flex-1 min-w-[14rem]">

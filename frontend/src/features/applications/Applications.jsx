@@ -135,7 +135,7 @@ const Applications = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Opportunity</th>
@@ -147,15 +147,19 @@ const Applications = () => {
                     <th className="py-stack-sm px-stack-md"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {opportunities.map((opportunity) => (
                     <tr key={opportunity.id}>
-                      <td className="py-stack-sm px-stack-md">
-                        <span className="font-bold text-primary">{opportunity.courseCode}</span>
-                        <span className="text-on-surface-variant"> - {opportunity.courseName}</span>
-                        <p className="font-body-sm text-outline mt-1">Min mark {opportunity.minimumMark}</p>
+                      <td data-label="Opportunity" className="py-stack-sm px-stack-md">
+                        <span className="cell-stack">
+                          <span>
+                            <span className="font-bold text-primary">{opportunity.courseCode}</span>
+                            <span className="text-on-surface-variant"> - {opportunity.courseName}</span>
+                          </span>
+                          <p className="font-body-sm text-outline mt-1">Min mark {opportunity.minimumMark}</p>
+                        </span>
                       </td>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Tutoring Slots" className="py-stack-sm px-stack-md">
                         <div className="flex flex-wrap gap-1">
                           {opportunity.slots.map((slot, index) => (
                             <span
@@ -167,16 +171,16 @@ const Applications = () => {
                           ))}
                         </div>
                       </td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Added" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {formatDate(opportunity.createdAt)}
                       </td>
-                      <td className="py-stack-sm px-stack-md">{opportunity.lecturer || 'Unknown'}</td>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Lecturer" className="py-stack-sm px-stack-md">{opportunity.lecturer || 'Unknown'}</td>
+                      <td data-label="Tutors" className="py-stack-sm px-stack-md">
                         <span className="font-semibold text-on-surface font-data-mono">
                           {opportunity.assignedTutors}/{opportunity.tutorsRequired}
                         </span>
                       </td>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Status" className="py-stack-sm px-stack-md">
                         <span className="bg-trust-blue/10 text-trust-blue px-2 py-1 rounded text-xs font-semibold">
                           Open
                         </span>
@@ -219,7 +223,7 @@ const Applications = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Course</th>
@@ -228,18 +232,18 @@ const Applications = () => {
                     <th className="py-stack-sm px-stack-md">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {myApplications.map((application) => (
                     <tr key={application.id}>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Course" className="py-stack-sm px-stack-md">
                         <span className="font-bold text-primary">{application.courseCode}</span>
                         <span className="text-on-surface-variant"> - {application.courseName}</span>
                       </td>
-                      <td className="py-stack-sm px-stack-md font-data-mono">{application.courseMark}</td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Your Mark" className="py-stack-sm px-stack-md font-data-mono">{application.courseMark}</td>
+                      <td data-label="Applied" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {formatDate(application.appliedAt)}
                       </td>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Status" className="py-stack-sm px-stack-md">
                         <span
                           className={`px-2 py-1 rounded text-xs font-semibold ${
                             STATUS_BADGES[application.status] || 'bg-surface-variant text-on-surface-variant'

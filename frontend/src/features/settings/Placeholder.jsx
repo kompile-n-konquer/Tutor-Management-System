@@ -3,7 +3,7 @@ import AppLayout from "../../components/layout/AppLayout";
 export default function Placeholder({ label = "Page" }) {
   return (
     <AppLayout title="Tutor Management System">
-      <div className="p-margin-page max-w-container-max mx-auto w-full">
+      <div className="p-gutter md:p-margin-page max-w-container-max mx-auto w-full">
         <div className="bg-surface-container-lowest border border-dashed border-outline-variant rounded-xl p-stack-lg text-center">
           <h2 className="font-headline-md text-headline-md text-on-surface mb-2">{label}</h2>
           <p className="font-body-md text-body-md text-on-surface-variant">

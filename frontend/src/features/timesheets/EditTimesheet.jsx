@@ -482,7 +482,7 @@ const EditTimesheet = () => {
               </p>
             ) : (
               <div className="max-h-96 overflow-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="responsive-table w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                       <th className="py-stack-sm px-stack-md">Course</th>
@@ -494,19 +494,23 @@ const EditTimesheet = () => {
                       <th className="py-stack-sm px-stack-md"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-variant font-body-md">
+                  <tbody className="font-body-md">
                     {pickerEvents.map((event) => {
                       const claimed = claimedEventIds.has(event.id);
                       return (
                         <tr key={event.id}>
-                          <td className="py-stack-sm px-stack-md">
-                            <span className="font-bold text-primary">{event.courseCode}</span>
-                            <span className="text-on-surface-variant"> - {event.courseName}</span>
+                          <td data-label="Course" className="py-stack-sm px-stack-md">
+                            <span className="cell-stack">
+                              <span>
+                                <span className="font-bold text-primary">{event.courseCode}</span>
+                                <span className="text-on-surface-variant"> - {event.courseName}</span>
+                              </span>
+                            </span>
                           </td>
-                          <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          <td data-label="Date" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                             {formatEventDay(event.date)}
                           </td>
-                          <td className="py-stack-sm px-stack-md">
+                          <td data-label="Time" className="py-stack-sm px-stack-md">
                             {event.times && event.times.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {event.times.map((time, index) => (
@@ -522,9 +526,9 @@ const EditTimesheet = () => {
                               <span className="text-outline text-sm">—</span>
                             )}
                           </td>
-                          <td className="py-stack-sm px-stack-md capitalize">{event.description}</td>
-                          <td className="py-stack-sm px-stack-md">{event.lecturer || 'Unknown'}</td>
-                          <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          <td data-label="Description" className="py-stack-sm px-stack-md capitalize">{event.description}</td>
+                          <td data-label="Lecturer" className="py-stack-sm px-stack-md">{event.lecturer || 'Unknown'}</td>
+                          <td data-label="Hours" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                             {event.duration} {event.duration === 1 ? 'hr' : 'hrs'}
                           </td>
                           <td className="py-stack-sm px-stack-md">
@@ -589,7 +593,7 @@ const EditTimesheet = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Course</th>
@@ -600,21 +604,25 @@ const EditTimesheet = () => {
                     {isEditable && <th className="py-stack-sm px-stack-md"></th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {entries.map((entry, index) => (
                     <tr key={entry.eventId ?? `entry-${index}`}>
-                      <td className="py-stack-sm px-stack-md">
-                        <span className="font-bold text-primary">{entry.courseCode}</span>
-                        <span className="text-on-surface-variant"> - {entry.courseName}</span>
+                      <td data-label="Course" className="py-stack-sm px-stack-md">
+                        <span className="cell-stack">
+                          <span>
+                            <span className="font-bold text-primary">{entry.courseCode}</span>
+                            <span className="text-on-surface-variant"> - {entry.courseName}</span>
+                          </span>
+                        </span>
                       </td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Date" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {formatEventDay(entry.workDate)}
                       </td>
-                      <td className="py-stack-sm px-stack-md capitalize">{entry.description}</td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Description" className="py-stack-sm px-stack-md capitalize">{entry.description}</td>
+                      <td data-label="Hours" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {Number(entry.duration)} {Number(entry.duration) === 1 ? 'hr' : 'hrs'}
                       </td>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Supervisor" className="py-stack-sm px-stack-md">
                         {entry.supervisorName || 'Unknown'}
                       </td>
                       {isEditable && (

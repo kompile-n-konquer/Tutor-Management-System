@@ -130,7 +130,7 @@ function TutorCard({ tutor, cardRef, isFocused, onKeyDown, onFocus, onDragStart,
 
 function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCardFocus, onDragStart, onDragEnd, onDragOver, onDrop, highlighted, onRemove, mutatingId, remoteDrag }) {
   return (
-    <div className="w-1/2 flex flex-col bg-surface-container-low rounded-lg border border-outline-variant/50">
+    <div className="w-full md:w-1/2 flex flex-col bg-surface-container-low rounded-lg border border-outline-variant/50">
       <div className="p-stack-sm border-b border-outline-variant/50 flex justify-between items-center">
         <span className="font-label-caps text-label-caps text-on-surface-variant">{label}</span>
         {remoteDrag && remoteDrag.pool === id ? (
@@ -650,9 +650,10 @@ export default function Organiser() {
 
   return (
     <AppLayout title="Tutor Management System">
-      <div className="p-stack-md md:p-margin-page flex gap-gutter h-full">
-        {/* Course list */}
-        <div className="w-80 flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden shrink-0">
+      <div className="p-stack-md md:p-margin-page flex flex-col md:flex-row gap-gutter md:h-full">
+        {/* Course list — full width with its own scroll on phones so the
+            board below stays reachable; docked column from md up. */}
+        <div className="w-full md:w-80 max-h-[45vh] md:max-h-none flex flex-col bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden shrink-0">
           <div className="p-stack-md border-b border-surface-variant bg-surface flex justify-between items-center">
             <div>
               <h2 className="font-headline-md text-headline-md text-on-surface">Courses</h2>
@@ -761,7 +762,7 @@ export default function Organiser() {
             </div>
           </div>
           {loading ? (
-            <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg" aria-hidden="true">
+            <div className="flex-1 p-stack-md overflow-hidden flex flex-col md:flex-row gap-stack-lg" aria-hidden="true">
               {[0, 1].map((pool) => (
                 <div key={pool} className="flex-1 min-w-0 space-y-stack-sm">
                   <div className="animate-pulse h-4 w-40 rounded bg-surface-container-high" />
@@ -794,7 +795,7 @@ export default function Organiser() {
               <p className="font-body-sm text-on-surface-variant">No courses found. Seed or create a course to get started.</p>
             </div>
           ) : (
-            <div className="flex-1 p-stack-md overflow-hidden flex gap-stack-lg">
+            <div className="flex-1 p-stack-md overflow-hidden flex flex-col md:flex-row gap-stack-lg">
               <Pool
                 id="available"
                 label={`Available for ${course.code}`}

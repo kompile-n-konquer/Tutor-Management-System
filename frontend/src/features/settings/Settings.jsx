@@ -253,7 +253,7 @@ const Settings = () => {
           {isOrganiser ? (
             <div className="space-y-gutter">
             <div className="flex flex-wrap items-stretch gap-gutter">
-              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
+              <div className="flex-1 min-w-[280px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
                 <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                   <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                     Max Claimable Hours
@@ -295,7 +295,7 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="flex-1 min-w-[340px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
+              <div className="flex-1 min-w-[280px] bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">
                 <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                   <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                     Event Claim Window

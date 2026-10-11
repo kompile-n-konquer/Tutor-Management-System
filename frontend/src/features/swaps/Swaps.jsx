@@ -9,37 +9,45 @@ import { formatSessionDate, formatSlot, swapStatusBadge, swapStatusLabel } from 
 
 // One row of the swap tables: which session moves where, the other tutor, the
 // status and — while an action is still allowed — the matching buttons.
-const SwapRow = ({ swap, currentUserId, onAccept, onDecline, onCancel, busy }) => {
+const SwapRow = ({ swap, currentUserId, onAccept, onDecline, onCancel, busy, tutorLabel = "From" }) => {
   const isRecipient = swap.recipient.userId === currentUserId;
   const isRequester = swap.requester.userId === currentUserId;
   const otherTutor = isRecipient ? swap.requester : swap.recipient;
 
   return (
     <tr>
-      <td className="py-stack-sm px-stack-md">
-        <span className="font-bold text-primary">{swap.offeredSession.courseCode}</span>
-        <span className="text-on-surface-variant"> — {swap.offeredSession.courseName}</span>
-        <p className="font-body-sm text-outline mt-1">
-          {formatSessionDate(swap.offeredSession.date)} ·{' '}
-          {swap.offeredSession.slots.map(formatSlot).join(', ')}
-        </p>
-        {swap.requestedSession && (
+      <td data-label="Session" className="py-stack-sm px-stack-md">
+        <span className="cell-stack">
+          <span>
+            <span className="font-bold text-primary">{swap.offeredSession.courseCode}</span>
+            <span className="text-on-surface-variant"> — {swap.offeredSession.courseName}</span>
+          </span>
           <p className="font-body-sm text-outline mt-1">
-            In return: <span className="font-semibold">{swap.requestedSession.courseCode}</span> —{' '}
-            {formatSessionDate(swap.requestedSession.date)} ·{' '}
-            {swap.requestedSession.slots.map(formatSlot).join(', ')}
+            {formatSessionDate(swap.offeredSession.date)} ·{' '}
+            {swap.offeredSession.slots.map(formatSlot).join(', ')}
           </p>
-        )}
+          {swap.requestedSession && (
+            <p className="font-body-sm text-outline mt-1">
+              In return: <span className="font-semibold">{swap.requestedSession.courseCode}</span> —{' '}
+              {formatSessionDate(swap.requestedSession.date)} ·{' '}
+              {swap.requestedSession.slots.map(formatSlot).join(', ')}
+            </p>
+          )}
+        </span>
       </td>
-      <td className="py-stack-sm px-stack-md">
-        {otherTutor.name}
-        <p className="font-body-sm text-outline mt-1">{otherTutor.email}</p>
+      <td data-label={tutorLabel} className="py-stack-sm px-stack-md">
+        <span className="cell-stack">
+          <span>{otherTutor.name}</span>
+          <p className="font-body-sm text-outline mt-1">{otherTutor.email}</p>
+        </span>
       </td>
-      <td className="py-stack-sm px-stack-md font-body-sm text-on-surface-variant">
-        {isRequester ? 'You offered this session' : 'Offered to you'}
-        {swap.reason && <p className="mt-1">“{swap.reason}”</p>}
+      <td data-label="Details" className="py-stack-sm px-stack-md font-body-sm text-on-surface-variant">
+        <span className="cell-stack">
+          <span>{isRequester ? 'You offered this session' : 'Offered to you'}</span>
+          {swap.reason && <p className="mt-1">“{swap.reason}”</p>}
+        </span>
       </td>
-      <td className="py-stack-sm px-stack-md">
+      <td data-label="Status" className="py-stack-sm px-stack-md">
         <span className={`${swapStatusBadge(swap.status)} px-2 py-1 rounded text-xs font-semibold`}>
           {swapStatusLabel(swap.status)}
         </span>
@@ -197,7 +205,7 @@ const Swaps = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Session</th>
@@ -207,18 +215,18 @@ const Swaps = () => {
                     <th className="py-stack-sm px-stack-md"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {activeSessions.map((session) => (
                     <tr key={session.eventId}>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Session" className="py-stack-sm px-stack-md">
                         <span className="font-bold text-primary">{session.courseCode}</span>
                         <span className="text-on-surface-variant"> — {session.courseName}</span>
                       </td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Date" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {formatSessionDate(session.date)}
                       </td>
-                      <td className="py-stack-sm px-stack-md">{session.slots.map(formatSlot).join(', ')}</td>
-                      <td className="py-stack-sm px-stack-md font-data-mono">{session.duration} h</td>
+                      <td data-label="Time" className="py-stack-sm px-stack-md">{session.slots.map(formatSlot).join(', ')}</td>
+                      <td data-label="Duration" className="py-stack-sm px-stack-md font-data-mono">{session.duration} h</td>
                       <td className="py-stack-sm px-stack-md text-right">
                         <Link
                           to={`/swaps/new?eventId=${session.eventId}`}
@@ -247,7 +255,7 @@ const Swaps = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Session</th>
@@ -257,12 +265,13 @@ const Swaps = () => {
                     <th className="py-stack-sm px-stack-md"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {received.map((swap) => (
                     <SwapRow
                       key={swap.id}
                       swap={swap}
                       currentUserId={currentUser.id}
+                      tutorLabel="From"
                       onAccept={handleAccept}
                       onDecline={handleDecline}
                       onCancel={handleCancel}
@@ -288,7 +297,7 @@ const Swaps = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Session</th>
@@ -298,12 +307,13 @@ const Swaps = () => {
                     <th className="py-stack-sm px-stack-md"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {sent.map((swap) => (
                     <SwapRow
                       key={swap.id}
                       swap={swap}
                       currentUserId={currentUser.id}
+                      tutorLabel="Offered to"
                       onAccept={handleAccept}
                       onDecline={handleDecline}
                       onCancel={handleCancel}

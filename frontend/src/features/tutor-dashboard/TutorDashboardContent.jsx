@@ -203,7 +203,7 @@ export default function TutorDashboardContent({
   const courseCodes = courses.map((course) => course.courseCode);
 
   return (
-    <div className="p-margin-page max-w-container-max mx-auto w-full">
+    <div className="p-gutter md:p-margin-page max-w-container-max mx-auto w-full">
       {/* ── Course context — what this tutor is approved to teach ── */}
       <header className="mb-stack-lg">
         <p className="font-label-caps text-label-caps text-primary uppercase tracking-widest mb-unit">

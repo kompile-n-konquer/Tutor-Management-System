@@ -92,7 +92,7 @@ const SwapReview = () => {
 
   const renderTable = (rows, { actionable = false } = {}) => (
     <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
+      <table className="responsive-table w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
             <th className="py-stack-sm px-stack-md">Sessions</th>
@@ -102,36 +102,45 @@ const SwapReview = () => {
             {actionable && <th className="py-stack-sm px-stack-md"></th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-surface-variant font-body-md">
+        <tbody className="font-body-md">
           {rows.map((swap) => (
             <tr key={swap.id}>
-              <td className="py-stack-sm px-stack-md">
-                <span className="font-bold text-primary">{swap.offeredSession.courseCode}</span>
-                <span className="text-on-surface-variant"> — {swap.offeredSession.courseName}</span>
-                <p className="font-body-sm text-outline mt-1">
-                  {formatSessionDate(swap.offeredSession.date)} ·{' '}
-                  {swap.offeredSession.slots.map(formatSlot).join(', ')}
-                </p>
-                {swap.requestedSession ? (
+              <td data-label="Sessions" className="py-stack-sm px-stack-md">
+                <span className="cell-stack">
+                  <span>
+                    <span className="font-bold text-primary">{swap.offeredSession.courseCode}</span>
+                    <span className="text-on-surface-variant"> — {swap.offeredSession.courseName}</span>
+                  </span>
                   <p className="font-body-sm text-outline mt-1">
-                    Two-way: <span className="font-semibold">{swap.requestedSession.courseCode}</span>{' '}
-                    — {formatSessionDate(swap.requestedSession.date)} ·{' '}
-                    {swap.requestedSession.slots.map(formatSlot).join(', ')}
+                    {formatSessionDate(swap.offeredSession.date)} ·{' '}
+                    {swap.offeredSession.slots.map(formatSlot).join(', ')}
                   </p>
-                ) : (
-                  <p className="font-body-sm text-outline mt-1">One-way handover</p>
-                )}
+                  {swap.requestedSession ? (
+                    <p className="font-body-sm text-outline mt-1">
+                      Two-way: <span className="font-semibold">{swap.requestedSession.courseCode}</span>{' '}
+                      — {formatSessionDate(swap.requestedSession.date)} ·{' '}
+                      {swap.requestedSession.slots.map(formatSlot).join(', ')}
+                    </p>
+                  ) : (
+                    <p className="font-body-sm text-outline mt-1">One-way handover</p>
+                  )}
+                </span>
               </td>
-              <td className="py-stack-sm px-stack-md">
-                {swap.requester.name} <span className="text-outline">gives</span>
-                <br />
-                {swap.recipient.name} <span className="text-outline">receives</span>
-                {swap.reason && <p className="font-body-sm text-outline mt-1">“{swap.reason}”</p>}
+              <td data-label="Tutors" className="py-stack-sm px-stack-md">
+                <span className="cell-stack">
+                  <span>
+                    {swap.requester.name} <span className="text-outline">gives</span>
+                  </span>
+                  <span>
+                    {swap.recipient.name} <span className="text-outline">receives</span>
+                  </span>
+                  {swap.reason && <p className="font-body-sm text-outline mt-1">“{swap.reason}”</p>}
+                </span>
               </td>
-              <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+              <td data-label="Requested" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                 {formatSessionDate(swap.requestedAt)}
               </td>
-              <td className="py-stack-sm px-stack-md">
+              <td data-label="Status" className="py-stack-sm px-stack-md">
                 <span className={`${swapStatusBadge(swap.status)} px-2 py-1 rounded text-xs font-semibold`}>
                   {swapStatusLabel(swap.status)}
                 </span>

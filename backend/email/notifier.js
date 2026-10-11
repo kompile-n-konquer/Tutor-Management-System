@@ -1,5 +1,5 @@
 const prisma = require('../prisma/client');
-const { getResendClient, isResendConfigured, getFromAddress } = require('./resend');
+const { sendEmail, isBrevoConfigured } = require('./brevo');
 const {
   assignmentAddedEmail,
   assignmentRemovedEmail,
@@ -64,7 +64,7 @@ function toRecipient(user) {
 }
 
 /**
- * Send one notification email via Resend and record the attempt in EmailLog.
+ * Send one notification email via Brevo and record the attempt in EmailLog.
  *
  * Duplicate prevention: before sending, the EmailLog is checked for a prior
  * successful (SENT) send of the same dedupe key — if one exists, the send is
@@ -72,7 +72,7 @@ function toRecipient(user) {
  * retry, so retries never produce duplicate successful notifications.
  *
  * This function never throws: every failure path (missing recipient, log
- * failure, Resend errors) is caught, logged to the console and returned in
+ * failure, Brevo errors) is caught, logged to the console and returned in
  * the result so callers can keep serving requests.
  */
 async function sendNotification({
@@ -131,21 +131,19 @@ async function sendNotification({
       },
     });
 
-    // 3. Actually send through Resend.
+    // 3. Actually send through Brevo.
     try {
-      if (!isResendConfigured()) {
-        throw new Error('RESEND_API_KEY is not set; cannot send notification emails');
+      if (!isBrevoConfigured()) {
+        throw new Error('BREVO_API_KEY is not set; cannot send notification emails');
       }
-      const resend = getResendClient();
-      const { data, error } = await resend.emails.send({
-        from: getFromAddress(),
-        to: [recipient.email],
+      const { data, error } = await sendEmail({
+        to: recipient.email,
         subject,
         html,
         text,
       });
       if (error) {
-        throw new Error(`Resend API error ${error.statusCode ?? ''} (${error.name}): ${error.message}`);
+        throw new Error(error.message);
       }
 
       // 4a. Success: mark the log row as SENT with the dispatch timestamp.
@@ -153,7 +151,7 @@ async function sendNotification({
         where: { id: log.id },
         data: { status: 'SENT', sentAt: new Date(), errorMessage: null },
       });
-      return { sent: true, skipped: false, messageId: data?.id ?? null, dedupeKey };
+      return { sent: true, skipped: false, messageId: data?.messageId ?? null, dedupeKey };
     } catch (sendError) {
       // 4b. Failure: keep the response intact — a failed email must never
       //     crash the app. The FAILED log row allows a later retry.

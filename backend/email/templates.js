@@ -1,5 +1,5 @@
 // Subject/body builders for every notification event type. Kept as pure
-// functions (no Prisma, no Resend) so they are trivially unit-testable.
+// functions (no Prisma, no email client) so they are trivially unit-testable.
 // All dynamic values are HTML-escaped before being embedded in the HTML body.
 
 const APP_NAME = 'Tutor Management System';

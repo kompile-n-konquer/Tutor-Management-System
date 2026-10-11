@@ -190,7 +190,7 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
   });
 
   // Fire-and-forget: email the newly assigned tutor. sendNotification never
-  // throws (every failure is logged in EmailLog instead), so a Resend outage
+  // throws (every failure is logged in EmailLog instead), so a Brevo outage
   // can never fail the assignment request itself.
   notifyAssignmentAdded(assignment).catch(() => {});
 

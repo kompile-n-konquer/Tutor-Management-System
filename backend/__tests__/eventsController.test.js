@@ -17,8 +17,8 @@ function flushMicrotasks() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-function mockReq() {
-  return { user: { user_id: 'uid-123' }, params: {}, query: {} };
+function mockReq(query = {}) {
+  return { user: { user_id: 'uid-123' }, params: {}, query };
 }
 
 function mockRes() {
@@ -112,6 +112,53 @@ describe('getEvents', () => {
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
     expect(prisma.event.findMany).not.toHaveBeenCalled();
+  });
+
+  test('combines a tutor scope with an inclusive date range', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 9, role: 'TUTOR' });
+    prisma.event.findMany.mockResolvedValue([]);
+
+    await getEvents(mockReq({ from: '2026-03-01', to: '2026-03-31' }), mockRes(), jest.fn());
+
+    expect(prisma.event.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          course: { assignments: { some: { userId: 9 } } },
+          date: {
+            gte: new Date('2026-03-01T00:00:00.000Z'),
+            lte: new Date('2026-03-31T00:00:00.000Z'),
+          },
+        },
+      }),
+    );
+  });
+
+  test.each([
+    ['after', { from: '2026-03-01' }, { gte: new Date('2026-03-01T00:00:00.000Z') }],
+    ['before', { to: '2026-03-31' }, { lte: new Date('2026-03-31T00:00:00.000Z') }],
+  ])('filters events %s a selected date', async (_label, query, date) => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'ORGANISER' });
+    prisma.event.findMany.mockResolvedValue([]);
+
+    await getEvents(mockReq(query), mockRes(), jest.fn());
+
+    expect(prisma.event.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { date } }),
+    );
+  });
+
+  test.each([
+    [{ from: '2026-02-30' }, 'from and to must be valid dates in YYYY-MM-DD format'],
+    [{ to: 'not-a-date' }, 'from and to must be valid dates in YYYY-MM-DD format'],
+    [{ from: '2026-04-01', to: '2026-03-31' }, 'from must be on or before to'],
+  ])('rejects invalid date filter input', async (query, message) => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'ORGANISER' });
+    const next = jest.fn();
+
+    await getEvents(mockReq(query), mockRes(), next);
+
+    expect(prisma.event.findMany).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400, message }));
   });
 });
 

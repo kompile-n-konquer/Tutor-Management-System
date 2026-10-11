@@ -26,6 +26,8 @@ const startOfToday = () => {
   return date.getTime();
 };
 
+const EVENTS_PER_COURSE_PAGE = 5;
+
 const Events = () => {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
@@ -35,6 +37,10 @@ const Events = () => {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState({ from: '', to: '' });
+  const [coursePages, setCoursePages] = useState({});
 
   const role = currentUser?.role?.toLowerCase();
   const canViewEvents = role === 'tutor' || role === 'lecturer' || role === 'organiser' || role === 'admin';
@@ -90,7 +96,11 @@ const Events = () => {
     if (loading || !currentUser || !canViewEvents) return;
 
     const loadEvents = async () => {
-      const response = await execute(() => api.get('/events'));
+      const searchParams = new URLSearchParams();
+      if (appliedFilters.from) searchParams.set('from', appliedFilters.from);
+      if (appliedFilters.to) searchParams.set('to', appliedFilters.to);
+      const query = searchParams.toString();
+      const response = await execute(() => api.get(query ? `/events?${query}` : '/events'));
       if (response && response.status === 200) {
         setEvents(response.data);
         setError('');
@@ -101,7 +111,24 @@ const Events = () => {
     };
 
     loadEvents();
-  }, [currentUser, loading, canViewEvents, execute, reloadKey]);
+  }, [currentUser, loading, canViewEvents, execute, reloadKey, appliedFilters]);
+
+  const applyFilters = (event) => {
+    event.preventDefault();
+    setExpandedCourse(null);
+    setCoursePages({});
+    setAppliedFilters({ from: fromDate, to: toDate });
+    setReloadKey((key) => key + 1);
+  };
+
+  const clearFilters = () => {
+    setFromDate('');
+    setToDate('');
+    setExpandedCourse(null);
+    setCoursePages({});
+    setAppliedFilters({ from: '', to: '' });
+    setReloadKey((key) => key + 1);
+  };
 
   if (loading) return null;
   if (!currentUser || !canViewEvents) return null;
@@ -133,6 +160,44 @@ const Events = () => {
             </div>
           )}
         </div>
+
+        <form
+          onSubmit={applyFilters}
+          className="mb-stack-lg rounded-xl border border-surface-variant bg-surface-container-lowest p-stack-md"
+        >
+          <fieldset className="flex flex-wrap items-end gap-gutter">
+            <legend className="mb-stack-sm font-label-caps text-label-caps text-on-surface-variant">
+              Filter events by date
+            </legend>
+            <label className="flex flex-col gap-1 font-body-sm text-on-surface-variant">
+              From date
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+                className="rounded border border-surface-variant bg-surface px-3 py-2 text-on-surface"
+              />
+            </label>
+            <label className="flex flex-col gap-1 font-body-sm text-on-surface-variant">
+              To date
+              <input
+                type="date"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
+                className="rounded border border-surface-variant bg-surface px-3 py-2 text-on-surface"
+              />
+            </label>
+            <Button type="submit" className="min-w-28">
+              Apply filters
+            </Button>
+            <Button type="button" className="min-w-28" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          </fieldset>
+          <p className="mt-stack-sm font-body-sm text-on-surface-variant">
+            Leave either date blank to see events only before or after the selected date.
+          </p>
+        </form>
 
         {error && (
           <div className="mb-stack-lg flex flex-wrap items-center gap-gutter">
@@ -171,6 +236,12 @@ const Events = () => {
             {courseGroups.map((group) => {
               const isExpanded = expandedCourse === group.key;
               const groupId = `course-events-${group.key}`;
+              const totalPages = Math.ceil(group.events.length / EVENTS_PER_COURSE_PAGE);
+              const currentPage = Math.min(coursePages[group.key] || 0, totalPages - 1);
+              const visibleEvents = group.events.slice(
+                currentPage * EVENTS_PER_COURSE_PAGE,
+                (currentPage + 1) * EVENTS_PER_COURSE_PAGE
+              );
               return (
                 <section
                   key={group.key}
@@ -213,7 +284,7 @@ const Events = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-surface-variant font-body-md">
-                          {group.events.map((event) => (
+                          {visibleEvents.map((event) => (
                             <tr
                               key={event.id}
                               onClick={() => navigate(`/events/${event.id}`)}
@@ -244,6 +315,33 @@ const Events = () => {
                           ))}
                         </tbody>
                       </table>
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between gap-gutter border-t border-surface-variant px-stack-md py-stack-sm">
+                          <Button
+                            type="button"
+                            className="min-w-24"
+                            disabled={currentPage === 0}
+                            onClick={() =>
+                              setCoursePages((pages) => ({ ...pages, [group.key]: currentPage - 1 }))
+                            }
+                          >
+                            Previous
+                          </Button>
+                          <p className="font-body-sm text-on-surface-variant" aria-live="polite">
+                            Page {currentPage + 1} of {totalPages}
+                          </p>
+                          <Button
+                            type="button"
+                            className="min-w-24"
+                            disabled={currentPage === totalPages - 1}
+                            onClick={() =>
+                              setCoursePages((pages) => ({ ...pages, [group.key]: currentPage + 1 }))
+                            }
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>

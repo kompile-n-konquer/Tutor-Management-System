@@ -333,6 +333,136 @@ exports.getEvent = catchAsync(async (req, res, next) => {
   res.status(200).json(serializeEvent(event, user));
 });
 
+// ── Event register ──────────────────────────────────────────────────────
+
+// Loads the event for the register endpoints and verifies the requester is the
+// owning lecturer — only the lecturer who created the course marks attendance.
+// Throws http-style errors, exactly like the getUser helper above.
+const loadRegisterEvent = async (user, eventIdParam) => {
+  const role = user.role.toUpperCase();
+  if (role !== 'LECTURER') {
+    const error = new Error("Only the course's lecturer can manage the event register");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const eventId = Number(eventIdParam);
+  if (!Number.isInteger(eventId)) {
+    const error = new Error('Event ID must be a number');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: EVENT_INCLUDE,
+  });
+  if (!event) {
+    const error = new Error('Event not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (event.course.userId !== user.id) {
+    const error = new Error('You can only manage the register for events on courses you have created');
+    error.statusCode = 403;
+    throw error;
+  }
+  return event;
+};
+
+// ── GET /events/:id/register ── The attendance register ───────────────
+
+exports.getEventRegister = catchAsync(async (req, res, next) => {
+  const user = await getUser(req.user.user_id);
+  const event = await loadRegisterEvent(user, req.params.id);
+
+  const dayOfWeek = dayOfWeekFor(event.date);
+  const times = deriveTimes(event.course?.slots || [], dayOfWeek);
+
+  // Every tutor allocated to the event's course
+  const assignments = await prisma.tutorAssignment.findMany({
+    where: { courseId: event.courseId },
+    include: {
+      user: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+    },
+  });
+
+  const registerRows = await prisma.eventRegister.findMany({
+    where: { eventId: event.id },
+  });
+  const presentIds = new Set(registerRows.map((row) => row.userId));
+
+  const tutors = assignments
+    .map(({ user: tutor }) => ({
+      id: tutor.id,
+      name: `${tutor.firstName} ${tutor.lastName}`,
+      email: tutor.email,
+      present: presentIds.has(tutor.id),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  res.status(200).json({
+    eventId: event.id,
+    courseCode: event.course?.courseCode || null,
+    courseName: event.course?.courseName || null,
+    date: event.date,
+    times,
+    tutors,
+  });
+});
+
+// ── PUT /events/:id/register ── Replace the present list ────────────
+
+exports.updateEventRegister = catchAsync(async (req, res, next) => {
+  const user = await getUser(req.user.user_id);
+  const event = await loadRegisterEvent(user, req.params.id);
+
+  const presentIds = req.body?.presentIds;
+  if (!Array.isArray(presentIds)) {
+    const error = new Error('presentIds must be an array of tutor ids');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const ids = presentIds.map(Number);
+  if (ids.some((id) => !Number.isInteger(id))) {
+    const error = new Error('Every tutor id must be a number');
+    error.statusCode = 400;
+    return next(error);
+  }
+  // A tutor twice on the same register would double-count their attendance
+  if (new Set(ids).size !== ids.length) {
+    const error = new Error('Each tutor can only appear once on the register');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // Only tutors actually allocated to the course may be marked present
+  if (ids.length > 0) {
+    const allocated = await prisma.tutorAssignment.findMany({
+      where: { courseId: event.courseId, userId: { in: ids } },
+      select: { userId: true },
+    });
+    if (allocated.length !== ids.length) {
+      const error = new Error('All tutors must be allocated to the course');
+      error.statusCode = 400;
+      return next(error);
+    }
+  }
+
+  // Replace strategy: clear the register, then mark the submitted tutors present
+  await prisma.$transaction([
+    prisma.eventRegister.deleteMany({ where: { eventId: event.id } }),
+    ...(ids.length > 0
+      ? [prisma.eventRegister.createMany({ data: ids.map((userId) => ({ eventId: event.id, userId })) })]
+      : []),
+  ]);
+
+  res.status(200).json({ message: 'Register saved', presentIds: ids });
+});
+
 // ── PUT /events/:id ── Update an event (own course only) ─────────────────────
 
 exports.updateEvent = catchAsync(async (req, res, next) => {

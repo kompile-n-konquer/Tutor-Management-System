@@ -115,6 +115,11 @@ const EventDetails = () => {
               Back to Events
             </Button>
             {event?.canEdit && (
+              <Button className="min-w-40" onClick={() => navigate(`/events/${event.id}/register`)}>
+                Register
+              </Button>
+            )}
+            {event?.canEdit && (
               <Button className="min-w-40" onClick={() => navigate(`/events/${event.id}/edit`)}>
                 Edit Event
               </Button>

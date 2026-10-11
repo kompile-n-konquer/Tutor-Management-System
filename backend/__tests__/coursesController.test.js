@@ -428,7 +428,7 @@ describe('getCourse', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourse({ params: { courseId: '1' } }, res, next);
+    await getCourse({ ...mockReq(), params: { courseId: '1' } }, res, next);
     await flushMicrotasks();
 
     expect(prisma.timesheet.groupBy).toHaveBeenCalledWith({
@@ -485,7 +485,7 @@ describe('getCourse', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourse({ params: { courseId: '2' } }, res, next);
+    await getCourse({ ...mockReq(), params: { courseId: '2' } }, res, next);
     await flushMicrotasks();
 
     expect(prisma.timesheet.groupBy).not.toHaveBeenCalled();
@@ -502,7 +502,7 @@ describe('getCourse', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourse({ params: { courseId: '999' } }, res, next);
+    await getCourse({ ...mockReq(), params: { courseId: '999' } }, res, next);
     await flushMicrotasks();
 
     expect(next).toHaveBeenCalledWith(
@@ -516,7 +516,7 @@ describe('getCourse', () => {
     const res = mockRes();
     const next = jest.fn();
 
-    await getCourse({ params: { courseId: 'abc' } }, res, next);
+    await getCourse({ ...mockReq(), params: { courseId: 'abc' } }, res, next);
     await flushMicrotasks();
 
     expect(next).toHaveBeenCalledWith(

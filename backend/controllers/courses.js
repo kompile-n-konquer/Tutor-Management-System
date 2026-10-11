@@ -210,6 +210,14 @@ exports.getCourse = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // Lecturers only read their own courses; organisers and admins see the
+  // whole registry (mirrors the updateCourse ownership rule)
+  if (role === 'LECTURER' && course.userId !== requestingUser.id) {
+    const error = new Error('You can only view courses you have created');
+    error.statusCode = 403;
+    return next(error);
+  }
+
   const assignedCount = course.assignments.length;
 
   // Per-tutor claim aggregates from APPROVED timesheets: hours claimed, how many

@@ -9,14 +9,16 @@ let socket = null;
 let cachedToken = null;
 
 /**
- * Connects (once) to the organiser board socket. The server verifies the
- * Firebase ID token at handshake and only admits ORGANISER/ADMIN users.
+ * Connects (once) to the app's realtime socket. The server verifies the
+ * Firebase ID token at handshake and admits every authenticated user; what
+ * each connected role may then receive is decided server-side per event
+ * (organisers keep the board rooms, everyone gets their own user room).
  *
  * socket.io's `auth` option only supports a SYNCHRONOUS callback, so the
  * token is fetched from Firebase first (autoConnect: false holds the
  * handshake until it is ready) and cached for subsequent reconnections.
  */
-export function connectOrganiserSocket() {
+export function connectSocket() {
   if (socket) return socket;
   socket = io(SOCKET_URL, {
     autoConnect: false,
@@ -41,14 +43,20 @@ export function connectOrganiserSocket() {
   return socket;
 }
 
-export function getOrganiserSocket() {
+export function getSocket() {
   return socket;
 }
 
-export function disconnectOrganiserSocket() {
+export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
     cachedToken = null;
   }
 }
+
+// The organiser board was this socket's first consumer — its imports keep
+// working against the same shared connection under the generic names.
+export const connectOrganiserSocket = connectSocket;
+export const getOrganiserSocket = getSocket;
+export const disconnectOrganiserSocket = disconnectSocket;

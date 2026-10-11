@@ -19,7 +19,7 @@ jest.mock('../prisma/client', () => {
 });
 
 // Email notifications are fire-and-forget: mock the notifier so tests assert
-// it was invoked without hitting Resend or the EmailLog table.
+// it was invoked without hitting Brevo or the EmailLog table.
 jest.mock('../email/notifier', () => ({
   notifyAssignmentAdded: jest.fn().mockResolvedValue({ sent: true, skipped: false }),
   notifyAssignmentRemoved: jest.fn().mockResolvedValue({ sent: true, skipped: false }),

@@ -416,6 +416,6 @@ The API integrates with two external services over HTTPS:
 1. **Firebase Authentication (Google Identity Platform)** — every request's bearer token is
    verified server-side with the Firebase Admin SDK; account deactivation propagates back by
    disabling the Firebase account.
-2. **Resend (email delivery)** — transactional notification emails (assignment added/removed,
-   timesheet approved/rejected, swap requested/responded/reviewed) are sent through the Resend
+2. **Brevo (email delivery)** — transactional notification emails (assignment added/removed,
+   timesheet approved/rejected, swap requested/responded/reviewed) are sent through the Brevo
    HTTP API, with every attempt recorded and de-duplicated in the `EmailLog` table.

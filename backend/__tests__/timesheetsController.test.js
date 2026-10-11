@@ -47,7 +47,7 @@ jest.mock('../prisma/client', () => {
 });
 
 // Timesheet approval/rejection emails are fire-and-forget: mock the notifier
-// so tests assert it was invoked without hitting Resend or the EmailLog table.
+// so tests assert it was invoked without hitting Brevo or the EmailLog table.
 jest.mock('../email/notifier', () => ({
   notifyTimesheetApproved: jest.fn().mockResolvedValue({ sent: true, skipped: false }),
   notifyTimesheetRejected: jest.fn().mockResolvedValue({ sent: true, skipped: false }),

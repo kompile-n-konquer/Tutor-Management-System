@@ -604,7 +604,7 @@ exports.approveEntry = catchAsync(async (req, res, next) => {
     });
 
     // Fire-and-forget: notify the tutor their timesheet was approved. The
-    // notifier never throws (failures are logged in EmailLog), so a Resend
+    // notifier never throws (failures are logged in EmailLog), so a Brevo
     // outage can never fail the approval request itself.
     notifyTimesheetApproved(approvedTimesheet).catch(() => {});
   }
@@ -672,7 +672,7 @@ exports.rejectTimesheet = catchAsync(async (req, res, next) => {
   });
 
   // Fire-and-forget: notify the tutor their timesheet was rejected, including
-  // the recorded reason. The notifier never throws, so a Resend outage can
+  // the recorded reason. The notifier never throws, so a Brevo outage can
   // never fail the rejection request itself.
   notifyTimesheetRejected(rejectedTimesheet).catch(() => {});
 

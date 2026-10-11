@@ -811,11 +811,11 @@ async function main() {
     },
     {
       // David's rejection notification never went out — the sending domain was
-      // not yet verified in Resend at the time.
+      // not yet verified in Brevo at the time.
       eventType: 'TIMESHEET_REJECTED', entityType: 'Timesheet',
       entityId: rejectedSheetId, recipient: 'david',
       status: 'FAILED', subject: `Your timesheet #${rejectedSheetId} has been rejected`,
-      attemptedAt: daysAgo(19), errorMessage: 'Resend API returned 403 — sending domain not verified',
+      attemptedAt: daysAgo(19), errorMessage: 'Brevo API returned 400 — sender email not verified',
     },
     {
       // Stuck-timesheet reminder to the supervising lecturer, in flight right now

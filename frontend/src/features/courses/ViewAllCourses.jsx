@@ -231,8 +231,8 @@ const ViewAllCourses = () => {
                             <span className="font-bold text-primary">{course.courseCode}</span>
                             <span className="text-on-surface-variant"> - {course.courseName}</span>
                             <p className="font-body-sm text-outline mt-1">
-                              Min mark {course.minimumMark} · {course.slotsCount} tutoring slot
-                              {course.slotsCount === 1 ? '' : 's'}
+                              Min mark {course.minimumMark} · {course.claimableHours} claimable hour
+                              {course.claimableHours === 1 ? '' : 's'}
                             </p>
                           </td>
                           <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">

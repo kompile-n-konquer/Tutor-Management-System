@@ -9,6 +9,31 @@ import { useAuth } from "../context/AuthContext";
 const formatHours = (value) =>
   Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
+// Money display with the rand sign (1800 -> "R1 800", 1800.5 -> "R1 800.5")
+const formatRand = (value) =>
+  `R${Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+// Compact money for chart labels (1500 -> "R1.5k", 150000 -> "R150k", 750 -> "R750")
+const formatRandCompact = (value) => {
+  const amount = Number(value ?? 0);
+  if (amount >= 1000) {
+    return `R${(amount / 1000).toLocaleString(undefined, {
+      maximumFractionDigits: amount >= 10000 ? 0 : 1,
+    })}k`;
+  }
+  return `R${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+};
+
+// "2026-01" -> "Jan", with the year appended on January (and on the window's
+// first point when it crosses a year boundary) so the axis stays unambiguous
+const monthLabel = (key, showYear) => {
+  const [year, month] = key.split('-').map(Number);
+  const label = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(undefined, {
+    month: 'short',
+  });
+  return showYear ? `${label} '${String(year).slice(2)}` : label;
+};
+
 function StatCard({ icon, label, value, accent = "text-primary", subtext }) {
   return (
     <div className="bg-surface-container-lowest rounded-xl p-stack-lg border border-outline-variant shadow-bento">
@@ -140,6 +165,27 @@ export default function OrganiserAnalytics() {
     course: { pending: 0, assigned: 0, rejected: 0 },
   };
   const workload = data?.workload ?? [];
+  const spending = data?.spending ?? { monthlyBudget: null, months: [] };
+  const spendingMonths = spending.months ?? [];
+  // Line-chart scale: the budget joins the tallest month in setting the top of
+  // the y-axis so the reference line is always in view, with headroom so the
+  // highest dot never clips against the top of the card.
+  const chartMax =
+    Math.max(...spendingMonths.map((month) => month.amount), spending.monthlyBudget ?? 0, 1) * 1.08;
+  const budgetYPct =
+    spending.monthlyBudget != null && spending.monthlyBudget > 0
+      ? (spending.monthlyBudget / chartMax) * 100
+      : null;
+  // Point positions in the 100x100 viewBox space (y grows downwards). One point
+  // per month at the centre of its column keeps the dots aligned with the
+  // month labels rendered below the chart.
+  const spendPoints = spendingMonths.map((month, index) => ({
+    x: ((index + 0.5) / spendingMonths.length) * 100,
+    y: 100 - (month.amount / chartMax) * 100,
+  }));
+  const currentMonth = spendingMonths[spendingMonths.length - 1] ?? null;
+  const totalSpend = spendingMonths.reduce((total, month) => total + (month.amount ?? 0), 0);
+  const hasSpend = spendingMonths.some((month) => month.amount > 0);
   const maxWorkloadHours = Math.max(...workload.map((row) => row.approvedHours), 1);
   const sessionsNeedingCover = sessions.unassigned + sessions.pendingCover;
 
@@ -151,9 +197,9 @@ export default function OrganiserAnalytics() {
           <div className="flex-1 min-w-[14rem]">
             <h2 className="font-display text-display text-primary mb-unit">Organiser Analytics</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant">
-              Live overview of staffing coverage, timesheet sign-off, applications and tutor
-              workload. Every figure is computed from the current data — refresh to pull the
-              latest numbers.
+              Live overview of staffing coverage, timesheet sign-off, monthly spending,
+              applications and tutor workload. Every figure is computed from the current
+              data — refresh to pull the latest numbers.
             </p>
           </div>
           <button
@@ -247,6 +293,156 @@ export default function OrganiserAnalytics() {
                 </div>
                 <p className="font-label-caps text-label-caps text-on-surface-variant mt-stack-md">
                   {formatHours(timesheets.approvedHours)}h approved · {formatHours(timesheets.submittedHours)}h awaiting review
+                </p>
+              </div>
+            </div>
+
+            {/* Monthly spending — months vs amount spent */}
+            <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-bento mb-stack-lg">
+              <div className="p-stack-lg border-b border-outline-variant">
+                <h3 className="font-headline-md text-headline-md text-on-surface">Monthly Spending</h3>
+                <p className="font-body-sm text-body-sm text-on-surface-variant mt-unit">
+                  Amount spent per month on all tutors, derived from approved timesheets (claimed
+                  hours × the tutor's year-of-study hourly rate)
+                  {spending.monthlyBudget != null
+                    ? '. The dashed line marks the monthly budget.'
+                    : '. Set a monthly budget in Settings to compare spending against it.'}
+                </p>
+              </div>
+              <div className="p-stack-lg">
+                {hasSpend ? (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[560px]">
+                      <div className="relative h-56 border-b border-outline-variant">
+                        {/* Lines live in a stretched 100x100 viewBox; the dots are
+                            HTML overlays so they stay perfectly round. Points sit
+                            at each month's column centre to line up with the
+                            labels underneath. */}
+                        <svg
+                          className="absolute inset-0 h-full w-full text-primary"
+                          viewBox="0 0 100 100"
+                          preserveAspectRatio="none"
+                          aria-hidden="true"
+                        >
+                          {/* Faint horizontal guides at quarter steps of the scale */}
+                          {[25, 50, 75].map((pct) => (
+                            <line
+                              key={pct}
+                              x1="0"
+                              x2="100"
+                              y1={100 - pct}
+                              y2={100 - pct}
+                              className="text-outline-variant"
+                              stroke="currentColor"
+                              strokeWidth="1"
+                              vectorEffect="non-scaling-stroke"
+                              opacity="0.5"
+                            />
+                          ))}
+                          {spendPoints.length > 1 && (
+                            <>
+                              <polygon
+                                points={[
+                                  `${spendPoints[0].x},100`,
+                                  ...spendPoints.map((p) => `${p.x},${p.y}`),
+                                  `${spendPoints[spendPoints.length - 1].x},100`,
+                                ].join(' ')}
+                                fill="currentColor"
+                                fillOpacity="0.1"
+                              />
+                              <polyline
+                                points={spendPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                vectorEffect="non-scaling-stroke"
+                              />
+                            </>
+                          )}
+                          {budgetYPct != null && (
+                            <line
+                              x1="0"
+                              x2="100"
+                              y1={100 - budgetYPct}
+                              y2={100 - budgetYPct}
+                              className="text-secondary"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeDasharray="6 4"
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          )}
+                        </svg>
+                        {budgetYPct != null && (
+                          <span
+                            className="absolute right-0 font-label-caps text-label-caps text-secondary whitespace-nowrap"
+                            style={{ bottom: `calc(${budgetYPct}% + 4px)` }}
+                          >
+                            Budget {formatRandCompact(spending.monthlyBudget)}
+                          </span>
+                        )}
+                        {spendingMonths.map((month, index) => {
+                          const overBudget =
+                            spending.monthlyBudget != null && month.amount > spending.monthlyBudget;
+                          return (
+                            <div
+                              key={month.month}
+                              className="absolute -translate-x-1/2 translate-y-1/2 p-1.5"
+                              style={{
+                                left: `${spendPoints[index].x}%`,
+                                bottom: `${(month.amount / chartMax) * 100}%`,
+                              }}
+                              title={`${month.month}: ${formatRand(month.amount)}`}
+                            >
+                              <span
+                                className={`block w-2.5 h-2.5 rounded-full transition-colors ${
+                                  month.amount === 0
+                                    ? 'bg-surface-container-high'
+                                    : overBudget
+                                      ? 'bg-urgent-orange'
+                                      : 'bg-primary'
+                                }`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-stack-sm mt-stack-sm">
+                        {spendingMonths.map((month, index) => (
+                          <span
+                            key={month.month}
+                            className="flex-1 text-center font-label-caps text-label-caps text-on-surface-variant truncate"
+                          >
+                            {monthLabel(month.month, index === 0 || month.month.endsWith('-01'))}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-stack-sm">
+                        {spendingMonths.map((month) => (
+                          <span
+                            key={month.month}
+                            className="flex-1 text-center font-data-mono text-data-mono text-on-surface-variant truncate"
+                          >
+                            {month.amount > 0 ? formatRandCompact(month.amount) : '—'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="font-body-md text-body-md text-on-surface-variant py-stack-lg text-center">
+                    No approved timesheets yet — spending appears here once timesheets are
+                    approved.
+                  </p>
+                )}
+                <p className="font-label-caps text-label-caps text-on-surface-variant mt-stack-md">
+                  {currentMonth && currentMonth.amount > 0
+                    ? `${monthLabel(currentMonth.month, false)}: ${formatRand(currentMonth.amount)}`
+                    : 'This month'}
+                  {spending.monthlyBudget != null ? ` of ${formatRand(spending.monthlyBudget)} budgeted` : ''}
+                  {` · ${formatRand(totalSpend)} over the last 12 months`}
                 </p>
               </div>
             </div>

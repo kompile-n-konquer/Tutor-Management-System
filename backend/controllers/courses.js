@@ -1,5 +1,15 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
+const { slotHours } = require('../utils/claimRules');
+const { getHourlyRates } = require('../utils/systemSettings');
+
+// Weekly hours a tutor can claim on a course: every tutoring slot counts as at least
+// one full hour, rounded up to whole hours (08:00-08:45 -> 1 hour), summed over the Mon-Fri slots
+const weeklyClaimableHours = (courseSlots) =>
+  courseSlots.reduce(
+    (total, slot) => total + slotHours(slot.timeSlot.startMinute, slot.timeSlot.endMinute),
+    0
+  );
 
 exports.getTimeSlots = catchAsync(async (req, res, next) => {
   const timeSlots = await prisma.timeSlot.findMany({
@@ -124,7 +134,9 @@ exports.getCourses = catchAsync(async (req, res, next) => {
     orderBy: { createdAt: 'desc' },
     include: {
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
-      _count: { select: { assignments: true, slots: true, applications: true } },
+      // Slots ride along so each course's claimable hours can be summed
+      slots: { include: { timeSlot: true } },
+      _count: { select: { assignments: true, applications: true } },
     },
   });
 
@@ -139,7 +151,8 @@ exports.getCourses = catchAsync(async (req, res, next) => {
       createdAt: course.createdAt,
       acceptingApplications: course.acceptingApplications,
       lecturer: course.user,
-      slotsCount: course._count.slots,
+      slotsCount: course.slots.length,
+      claimableHours: weeklyClaimableHours(course.slots),
       applicationsCount: course._count.applications,
       assignedTutors,
       tutorsMissing: Math.max(course.tutorsRequired - assignedTutors, 0),
@@ -185,7 +198,7 @@ exports.getCourse = catchAsync(async (req, res, next) => {
         orderBy: [{ dayOfWeek: 'asc' }, { timeSlot: { startMinute: 'asc' } }],
       },
       assignments: {
-        include: { user: { select: { firstName: true, lastName: true, email: true } } },
+        include: { user: { select: { firstName: true, lastName: true, email: true, yearOfStudy: true } } },
       },
       _count: { select: { applications: true } },
     },
@@ -197,21 +210,41 @@ exports.getCourse = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  // Lecturers can only view the courses they created (mirrors events.js)
-  if (role === 'LECTURER' && course.userId !== requestingUser.id) {
-    const error = new Error('You can only view courses you have created');
-    error.statusCode = 403;
-    return next(error);
-  }
+  const assignedCount = course.assignments.length;
 
-  const assignedTutors = course.assignments.map((assignment) => ({
-    userId: assignment.userId,
-    tutorName: `${assignment.user.firstName} ${assignment.user.lastName}`,
-    tutorEmail: assignment.user.email,
-    semester: assignment.semester,
-  }));
+  // Per-tutor claim aggregates from APPROVED timesheets: hours claimed, how many
+  // timesheets were approved (claims) and the money spent. Spend is derived the
+  // same way as the timesheet PDF total — hours x the tutor's year-of-study
+  // hourly rate — so nothing is stored and rate changes apply immediately.
+  const tutorIds = course.assignments.map((assignment) => assignment.userId);
+  const [approvedStats, rates] = await Promise.all([
+    tutorIds.length
+      ? prisma.timesheet.groupBy({
+          by: ['userId'],
+          where: { userId: { in: tutorIds }, status: 'APPROVED' },
+          _count: { _all: true },
+          _sum: { totalHours: true },
+        })
+      : [],
+    getHourlyRates(),
+  ]);
+  const statsByUser = new Map(approvedStats.map((stat) => [stat.userId, stat]));
 
-  const assignedCount = assignedTutors.length;
+  const assignedTutors = course.assignments.map((assignment) => {
+    const stat = statsByUser.get(assignment.userId);
+    const claimedHours = stat?._sum?.totalHours ?? 0;
+    const claims = stat?._count?._all ?? 0;
+    const rate = rates[assignment.user.yearOfStudy] ?? null;
+    return {
+      userId: assignment.userId,
+      tutorName: `${assignment.user.firstName} ${assignment.user.lastName}`,
+      tutorEmail: assignment.user.email,
+      semester: assignment.semester,
+      claimedHours,
+      claims,
+      spent: rate == null ? 0 : Math.round(claimedHours * rate * 100) / 100,
+    };
+  });
 
   res.status(200).json({
     id: course.id,
@@ -231,6 +264,7 @@ exports.getCourse = catchAsync(async (req, res, next) => {
       venue: slot.venue,
       sessionType: slot.sessionType,
     })),
+    claimableHours: weeklyClaimableHours(course.slots),
     assignedTutors,
     assignedCount,
     tutorsMissing: Math.max(course.tutorsRequired - assignedCount, 0),

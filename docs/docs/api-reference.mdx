@@ -147,10 +147,11 @@ Legend for the **Access** column: 🔓 no token required, ✅ any authenticated 
 | PUT | `/timesheets/:id/entries/:entryId/approve` | Supervising staff | Approve one entry |
 | PUT | `/timesheets/:id/reject` | Supervising staff | Reject with a reason |
 | GET | `/timesheets/:id/export` | ✅ | Download an approved timesheet as PDF |
-| GET | `/settings` | ✅ | System settings (hours cap, claim window, rates) |
+| GET | `/settings` | ✅ | System settings (hours cap, claim window, rates, monthly budget) |
 | PUT | `/settings/tutor-monthly-hours` | ORGANISER, ADMIN | Set the monthly claimable-hours cap |
 | PUT | `/settings/tutor-event-claim-months` | ORGANISER, ADMIN | Set the event claim window |
 | PUT | `/settings/hourly-rates` | ORGANISER, ADMIN | Set hourly rates per year of study |
+| PUT | `/settings/monthly-budget` | ORGANISER, ADMIN | Set the monthly tutor budget (ZAR) |
 | PUT | `/settings/pdf-template` | ORGANISER, ADMIN | Upload the timesheet PDF template |
 | GET | `/settings/pdf-template` | ORGANISER, ADMIN | Download the template |
 | DELETE | `/settings/pdf-template` | ORGANISER, ADMIN | Remove the template |
@@ -210,7 +211,12 @@ Responds `204`.
 
 ### `GET /courses`
 
-All courses with allocation progress (`assignedCount`, `tutorsRequired`, `lecturer` name).
+All courses with allocation progress (`assignedCount`, `tutorsRequired`, `lecturer` name) and the weekly
+`claimableHours` tutors can claim — every tutoring slot counts as at least one full hour, rounded up to
+whole hours. `GET /courses/:courseId` returns the same `claimableHours` alongside the full slot list,
+and each allocated tutor row carries derived claim aggregates: `claimedHours` and `claims` (count of
+approved timesheets) plus `spent` — approved hours × the tutor's year-of-study hourly rate, the same
+derivation as the timesheet PDF total. Nothing is stored, so rate changes apply immediately.
 
 ### `POST /courses`
 

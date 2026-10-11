@@ -396,17 +396,17 @@ describe('NewSwap — offer a session swap', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  test('stays in the loading state when the sessions request throws', async () => {
+  test('shows the load error when the sessions request throws', async () => {
     mockGet.mockRejectedValue(new Error('network down'));
 
     renderNewSwap();
 
-    // The hook swallows the throw and the loaded flag stays unset, so the
-    // select keeps its loading placeholder and no error banner appears.
-    expect(await screen.findByText('Loading sessions...')).toBeInTheDocument();
+    // A network throw is caught by the page: the loading placeholder is
+    // replaced by the sessions error banner above the form.
     expect(
-      screen.queryByText('Something went wrong! Please try again later.'),
-    ).not.toBeInTheDocument();
+      await screen.findByText('Could not load your sessions. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Loading sessions...')).not.toBeInTheDocument();
   });
 
   test('shows a generic message when a failed sessions load carries none', async () => {

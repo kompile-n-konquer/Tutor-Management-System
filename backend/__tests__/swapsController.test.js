@@ -921,3 +921,980 @@ describe('rejectSwap', () => {
     expect(prisma.swapRequest.update).not.toHaveBeenCalled();
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// Gap-filling: shared guards, slot ordering and candidate sessions
+// ════════════════════════════════════════════════════════════════════════
+
+// 2026-10-06 is a Tuesday, which the schema numbers as dayOfWeek 1
+const TUESDAY_EVENT = {
+  id: 200,
+  courseId: 6,
+  date: new Date('2026-10-06T00:00:00.000Z'),
+  description: 'tutoring',
+  course: {
+    id: 6,
+    courseCode: 'COMS2000',
+    courseName: 'Data Structures',
+    userId: 2,
+    slots: [
+      { dayOfWeek: 1, timeSlotId: 9, timeSlot: { id: 9, startMinute: 600, endMinute: 660 } },
+    ],
+  },
+};
+
+const TUESDAY_ENTRY = {
+  id: 600,
+  timesheetId: 70,
+  eventId: TUESDAY_EVENT.id,
+  status: 'PENDING',
+  event: TUESDAY_EVENT,
+};
+
+describe('shared user lookup guard', () => {
+  test('returns 404 when the firebase identity has no profile', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ user: { user_id: 'uid-ghost' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getSwaps(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 404,
+        message: 'User not found. Please check if the user exists',
+      })
+    );
+    expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe('getMySessions slot ordering', () => {
+  test('derives and sorts every slot on the session day and sums the hours', async () => {
+    const DOUBLE_SLOT_EVENT = {
+      ...EVENT,
+      course: {
+        ...EVENT.course,
+        slots: [
+          { dayOfWeek: 0, timeSlotId: 8, timeSlot: { id: 8, startMinute: 600, endMinute: 660 } },
+          { dayOfWeek: 0, timeSlotId: 7, timeSlot: { id: 7, startMinute: 480, endMinute: 570 } },
+        ],
+      },
+    };
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+    prisma.timesheetEntry.findMany.mockResolvedValue([{ ...OWN_ENTRY, event: DOUBLE_SLOT_EVENT }]);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    const [session] = res.json.mock.calls[0][0];
+    expect(session.slots.map((slot) => slot.startMinute)).toEqual([480, 600]);
+    expect(session.duration).toBe(3); // 2h + 1h
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCandidates role guard', () => {
+  test('returns 403 when a non-tutor asks for candidates', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { eventId: '100' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCandidates(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only tutors can view swap candidates' })
+    );
+    expect(prisma.tutorAssignment.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCandidates candidate sessions', () => {
+  test('lists the candidate sessions the requester can take over', async () => {
+    const OTHER_COURSE_EVENT = {
+      id: 300,
+      courseId: 7,
+      date: TUESDAY_EVENT.date,
+      description: 'tutoring',
+      course: {
+        id: 7,
+        courseCode: 'COMS1000',
+        courseName: 'Intro to Computing',
+        userId: 3,
+        slots: [
+          { dayOfWeek: 1, timeSlotId: 9, timeSlot: { id: 9, startMinute: 600, endMinute: 660 } },
+        ],
+      },
+    };
+
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+    claimLookupSequence(OWN_ENTRY, null, null);
+    prisma.tutorAssignment.findMany.mockResolvedValue([{ id: 3, user: RECIPIENT }]);
+    stubEligibleSide();
+    prisma.availability.findMany.mockResolvedValue([
+      { dayOfWeek: 0, timeSlotId: 7 },
+      { dayOfWeek: 1, timeSlotId: 9 },
+    ]);
+    // #1: candidate conflict lookup; #2: the candidate swappable sessions; #3: requester conflict lookup
+    prisma.timesheetEntry.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([TUESDAY_ENTRY, { ...TUESDAY_ENTRY, id: 601, eventId: 300, event: OTHER_COURSE_EVENT }])
+      .mockResolvedValue([]);
+    // Candidate allocation check, then the requester allocation checks: course 6 yes, course 7 no
+    prisma.tutorAssignment.findFirst
+      .mockResolvedValueOnce({ id: 4, userId: RECIPIENT.id, courseId: 5 })
+      .mockResolvedValueOnce({ id: 5, userId: REQUESTER.id, courseId: 6 })
+      .mockResolvedValueOnce({ id: 5, userId: REQUESTER.id, courseId: 6 })
+      .mockResolvedValue(null);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid }, params: { eventId: '100' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getCandidates(req, res, next);
+    await flushMicrotasks();
+
+    const { candidates } = res.json.mock.calls[0][0];
+    expect(candidates[0].sessions).toEqual([
+      expect.objectContaining({ eventId: 200, courseCode: 'COMS2000', eligible: true, reasons: [] }),
+    ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('createSwap role guard', () => {
+  test('returns 403 when a non-tutor tries to request a swap', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+
+    const req = mockReq({
+      user: { user_id: ORGANISER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only tutors can request a session swap' })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('createSwap two-way id guard', () => {
+  test('returns 400 when both legs point at the same session', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id, recipientEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'A two-way swap needs two different sessions' })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Gap-filling: validateSwapSide constraint branches
+// ════════════════════════════════════════════════════════════════════════
+
+describe('createSwap constraint branches', () => {
+  test('returns 403 when the course no longer has slots on the session day', async () => {
+    const SLOTLESS_EVENT = {
+      ...EVENT,
+      id: 150,
+      course: {
+        ...EVENT.course,
+        slots: [
+          { dayOfWeek: 2, timeSlotId: 5, timeSlot: { id: 5, startMinute: 480, endMinute: 570 } },
+        ],
+      },
+    };
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    claimLookupSequence({ ...OWN_ENTRY, eventId: 150, event: SLOTLESS_EVENT });
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: 150 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: expect.stringContaining("no longer has tutoring timeslots on the session's day"),
+      })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the recipient already holds the session claim', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    // Own entry, then the recipient's existing-claim check finds their own row
+    claimLookupSequence(OWN_ENTRY, { id: 700, timesheetId: 80, eventId: EVENT.id, status: 'PENDING' });
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: expect.stringContaining('they already hold this session'),
+      })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the session double-books the recipient against another claim', async () => {
+    const CLASH_EVENT = {
+      id: 999,
+      courseId: 9,
+      date: EVENT.date,
+      description: 'tutoring',
+      course: {
+        id: 9,
+        courseCode: 'COMS1000',
+        courseName: 'Intro to Computing',
+        userId: 3,
+        slots: [
+          { dayOfWeek: 0, timeSlotId: 7, timeSlot: { id: 7, startMinute: 480, endMinute: 570 } },
+        ],
+      },
+    };
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    claimLookupSequence(OWN_ENTRY);
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+    // One entry with a missing event (filtered out) and one overlapping the offered session
+    prisma.timesheetEntry.findMany.mockResolvedValue([
+      { eventId: 998, event: null },
+      { eventId: 999, event: CLASH_EVENT },
+    ]);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: expect.stringContaining('it double-books them against COMS1000 on 2026-10-05'),
+      })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the session pushes the recipient past the claimable-hours window', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    claimLookupSequence(OWN_ENTRY);
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+    prisma.systemSetting.findUnique.mockResolvedValue({
+      key: 'TUTOR_MONTHLY_CLAIMABLE_HOURS',
+      value: '4',
+    });
+    // #1 conflict lookup (none), then #2 the recipient's existing claims feeding the window
+    prisma.timesheetEntry.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ workDate: new Date('2026-09-20T00:00:00.000Z'), duration: 3 }]);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: expect.stringContaining(
+          'it would push them above the 4 claimable-hours limit for the window 2026-09-20 to 2026-10-05'
+        ),
+      })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+
+  test('allows the swap when the recipient stays within the claimable-hours window', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    claimLookupSequence(OWN_ENTRY);
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+    prisma.systemSetting.findUnique.mockResolvedValue({
+      key: 'TUTOR_MONTHLY_CLAIMABLE_HOURS',
+      value: '4',
+    });
+    // #1 conflict lookup (none), then #2 the recipient's existing claims: 1 + 2 = 3 hours stay under the cap
+    prisma.timesheetEntry.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ workDate: new Date('2026-09-20T00:00:00.000Z'), duration: 1 }]);
+    prisma.swapRequest.create.mockResolvedValue(PENDING_SWAP);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Gap-filling: swap partner guard
+// ════════════════════════════════════════════════════════════════════════
+
+describe('createSwap partner guard', () => {
+  test('returns 404 when the partner is not an active tutor', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(null);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: 777, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'The swap partner must be an active tutor' })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Gap-filling: remaining branch partials
+// ════════════════════════════════════════════════════════════════════════
+
+describe('getMySessions weekend sessions', () => {
+  test('derives no slots and zero duration for an event on a weekend day', async () => {
+    const SATURDAY_EVENT = {
+      ...EVENT,
+      date: new Date('2026-10-03T00:00:00.000Z'), // Saturday
+    };
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+    prisma.timesheetEntry.findMany.mockResolvedValue([{ ...OWN_ENTRY, event: SATURDAY_EVENT }]);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    const [session] = res.json.mock.calls[0][0];
+    expect(session.slots).toEqual([]);
+    expect(session.duration).toBe(0);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('getSwaps name fallback and organiser default filter', () => {
+  test('falls back to the email when a tutor has no recorded name', async () => {
+    const NAMELESS_TUTOR = { ...REQUESTER, firstName: null, lastName: null };
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+    prisma.swapRequest.findMany.mockResolvedValue([{ ...PENDING_SWAP, requester: NAMELESS_TUTOR }]);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getSwaps(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith([
+      expect.objectContaining({
+        requester: expect.objectContaining({ userId: REQUESTER.id, name: REQUESTER.email }),
+      }),
+    ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('organisers without a status filter see every swap', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+    prisma.swapRequest.findMany.mockResolvedValue([]);
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getSwaps(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.swapRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+    expect(res.json).toHaveBeenCalledWith([]);
+  });
+});
+
+describe('createSwap id validation branches', () => {
+  test('returns 400 when the request body is missing entirely', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid }, body: undefined });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('recipientId') })
+    );
+  });
+
+  test('returns 400 when requesterEventId is not an integer', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: 'abc' },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('requesterEventId') })
+    );
+  });
+
+  test('returns 400 when recipientEventId is not an integer', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id, recipientEventId: 'abc' },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: expect.stringContaining('recipientEventId') })
+    );
+  });
+});
+
+describe('state-transition id validation', () => {
+  test('acceptSwap rejects a non-integer id', async () => {
+    prisma.user.findUnique.mockResolvedValue(RECIPIENT);
+
+    const req = mockReq({ user: { user_id: RECIPIENT.firebaseUid }, params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await acceptSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Swap request ID must be a valid integer' })
+    );
+    expect(prisma.swapRequest.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('declineSwap rejects a non-integer id', async () => {
+    prisma.user.findUnique.mockResolvedValue(RECIPIENT);
+
+    const req = mockReq({ user: { user_id: RECIPIENT.firebaseUid }, params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await declineSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(prisma.swapRequest.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('cancelSwap rejects a non-integer id', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid }, params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(prisma.swapRequest.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('approveSwap rejects a non-integer id', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await approveSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(prisma.swapRequest.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('rejectSwap rejects a non-integer id', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { id: 'abc' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await rejectSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(prisma.swapRequest.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('null rejection reasons and fire-and-forget notifier failures', () => {
+  test('declining without a body stores a null rejection reason', async () => {
+    prisma.user.findUnique.mockResolvedValue(RECIPIENT);
+    prisma.swapRequest.findUnique.mockResolvedValue(PENDING_SWAP);
+    prisma.swapRequest.update.mockResolvedValue({ ...PENDING_SWAP, status: 'REJECTED' });
+
+    const req = mockReq({ user: { user_id: RECIPIENT.firebaseUid }, params: { id: '1' }, body: undefined });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await declineSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.swapRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ rejectionReason: null }) })
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('rejecting without a body stores a null rejection reason', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+    prisma.swapRequest.findUnique.mockResolvedValue({ ...PENDING_SWAP, status: 'ACCEPTED' });
+    prisma.swapRequest.update.mockResolvedValue({ ...PENDING_SWAP, status: 'REJECTED' });
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { id: '1' }, body: undefined });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await rejectSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.swapRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ rejectionReason: null }) })
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('a failing swap-requested email does not stop the swap being created', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    claimLookupSequence(OWN_ENTRY);
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+    prisma.swapRequest.create.mockResolvedValue(PENDING_SWAP);
+    notifySwapRequested.mockRejectedValueOnce(new Error('smtp down'));
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('a failing swap-responded email does not stop the acceptance', async () => {
+    prisma.user.findUnique.mockResolvedValue(RECIPIENT);
+    prisma.swapRequest.findUnique.mockResolvedValue(PENDING_SWAP);
+    prisma.swapRequest.update.mockResolvedValue({ ...PENDING_SWAP, status: 'ACCEPTED' });
+    notifySwapResponded.mockRejectedValueOnce(new Error('smtp down'));
+
+    const req = mockReq({ user: { user_id: RECIPIENT.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await acceptSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACCEPTED' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('a failing swap-reviewed email does not stop the rejection', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+    prisma.swapRequest.findUnique.mockResolvedValue({ ...PENDING_SWAP, status: 'ACCEPTED' });
+    prisma.swapRequest.update.mockResolvedValue({ ...PENDING_SWAP, status: 'REJECTED' });
+    notifySwapReviewed.mockRejectedValueOnce(new Error('smtp down'));
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await rejectSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'REJECTED' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Gap-filling: two-way swap leg guards
+// ════════════════════════════════════════════════════════════════════════
+
+describe('createSwap two-way leg guards', () => {
+  test('returns 404 when the requested session is not a pending claim of the partner', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    // Own entry, recipient validator's claim check, then the missing return session
+    claimLookupSequence(OWN_ENTRY, null);
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id, recipientEventId: 200 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 404,
+        message: expect.stringContaining("was not found among the partner's claimed sessions"),
+      })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the requester cannot take over the return session', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(REQUESTER).mockResolvedValueOnce(RECIPIENT);
+    // Own entry, both existing-claim checks, then the partner's return session
+    claimLookupSequence(OWN_ENTRY, null, TUESDAY_ENTRY);
+    prisma.swapRequest.findFirst.mockResolvedValue(null);
+    stubEligibleSide();
+    prisma.availability.findMany.mockResolvedValue([
+      { dayOfWeek: 0, timeSlotId: 7 },
+      { dayOfWeek: 1, timeSlotId: 9 },
+    ]);
+    // The recipient check passes; the requester is not allocated to the return course
+    prisma.tutorAssignment.findFirst
+      .mockResolvedValueOnce({ id: 3, userId: RECIPIENT.id, courseId: 5 })
+      .mockResolvedValue(null);
+
+    const req = mockReq({
+      user: { user_id: REQUESTER.firebaseUid },
+      body: { recipientId: RECIPIENT.id, requesterEventId: EVENT.id, recipientEventId: 200 },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: expect.stringContaining('You cannot take over the requested session: not allocated to COMS2000'),
+      })
+    );
+    expect(prisma.swapRequest.create).not.toHaveBeenCalled();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// Gap-filling: state-transition guards
+// ════════════════════════════════════════════════════════════════════════
+
+describe('acceptSwap swap lookup guard', () => {
+  test('returns 404 when the swap request does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(RECIPIENT);
+    prisma.swapRequest.findUnique.mockResolvedValue(null);
+
+    const req = mockReq({ user: { user_id: RECIPIENT.firebaseUid }, params: { id: '42' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await acceptSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 404, message: 'Swap request not found' })
+    );
+    expect(prisma.swapRequest.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('getSwaps tutor filter and role guard', () => {
+  test('a tutor can filter their own swaps by status', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+    prisma.swapRequest.findMany.mockResolvedValue([PENDING_SWAP]);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid }, query: { status: 'pending' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getSwaps(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.swapRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ requesterId: REQUESTER.id }, { recipientId: REQUESTER.id }],
+          status: 'PENDING',
+        }),
+      })
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for roles that are neither tutors nor organisers', async () => {
+    prisma.user.findUnique.mockResolvedValue({ ...REQUESTER, role: 'STUDENT' });
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getSwaps(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: 'Only tutors and organisers can view swap requests',
+      })
+    );
+    expect(prisma.swapRequest.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('declineSwap guards', () => {
+  test('a tutor who is not the recipient cannot decline', async () => {
+    const OTHER_TUTOR = { ...RECIPIENT, id: 30, firebaseUid: 'uid-cara', firstName: 'Cara' };
+    prisma.user.findUnique.mockResolvedValue(OTHER_TUTOR);
+    prisma.swapRequest.findUnique.mockResolvedValue(PENDING_SWAP);
+
+    const req = mockReq({ user: { user_id: OTHER_TUTOR.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await declineSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: 'Only the tutor the swap was offered to can respond to it',
+      })
+    );
+    expect(prisma.swapRequest.update).not.toHaveBeenCalled();
+  });
+
+  test('a swap that is no longer pending cannot be declined', async () => {
+    prisma.user.findUnique.mockResolvedValue(RECIPIENT);
+    prisma.swapRequest.findUnique.mockResolvedValue({ ...PENDING_SWAP, status: 'APPROVED' });
+
+    const req = mockReq({ user: { user_id: RECIPIENT.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await declineSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: expect.stringContaining('can be declined') })
+    );
+    expect(prisma.swapRequest.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('cancelSwap status guard', () => {
+  test('a swap that is no longer pending cannot be cancelled', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+    prisma.swapRequest.findUnique.mockResolvedValue({ ...PENDING_SWAP, status: 'ACCEPTED' });
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await cancelSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: expect.stringContaining('can be cancelled') })
+    );
+    expect(prisma.swapRequest.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('approveSwap claim-state blocker', () => {
+  test('returns 409 when a traded claim is no longer pending', async () => {
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+    prisma.swapRequest.findUnique.mockResolvedValue({ ...PENDING_SWAP, status: 'ACCEPTED' });
+    // The requester now holds a rejected version of the claim; the validator's
+    // existing-claim check afterwards finds nothing
+    prisma.timesheetEntry.findFirst
+      .mockResolvedValueOnce({ id: 500, timesheetId: 50, status: 'REJECTED' })
+      .mockResolvedValue(null);
+    stubEligibleSide();
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await approveSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 409, message: expect.stringContaining('is no longer pending') })
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('approveSwap two-way trades', () => {
+  test('approval moves both claims for a two-way swap', async () => {
+    const acceptedSwap = {
+      ...PENDING_SWAP,
+      status: 'ACCEPTED',
+      recipientEventId: TUESDAY_EVENT.id,
+      recipientEvent: TUESDAY_EVENT,
+    };
+    const approvedSwap = {
+      ...acceptedSwap,
+      status: 'APPROVED',
+      reviewedAt: new Date(),
+      reviewedById: ORGANISER.id,
+    };
+
+    prisma.user.findUnique.mockResolvedValue(ORGANISER);
+    // loadSwap, then the response re-fetch
+    prisma.swapRequest.findUnique.mockResolvedValueOnce(acceptedSwap).mockResolvedValueOnce(approvedSwap);
+    // Requester claim, recipient claim, then both validators' existing-claim checks
+    prisma.timesheetEntry.findFirst
+      .mockResolvedValueOnce({ id: 500, timesheetId: 50, status: 'PENDING' })
+      .mockResolvedValueOnce({ id: 600, timesheetId: 51, status: 'PENDING' })
+      .mockResolvedValue(null);
+    // Every side checks the Monday slot 7 and the Tuesday slot 9
+    stubEligibleSide();
+    prisma.availability.findMany.mockResolvedValue([
+      { dayOfWeek: 0, timeSlotId: 7 },
+      { dayOfWeek: 1, timeSlotId: 9 },
+    ]);
+
+    prisma.__tx.timesheetEntry.findFirst
+      .mockResolvedValueOnce({ id: 500, timesheetId: 50, status: 'PENDING' })
+      .mockResolvedValueOnce({ id: 600, timesheetId: 51, status: 'PENDING' });
+    prisma.__tx.timesheet.findFirst
+      .mockResolvedValueOnce({ id: 60, userId: RECIPIENT.id, status: 'DRAFT' })
+      .mockResolvedValueOnce({ id: 61, userId: REQUESTER.id, status: 'DRAFT' });
+    prisma.__tx.timesheetEntry.findMany.mockResolvedValue([{ duration: 2 }]);
+    prisma.__tx.swapRequest.update.mockResolvedValue({});
+
+    const req = mockReq({ user: { user_id: ORGANISER.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await approveSwap(req, res, next);
+    await flushMicrotasks();
+
+    // The offered session moves to the recipient and the return session to the requester
+    expect(prisma.__tx.timesheetEntry.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 500 }, data: { timesheetId: 60 } })
+    );
+    expect(prisma.__tx.timesheetEntry.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 600 }, data: { timesheetId: 61 } })
+    );
+    expect(notifySwapReviewed).toHaveBeenCalledWith(approvedSwap);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 1,
+        status: 'APPROVED',
+        requestedSession: expect.objectContaining({ eventId: 200 }),
+      })
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('rejectSwap role guard', () => {
+  test('returns 403 for tutors', async () => {
+    prisma.user.findUnique.mockResolvedValue(REQUESTER);
+
+    const req = mockReq({ user: { user_id: REQUESTER.firebaseUid }, params: { id: '1' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await rejectSwap(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'Only organisers can reject swap requests' })
+    );
+    expect(prisma.swapRequest.update).not.toHaveBeenCalled();
+  });
+});

@@ -220,8 +220,8 @@ const validateSwapSide = async (tutor, event, excludeEventIds = []) => {
       select: { workDate: true, duration: true },
     });
     const hypothetical = [
-      ...entries.map((entry) => ({ date: entry.workDate, hours: Number(entry.duration) })),
-      { date: event.date, hours: sessionDuration(event) },
+      ...entries.map((entry) => ({ workDate: entry.workDate, duration: Number(entry.duration) })),
+      { workDate: event.date, duration: sessionDuration(event) },
     ];
     const excessive = findExcessiveWindow(hypothetical, maxClaimableHours);
     if (excessive) {

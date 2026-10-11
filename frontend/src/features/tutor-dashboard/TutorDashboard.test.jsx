@@ -429,16 +429,17 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
     );
   });
 
-  test('falls back to an em dash when no weekly cap is configured', async () => {
+  test('shows the hours alone when no weekly cap is configured', async () => {
     mockGet.mockResolvedValue({ status: 200, data: makeFeed({ maxHoursPerWeek: null }) });
 
     renderDashboard();
 
-    expect(await screen.findByText('of —h scheduled')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Scheduled hours this week' })).toHaveAttribute(
-      'aria-valuemax',
-      '0',
-    );
+    // Without a cap the card drops the progress track and reads
+    // "Nh scheduled this week" instead of comparing against a limit.
+    expect(await screen.findByText('scheduled this week')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Scheduled hours this week' }),
+    ).not.toBeInTheDocument();
   });
 
   test('summarises several cover sessions and tolerates a course-less row', async () => {

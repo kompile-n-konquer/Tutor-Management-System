@@ -64,9 +64,9 @@ function CourseSection({ course, onDecided }) {
   return (
     <section
       aria-label={`${course.courseCode} sessions`}
-      className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+      className="bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden"
     >
-      <div className="flex flex-wrap items-baseline gap-x-stack-md gap-y-unit px-stack-lg py-stack-md border-b border-outline-variant">
+      <div className="flex flex-wrap items-baseline gap-x-stack-md gap-y-unit px-stack-md py-stack-md border-b border-surface-variant">
         <span className="font-data-mono text-data-mono font-semibold text-primary">
           {course.courseCode}
         </span>
@@ -84,7 +84,7 @@ function CourseSection({ course, onDecided }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* Upcoming events — the course's tutoring schedule */}
-        <div className="p-stack-lg lg:border-r border-outline-variant/60">
+        <div className="p-stack-md lg:border-r border-surface-variant">
           <div className="flex items-baseline justify-between gap-stack-md mb-stack-md">
             <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
               Upcoming events
@@ -137,7 +137,7 @@ function CourseSection({ course, onDecided }) {
         </div>
 
         {/* Session follow-ups — the excuse / volunteer lifecycle */}
-        <div className="p-stack-lg bg-surface-container-low">
+        <div className="p-stack-md bg-surface-container-low">
           <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
             Session follow-ups
           </h3>
@@ -286,21 +286,21 @@ export default function LecturerView() {
             {[0, 1].map((card) => (
               <div
                 key={card}
-                className="animate-pulse bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+                className="animate-pulse bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm overflow-hidden"
               >
-                <div className="flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-lg py-stack-md border-b border-outline-variant">
+                <div className="flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-md border-b border-surface-variant">
                   <div className="h-4 w-20 rounded bg-surface-container-high" />
                   <div className="h-4 w-44 rounded bg-surface-container-high" />
                   <div className="h-4 w-28 rounded bg-surface-container-high" />
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="p-stack-lg space-y-stack-md lg:border-r border-outline-variant/60">
+                  <div className="p-stack-md space-y-stack-md lg:border-r border-surface-variant">
                     <div className="h-4 w-32 rounded bg-surface-container-high" />
                     <div className="h-5 rounded bg-surface-container-high/60" />
                     <div className="h-5 rounded bg-surface-container-high/60" />
                     <div className="h-5 rounded bg-surface-container-high/60" />
                   </div>
-                  <div className="p-stack-lg bg-surface-container-low space-y-stack-md">
+                  <div className="p-stack-md bg-surface-container-low space-y-stack-md">
                     <div className="h-4 w-36 rounded bg-surface-container-high" />
                     <div className="h-5 rounded bg-surface-container-high/60" />
                     <div className="h-5 rounded bg-surface-container-high/60" />
@@ -310,7 +310,7 @@ export default function LecturerView() {
             ))}
           </div>
         ) : !error && courses.length === 0 ? (
-          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
+          <section className="bg-surface-container-lowest border border-surface-variant rounded-xl shadow-sm p-stack-md">
             <h2 className="font-headline-md text-headline-md text-on-surface mb-unit">
               No courses yet
             </h2>

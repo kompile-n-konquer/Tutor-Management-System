@@ -14,6 +14,7 @@
  */
 :root {
   color-scheme: light;
+  font-family: "Hanken Grotesk", sans-serif;
 
   /* Primary */
   --color-primary: #2e0052;
@@ -254,6 +255,33 @@
   --color-trust-blue: #7d9df5;
   --color-urgent-orange: #ff7043;
   --color-on-urgent-orange: #331200;
+}
+
+body {
+  margin: 0;
+  font-family: "Hanken Grotesk", sans-serif;
+}
+
+/* Shared interaction affordances: native and ARIA buttons identify actions,
+   while every navigational link gains a consistent underline on hover. */
+a {
+  cursor: pointer;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  text-decoration-line: underline;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 .material-symbols-outlined {

@@ -882,3 +882,173 @@ describe('getPendingApplications', () => {
     expect(next).not.toHaveBeenCalled();
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// Supplementary guards — reapplication after approval, application detail,
+// id validation and the pending-list filters
+// ════════════════════════════════════════════════════════════════════════
+describe('submitApplication already approved', () => {
+  test('returns 409 when the same role application was already approved', async () => {
+    prisma.roleApplication.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 2, status: 'APPROVED' });
+
+    const req = mockReq({ body: { requestedRole: 'LECTURER' } });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await submitApplication(req, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 409,
+        message: 'Your LECTURER application has already been approved',
+      }),
+    );
+    expect(prisma.roleApplication.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('getApplicationById', () => {
+  const applicationDetail = {
+    id: 1,
+    userId: 5,
+    requestedRole: 'TUTOR',
+    status: 'PENDING',
+    user: { id: 5, firstName: 'Alex', lastName: 'Mercer', email: 'alex@test.com' },
+  };
+
+  test('rejects a non-numeric id with 400', async () => {
+    const next = jest.fn();
+
+    await getApplicationById(mockReq({ params: { id: 'abc' } }), mockRes(), next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Application id must be a valid integer' }),
+    );
+    expect(prisma.roleApplication.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the application does not exist', async () => {
+    prisma.roleApplication.findUnique.mockResolvedValue(null);
+
+    const next = jest.fn();
+
+    await getApplicationById(mockReq({ params: { id: '99' } }), mockRes(), next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+  });
+
+  test('blocks other users but lets the owner and organisers read the detail', async () => {
+    prisma.roleApplication.findUnique.mockResolvedValue(applicationDetail);
+    prisma.availability.findMany.mockResolvedValue([
+      { id: 1, dayOfWeek: 0, timeSlotId: 3, timeSlot: { startMinute: 480, endMinute: 525 } },
+    ]);
+    prisma.application.findMany.mockResolvedValue([
+      {
+        courseMark: 80,
+        course: { courseCode: 'COMS1015', courseName: 'Intro to Programming', minimumMark: 65 },
+      },
+    ]);
+
+    // A different student cannot read someone else's application
+    let next = jest.fn();
+    await getApplicationById(
+      mockReq({ params: { id: '1' }, user: { id: 7, role: 'STUDENT' } }),
+      mockRes(),
+      next,
+    );
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: 'You do not have permission to view this application',
+      }),
+    );
+
+    // The owner sees their own application with availability and course marks
+    const ownerRes = mockRes();
+    next = jest.fn();
+    await getApplicationById(
+      mockReq({ params: { id: '1' }, user: { id: 5, role: 'STUDENT' } }),
+      ownerRes,
+      next,
+    );
+    await flushMicrotasks();
+
+    expect(next).not.toHaveBeenCalled();
+    const body = ownerRes.json.mock.calls[0][0];
+    expect(body.application.availability).toHaveLength(1);
+    expect(body.application.courseMarks).toEqual([
+      { courseCode: 'COMS1015', courseName: 'Intro to Programming', mark: 80, minimumMark: 65 },
+    ]);
+
+    // Organisers may read any application
+    const organiserRes = mockRes();
+    next = jest.fn();
+    await getApplicationById(
+      mockReq({ params: { id: '1' }, user: { id: 99, role: 'ORGANISER' } }),
+      organiserRes,
+      next,
+    );
+    await flushMicrotasks();
+    expect(next).not.toHaveBeenCalled();
+    expect(organiserRes.json).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('id validation guards', () => {
+  test('getApplicantRank rejects a non-numeric id with 400', async () => {
+    const next = jest.fn();
+
+    await getApplicantRank(mockReq({ params: { id: 'abc' } }), mockRes(), next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Application id must be a valid integer' }),
+    );
+    expect(prisma.roleApplication.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('reviewApplication rejects a non-numeric id with 400', async () => {
+    const next = jest.fn();
+
+    await reviewApplication(
+      mockReq({ params: { id: 'abc' }, body: { action: 'APPROVE' } }),
+      mockRes(),
+      next,
+    );
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 400, message: 'Application id must be a valid integer' }),
+    );
+    expect(prisma.roleApplication.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('getPendingApplications filters', () => {
+  test('uppercases the status and role query filters', async () => {
+    prisma.roleApplication.findMany.mockResolvedValue([]);
+
+    const req = mockReq({
+      user: { id: 99, role: 'ORGANISER' },
+      query: { status: 'approved', role: 'tutor' },
+    });
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getPendingApplications(req, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.roleApplication.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: 'APPROVED', requestedRole: 'TUTOR' },
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+});

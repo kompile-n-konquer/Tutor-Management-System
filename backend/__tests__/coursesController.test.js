@@ -19,7 +19,15 @@ jest.mock('../prisma/client', () => ({
 }));
 
 const prisma = require('../prisma/client');
-const { getCourses, getCourse, updateCourse, startApplicationProcess } = require('../controllers/courses');
+const {
+  getTimeSlots,
+  createCourse,
+  getCourses,
+  getCourse,
+  updateCourse,
+  updateCourseSlots,
+  startApplicationProcess,
+} = require('../controllers/courses');
 
 // catchAsync does not `return` the inner promise — flushMicrotasks waits
 // for the background async work to settle before assertions run.
@@ -523,5 +531,355 @@ describe('getCourse', () => {
       expect.objectContaining({ statusCode: 400 }),
     );
     expect(prisma.course.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('getTimeSlots', () => {
+  test('returns every timeslot ordered by start minute', async () => {
+    prisma.timeSlot.findMany.mockResolvedValue([
+      { id: 1, startMinute: 480, endMinute: 525 },
+      { id: 2, startMinute: 600, endMinute: 645 },
+    ]);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getTimeSlots(mockReq(), res, next);
+    await flushMicrotasks();
+
+    expect(prisma.timeSlot.findMany).toHaveBeenCalledWith({ orderBy: { startMinute: 'asc' } });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith([
+      { id: 1, startMinute: 480, endMinute: 525 },
+      { id: 2, startMinute: 600, endMinute: 645 },
+    ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('createCourse', () => {
+  const validBody = {
+    courseCode: 'CS101',
+    courseName: 'Intro to Programming',
+    minimumMark: '50',
+    tutorsRequired: '2',
+    slots: [{ dayOfWeek: 0, timeSlotId: 1 }],
+  };
+
+  test('guards the profile and role', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    let next = jest.fn();
+    await createCourse({ ...mockReq(), body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 9, role: 'STUDENT' });
+    next = jest.fn();
+    await createCourse({ ...mockReq(), body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(prisma.course.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects missing fields, bad marks, bad tutor counts and invalid slots', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'LECTURER' });
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+
+    for (const body of [
+      {},
+      { ...validBody, minimumMark: 101 },
+      { ...validBody, tutorsRequired: 0 },
+      { ...validBody, slots: [{ dayOfWeek: 6, timeSlotId: 1 }] },
+    ]) {
+      const next = jest.fn();
+      await createCourse({ ...mockReq(), body }, mockRes(), next);
+      await flushMicrotasks();
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    }
+    expect(prisma.course.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects an existing course code with 409', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'LECTURER' });
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+    prisma.course.findUnique.mockResolvedValue({ id: 3, courseCode: 'CS101' });
+
+    const next = jest.fn();
+
+    await createCourse({ ...mockReq(), body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 409 }));
+    expect(prisma.course.create).not.toHaveBeenCalled();
+  });
+
+  test('creates the course owned by the caller with nested slots', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'LECTURER' });
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+    prisma.course.findUnique.mockResolvedValue(null);
+    prisma.course.create.mockResolvedValue({ id: 10, courseCode: 'CS101', slots: [{ id: 1 }] });
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createCourse({ ...mockReq(), body: validBody }, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.course.create).toHaveBeenCalledWith({
+      data: {
+        courseCode: 'CS101',
+        courseName: 'Intro to Programming',
+        minimumMark: 50,
+        tutorsRequired: 2,
+        userId: 7,
+        slots: { create: [{ dayOfWeek: 0, timeSlotId: 1 }] },
+      },
+      include: { slots: true },
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ id: 10, courseCode: 'CS101', slots: [{ id: 1 }] });
+  });
+});
+
+describe('updateCourse', () => {
+  const validBody = {
+    courseCode: 'CS101',
+    courseName: 'Intro to Programming',
+    minimumMark: '50',
+    tutorsRequired: '2',
+    slots: [{ dayOfWeek: 0, timeSlotId: 1 }],
+  };
+  const existingCourse = { id: 1, userId: 7, courseCode: 'CS101' };
+
+  test('guards the profile, role, id and unknown courses', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    let next = jest.fn();
+    await updateCourse({ ...mockReq(), params: { courseId: '1' }, body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 9, role: 'STUDENT' });
+    next = jest.fn();
+    await updateCourse({ ...mockReq(), params: { courseId: '1' }, body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
+    next = jest.fn();
+    await updateCourse({ ...mockReq(), params: { courseId: 'abc' }, body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    prisma.course.findUnique.mockResolvedValue(null);
+    next = jest.fn();
+    await updateCourse({ ...mockReq(), params: { courseId: '99' }, body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('rejects invalid payloads before writing', async () => {
+    prisma.course.findUnique.mockResolvedValue(existingCourse);
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+
+    for (const body of [
+      {},
+      { ...validBody, minimumMark: -5 },
+      { ...validBody, tutorsRequired: 1.5 },
+      { ...validBody, slots: [{ dayOfWeek: 9, timeSlotId: 1 }] },
+    ]) {
+      const next = jest.fn();
+      await updateCourse({ ...mockReq(), params: { courseId: '1' }, body }, mockRes(), next);
+      await flushMicrotasks();
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    }
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('rejects a course code already used by another course', async () => {
+    prisma.course.findUnique.mockResolvedValue(existingCourse);
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+    prisma.course.findFirst.mockResolvedValue({ id: 2, courseCode: 'CS101' });
+
+    const next = jest.fn();
+
+    await updateCourse({ ...mockReq(), params: { courseId: '1' }, body: validBody }, mockRes(), next);
+    await flushMicrotasks();
+
+    expect(prisma.course.findFirst).toHaveBeenCalledWith({
+      where: { courseCode: 'CS101', id: { not: 1 } },
+    });
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 409 }));
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('replaces details and slots in one transaction and returns the reloaded course', async () => {
+    prisma.course.findUnique
+      .mockResolvedValueOnce(existingCourse)
+      .mockResolvedValueOnce({
+        id: 1,
+        courseCode: 'CS102',
+        courseName: 'Advanced Programming',
+        slots: [{ id: 5, dayOfWeek: 0, timeSlotId: 1 }],
+      });
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+    prisma.course.findFirst.mockResolvedValue(null);
+    prisma.$transaction.mockResolvedValue([]);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await updateCourse(
+      {
+        ...mockReq(),
+        params: { courseId: '1' },
+        body: { ...validBody, courseCode: 'CS102', courseName: 'Advanced Programming' },
+      },
+      res,
+      next,
+    );
+    await flushMicrotasks();
+
+    expect(prisma.course.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: {
+        courseCode: 'CS102',
+        courseName: 'Advanced Programming',
+        minimumMark: 50,
+        tutorsRequired: 2,
+      },
+    });
+    expect(prisma.courseSlot.deleteMany).toHaveBeenCalledWith({ where: { courseId: 1 } });
+    expect(prisma.courseSlot.createMany).toHaveBeenCalledWith({
+      data: [{ courseId: 1, dayOfWeek: 0, timeSlotId: 1 }],
+    });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      id: 1,
+      courseCode: 'CS102',
+      courseName: 'Advanced Programming',
+      slots: [{ id: 5, dayOfWeek: 0, timeSlotId: 1 }],
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateCourseSlots', () => {
+  const body = { slots: [{ dayOfWeek: 0, timeSlotId: 1 }] };
+
+  test('guards the profile, role, id, unknown course and ownership', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    let next = jest.fn();
+    await updateCourseSlots({ ...mockReq(), params: { courseId: '1' }, body }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 9, role: 'STUDENT' });
+    next = jest.fn();
+    await updateCourseSlots({ ...mockReq(), params: { courseId: '1' }, body }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
+    next = jest.fn();
+    await updateCourseSlots({ ...mockReq(), params: { courseId: 'x' }, body }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    prisma.course.findUnique.mockResolvedValue(null);
+    next = jest.fn();
+    await updateCourseSlots({ ...mockReq(), params: { courseId: '99' }, body }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 8, role: 'LECTURER' });
+    prisma.course.findUnique.mockResolvedValue({ id: 1, userId: 7 });
+    next = jest.fn();
+    await updateCourseSlots({ ...mockReq(), params: { courseId: '1' }, body }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('rejects empty slot lists and invalid slots', async () => {
+    prisma.course.findUnique.mockResolvedValue({ id: 1, userId: 7 });
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+
+    let next = jest.fn();
+    await updateCourseSlots(
+      { ...mockReq(), params: { courseId: '1' }, body: { slots: [] } },
+      mockRes(),
+      next,
+    );
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    next = jest.fn();
+    await updateCourseSlots(
+      { ...mockReq(), params: { courseId: '1' }, body: { slots: [{ dayOfWeek: 0, timeSlotId: 99 }] } },
+      mockRes(),
+      next,
+    );
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('replaces all slots for an organiser', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
+    prisma.course.findUnique
+      .mockResolvedValueOnce({ id: 1, userId: 7 })
+      .mockResolvedValueOnce({ id: 1, slots: [{ id: 5, dayOfWeek: 0, timeSlotId: 1 }] });
+    prisma.timeSlot.findMany.mockResolvedValue([{ id: 1 }]);
+    prisma.$transaction.mockResolvedValue([]);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await updateCourseSlots({ ...mockReq(), params: { courseId: '1' }, body }, res, next);
+    await flushMicrotasks();
+
+    expect(prisma.courseSlot.deleteMany).toHaveBeenCalledWith({ where: { courseId: 1 } });
+    expect(prisma.courseSlot.createMany).toHaveBeenCalledWith({
+      data: [{ courseId: 1, dayOfWeek: 0, timeSlotId: 1 }],
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ id: 1, slots: [{ id: 5, dayOfWeek: 0, timeSlotId: 1 }] });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('startApplicationProcess guards', () => {
+  test('guards the profile, role, payload shape and unknown courses', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    let next = jest.fn();
+    await startApplicationProcess({ ...mockReq(), body: { courseIds: [1] } }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 9, role: 'STUDENT' });
+    next = jest.fn();
+    await startApplicationProcess({ ...mockReq(), body: { courseIds: [1] } }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'ORGANISER' });
+    next = jest.fn();
+    await startApplicationProcess(mockReq(), mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    next = jest.fn();
+    await startApplicationProcess({ ...mockReq(), body: { courseIds: ['x'] } }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    prisma.course.findMany.mockResolvedValue([{ id: 1, userId: 7 }]);
+    next = jest.fn();
+    await startApplicationProcess({ ...mockReq(), body: { courseIds: [1, 2] } }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+    expect(prisma.course.updateMany).not.toHaveBeenCalled();
   });
 });

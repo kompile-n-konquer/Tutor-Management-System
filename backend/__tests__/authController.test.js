@@ -8,7 +8,7 @@ jest.mock('../prisma/client', () => ({
 jest.mock('../firebase/admin', () => jest.fn());
 
 const prisma = require('../prisma/client');
-const { getAllUsers, getUser, getUserMe, createUser } = require('../controllers/auth');
+const { getAllUsers, getUser, getUserMe, createUser, updateUser, verifyRole } = require('../controllers/auth');
 
 // catchAsync does not `return` the inner promise — flushMicrotasks waits
 // for the background async work to settle before assertions run.
@@ -185,5 +185,153 @@ describe('createUser', () => {
     await flushMicrotasks();
 
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 409 }));
+  });
+});
+
+describe('getUserMe missing profile', () => {
+  test('returns 404 when the profile row does not exist', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getUserMe({ user: { id: 1 } }, res, next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+    expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe('createUser unexpected failures', () => {
+  test('rethrows database errors that are not unique-constraint violations', async () => {
+    const dbError = new Error('connection lost');
+    dbError.code = 'ECONNRESET';
+    prisma.user.create.mockRejectedValue(dbError);
+
+    const req = {
+      body: {
+        firstName: 'New',
+        lastName: 'Student',
+        email: 'new.student@wits.ac.za',
+        firebaseUid: 'new-uid',
+      },
+      firebaseUser: { uid: 'new-uid', email: 'new.student@wits.ac.za' },
+    };
+    const res = mockRes();
+    const next = jest.fn();
+
+    await createUser(req, res, next);
+    await flushMicrotasks();
+
+    // catchAsync forwards the rethrown error to the global error handler
+    expect(next).toHaveBeenCalledWith(dbError);
+    expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateUser', () => {
+  const req = (body) => ({ user: { user_id: 'uid-123' }, body });
+
+  test('returns 404 when the profile row is missing', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    const next = jest.fn();
+
+    await updateUser(req({ firstName: 'Ann' }), mockRes(), next);
+    await flushMicrotasks();
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  test('rejects empty names and invalid years of study', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1 });
+
+    let next = jest.fn();
+    await updateUser(req({ firstName: '   ' }), mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    next = jest.fn();
+    await updateUser(req({ lastName: '' }), mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+
+    next = jest.fn();
+    await updateUser(req({ yearOfStudy: '1st year' }), mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  test('trims names, clears empty optional fields and returns the updated profile', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1 });
+    prisma.user.update.mockResolvedValue({ id: 1, firstName: 'Ann', lastName: 'Lee' });
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await updateUser(
+      req({ firstName: '  Ann ', lastName: ' Lee ', phoneNumber: '', yearOfStudy: null }),
+      res,
+      next,
+    );
+    await flushMicrotasks();
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { firebaseUid: 'uid-123' },
+      data: { firstName: 'Ann', lastName: 'Lee', phoneNumber: null, yearOfStudy: null },
+      select: expect.not.objectContaining({ firebaseUid: true }),
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ id: 1, firstName: 'Ann', lastName: 'Lee' });
+  });
+
+  test('sends only the provided fields', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1 });
+    prisma.user.update.mockResolvedValue({ id: 1, phoneNumber: '0821234567', yearOfStudy: 'honours' });
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await updateUser(req({ phoneNumber: '0821234567', yearOfStudy: 'honours' }), res, next);
+    await flushMicrotasks();
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { firebaseUid: 'uid-123' },
+      data: { phoneNumber: '0821234567', yearOfStudy: 'honours' },
+      select: expect.any(Object),
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifyRole', () => {
+  test('allows when the caller role is in the requested list', async () => {
+    const res = mockRes();
+    const next = jest.fn();
+
+    await verifyRole(
+      { user: { role: 'ORGANISER' }, query: { roles: ' tutor, organiser ,' } },
+      res,
+      next,
+    );
+    await flushMicrotasks();
+
+    expect(res.json).toHaveBeenCalledWith({ role: 'ORGANISER', allowed: true });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('rejects when the role is not in the requested list or the list is empty', async () => {
+    let next = jest.fn();
+    await verifyRole({ user: { role: 'TUTOR' }, query: { roles: 'admin' } }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+
+    next = jest.fn();
+    await verifyRole({ user: { role: 'TUTOR' }, query: {} }, mockRes(), next);
+    await flushMicrotasks();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 });

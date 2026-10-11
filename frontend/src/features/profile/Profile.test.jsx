@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ThemeProvider from '../context/ThemeProvider.jsx';
 
@@ -277,7 +277,9 @@ describe('Profile — tutor profile with the availability grid', () => {
   });
 
   describe('role-specific panels', () => {
-    test('a lecturer sees the employee chip and no tutoring availability grid', async () => {
+    // The old lecturer-courses and platform-overview panels were removed —
+    // staff roles get the plain profile with no availability grid.
+    test('a lecturer gets the plain profile with no courses panel or availability grid', async () => {
       roleState.value = 'lecturer';
       mockApi({ profile: { ...USER_PROFILE, employeeNumber: '700123' } });
 
@@ -285,13 +287,51 @@ describe('Profile — tutor profile with the availability grid', () => {
 
       // Staff identity: the employee number chip replaces any student number.
       expect(await screen.findByText('Employee № 700123')).toBeInTheDocument();
-      // Staff roles have no tutoring availability grid, and the removed
-      // lecturer-courses / platform-overview panels must not fetch again.
+      expect(screen.queryByText('My Courses')).not.toBeInTheDocument();
+      expect(screen.queryByText('Availability & Schedule')).not.toBeInTheDocument();
       expect(mockGet).not.toHaveBeenCalledWith('/availability');
       expect(mockGet).not.toHaveBeenCalledWith('/sessions/lecturer');
-      expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
+    });
+
+    test('an organiser gets no availability grid and no analytics panel', async () => {
+      roleState.value = 'organiser';
+      mockApi({ profile: { ...USER_PROFILE, employeeNumber: '700124' } });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Availability & Schedule')).not.toBeInTheDocument();
+      expect(screen.queryByText('Platform Overview')).not.toBeInTheDocument();
+      expect(mockGet).not.toHaveBeenCalledWith('/availability');
       expect(mockGet).not.toHaveBeenCalledWith('/analytics/organiser');
-      expect(screen.queryByText('Mon')).not.toBeInTheDocument();
+    });
+
+    test('an admin gets the same plain profile as an organiser', async () => {
+      roleState.value = 'admin';
+      mockApi();
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Availability & Schedule')).not.toBeInTheDocument();
+      expect(screen.queryByText('Platform Overview')).not.toBeInTheDocument();
+      expect(mockGet).not.toHaveBeenCalledWith('/analytics/organiser');
+    });
+
+    test('hides the platform overview when the analytics request fails', async () => {
+      roleState.value = 'organiser';
+      mockGet.mockImplementation((url) => {
+        if (url === '/analytics/organiser') return Promise.reject(new Error('network down'));
+        if (url === `/users/${authState.currentUser?.uid}`) {
+          return Promise.resolve({ status: 200, data: USER_PROFILE });
+        }
+        return Promise.reject(new Error(`Unexpected GET ${url}`));
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Platform Overview')).not.toBeInTheDocument();
     });
   });
 

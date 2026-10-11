@@ -149,7 +149,7 @@ const OpportunityDetails = () => {
             </p>
           </div>
           <div>
-            <Button className="min-w-40" onClick={() => navigate('/applications')}>
+            <Button fullWidth={false} className="min-w-40" onClick={() => navigate('/applications')}>
               Back to Applications
             </Button>
           </div>
@@ -160,6 +160,7 @@ const OpportunityDetails = () => {
             <ErrorMessage>{error}</ErrorMessage>
             {!opportunity && (
               <Button
+                fullWidth={false}
                 className="min-w-32"
                 onClick={() => {
                   setError('');
@@ -336,8 +337,16 @@ const OpportunityDetails = () => {
                   </div>
 
                   <div className="mt-gutter flex gap-2">
-                    <Button onClick={() => navigate('/applications')}>Cancel</Button>
-                    <Button type="submit" disabled={!canSubmit} loading={isLoading} className="min-w-40">
+                    <Button fullWidth={false} className="min-w-40" onClick={() => navigate('/applications')}>
+                      Cancel
+                    </Button>
+                    <Button
+                      fullWidth={false}
+                      type="submit"
+                      disabled={!canSubmit}
+                      loading={isLoading}
+                      className="min-w-40"
+                    >
                       Apply
                     </Button>
                   </div>

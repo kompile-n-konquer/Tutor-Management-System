@@ -37,10 +37,10 @@ const Events = () => {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [appliedFilters, setAppliedFilters] = useState({ from: '', to: '' });
   const [coursePages, setCoursePages] = useState({});
+  const [courseFilters, setCourseFilters] = useState({});
+  const [filterDrafts, setFilterDrafts] = useState({});
+  const [openFilterCourse, setOpenFilterCourse] = useState(null);
 
   const role = currentUser?.role?.toLowerCase();
   const canViewEvents = role === 'tutor' || role === 'lecturer' || role === 'organiser' || role === 'admin';
@@ -96,11 +96,7 @@ const Events = () => {
     if (loading || !currentUser || !canViewEvents) return;
 
     const loadEvents = async () => {
-      const searchParams = new URLSearchParams();
-      if (appliedFilters.from) searchParams.set('from', appliedFilters.from);
-      if (appliedFilters.to) searchParams.set('to', appliedFilters.to);
-      const query = searchParams.toString();
-      const response = await execute(() => api.get(query ? `/events?${query}` : '/events'));
+      const response = await execute(() => api.get('/events'));
       if (response && response.status === 200) {
         setEvents(response.data);
         setError('');
@@ -111,23 +107,32 @@ const Events = () => {
     };
 
     loadEvents();
-  }, [currentUser, loading, canViewEvents, execute, reloadKey, appliedFilters]);
+  }, [currentUser, loading, canViewEvents, execute, reloadKey]);
 
-  const applyFilters = (event) => {
-    event.preventDefault();
-    setExpandedCourse(null);
-    setCoursePages({});
-    setAppliedFilters({ from: fromDate, to: toDate });
-    setReloadKey((key) => key + 1);
+  const openCourseFilter = (key) => {
+    setFilterDrafts((drafts) => ({
+      ...drafts,
+      [key]: courseFilters[key] || { from: '', to: '' },
+    }));
+    setOpenFilterCourse(key);
   };
 
-  const clearFilters = () => {
-    setFromDate('');
-    setToDate('');
-    setExpandedCourse(null);
-    setCoursePages({});
-    setAppliedFilters({ from: '', to: '' });
-    setReloadKey((key) => key + 1);
+  const applyCourseFilter = (key) => {
+    const filter = filterDrafts[key] || { from: '', to: '' };
+    setCourseFilters((filters) => ({ ...filters, [key]: filter }));
+    setCoursePages((pages) => ({ ...pages, [key]: 0 }));
+    setOpenFilterCourse(null);
+  };
+
+  const clearCourseFilter = (key) => {
+    setCourseFilters((filters) => {
+      const remainingFilters = { ...filters };
+      delete remainingFilters[key];
+      return remainingFilters;
+    });
+    setFilterDrafts((drafts) => ({ ...drafts, [key]: { from: '', to: '' } }));
+    setCoursePages((pages) => ({ ...pages, [key]: 0 }));
+    setOpenFilterCourse(null);
   };
 
   if (loading) return null;
@@ -160,44 +165,6 @@ const Events = () => {
             </div>
           )}
         </div>
-
-        <form
-          onSubmit={applyFilters}
-          className="mb-stack-lg rounded-xl border border-surface-variant bg-surface-container-lowest p-stack-md"
-        >
-          <fieldset className="flex flex-wrap items-end gap-gutter">
-            <legend className="mb-stack-sm font-label-caps text-label-caps text-on-surface-variant">
-              Filter events by date
-            </legend>
-            <label className="flex flex-col gap-1 font-body-sm text-on-surface-variant">
-              From date
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(event) => setFromDate(event.target.value)}
-                className="rounded border border-surface-variant bg-surface px-3 py-2 text-on-surface"
-              />
-            </label>
-            <label className="flex flex-col gap-1 font-body-sm text-on-surface-variant">
-              To date
-              <input
-                type="date"
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-                className="rounded border border-surface-variant bg-surface px-3 py-2 text-on-surface"
-              />
-            </label>
-            <Button type="submit" className="min-w-28">
-              Apply filters
-            </Button>
-            <Button type="button" className="min-w-28" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          </fieldset>
-          <p className="mt-stack-sm font-body-sm text-on-surface-variant">
-            Leave either date blank to see events only before or after the selected date.
-          </p>
-        </form>
 
         {error && (
           <div className="mb-stack-lg flex flex-wrap items-center gap-gutter">
@@ -236,41 +203,144 @@ const Events = () => {
             {courseGroups.map((group) => {
               const isExpanded = expandedCourse === group.key;
               const groupId = `course-events-${group.key}`;
-              const totalPages = Math.ceil(group.events.length / EVENTS_PER_COURSE_PAGE);
-              const currentPage = Math.min(coursePages[group.key] || 0, totalPages - 1);
-              const visibleEvents = group.events.slice(
+              const filter = courseFilters[group.key] || { from: '', to: '' };
+              const isFilterActive = Boolean(filter.from || filter.to);
+              const filteredEvents = group.events.filter((event) => {
+                const eventDate = new Date(event.date).toISOString().slice(0, 10);
+                return (!filter.from || eventDate >= filter.from) && (!filter.to || eventDate <= filter.to);
+              });
+              const filteredUpcoming = filteredEvents.filter(
+                (event) => new Date(event.date).getTime() >= startOfToday()
+              ).length;
+              const totalPages = Math.ceil(filteredEvents.length / EVENTS_PER_COURSE_PAGE);
+              const currentPage = Math.min(coursePages[group.key] || 0, Math.max(totalPages - 1, 0));
+              const visibleEvents = filteredEvents.slice(
                 currentPage * EVENTS_PER_COURSE_PAGE,
                 (currentPage + 1) * EVENTS_PER_COURSE_PAGE
               );
+              const filterPopupId = `course-filter-${group.key}`;
+              const draft = filterDrafts[group.key] || filter;
               return (
                 <section
                   key={group.key}
-                  className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm overflow-hidden"
+                  className="relative bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm overflow-visible"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setExpandedCourse(isExpanded ? null : group.key)}
-                    aria-expanded={isExpanded}
-                    aria-controls={groupId}
-                    className="w-full flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-md text-left cursor-pointer hover:bg-surface-container-low transition-colors"
-                  >
-                    <span className="font-data-mono text-data-mono font-bold text-primary shrink-0">
-                      {group.courseCode}
-                    </span>
-                    <span className="font-body-md text-body-md text-on-surface flex-1 min-w-[10rem] break-words">
-                      {group.courseName}
-                    </span>
-                    <span className="font-label-caps text-label-caps text-on-surface-variant shrink-0">
-                      {group.events.length} event{group.events.length === 1 ? '' : 's'} · {group.upcoming} upcoming
-                    </span>
-                    <span
-                      className={`material-symbols-outlined text-on-surface-variant shrink-0 transition-transform ${
-                        isExpanded ? 'rotate-180' : ''
+                  <div className="flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-md py-stack-md">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCourse(isExpanded ? null : group.key)}
+                      aria-expanded={isExpanded}
+                      aria-controls={groupId}
+                      className="flex flex-1 items-center gap-x-stack-md text-left cursor-pointer hover:text-primary transition-colors min-w-[14rem]"
+                    >
+                      <span className="font-data-mono text-data-mono font-bold text-primary shrink-0">
+                        {group.courseCode}
+                      </span>
+                      <span className="font-body-md text-body-md text-on-surface break-words">
+                        {group.courseName}
+                      </span>
+                      <span
+                        className={`material-symbols-outlined text-on-surface-variant shrink-0 transition-transform ${
+                          isExpanded ? 'rotate-180' : ''
+                        }`}
+                        aria-hidden="true"
+                      >
+                        expand_more
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openFilterCourse === group.key
+                          ? setOpenFilterCourse(null)
+                          : openCourseFilter(group.key)
+                      }
+                      aria-label={`Filter ${group.courseCode} events by date`}
+                      aria-haspopup="dialog"
+                      aria-expanded={openFilterCourse === group.key}
+                      aria-controls={filterPopupId}
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                        isFilterActive
+                          ? 'border-primary bg-primary text-on-primary'
+                          : 'border-surface-variant text-on-surface-variant hover:bg-surface-container-high'
                       }`}
                     >
-                      expand_more
+                      <span className="material-symbols-outlined text-[1.15rem]" aria-hidden="true">filter_alt</span>
+                    </button>
+                    <span className="font-label-caps text-label-caps text-on-surface-variant shrink-0">
+                      {filteredEvents.length} event{filteredEvents.length === 1 ? '' : 's'} · {filteredUpcoming} upcoming
                     </span>
-                  </button>
+                  </div>
+
+                  {openFilterCourse === group.key && (
+                    <div
+                      id={filterPopupId}
+                      role="dialog"
+                      aria-label={`Filter ${group.courseCode} events by date`}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') setOpenFilterCourse(null);
+                      }}
+                      className="absolute right-stack-md top-[4.75rem] z-10 w-[min(22rem,calc(100%-2rem))] rounded-xl border border-surface-variant bg-surface-container-lowest p-stack-md shadow-bento"
+                    >
+                      <div className="mb-stack-sm flex items-center justify-between gap-gutter">
+                        <p className="font-label-caps text-label-caps text-on-surface">Filter {group.courseCode}</p>
+                        <button
+                          type="button"
+                          className="text-on-surface-variant hover:text-on-surface"
+                          onClick={() => setOpenFilterCourse(null)}
+                          aria-label="Close date filter"
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">close</span>
+                        </button>
+                      </div>
+                      <div className="grid gap-stack-sm sm:grid-cols-2">
+                        <label className="flex flex-col gap-1 font-body-sm text-on-surface-variant">
+                          From date
+                          <input
+                            type="date"
+                            value={draft.from}
+                            onChange={(event) =>
+                              setFilterDrafts((drafts) => ({
+                                ...drafts,
+                                [group.key]: { ...draft, from: event.target.value },
+                              }))
+                            }
+                            className="rounded-lg border border-surface-variant bg-surface px-3 py-2 text-on-surface"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 font-body-sm text-on-surface-variant">
+                          To date
+                          <input
+                            type="date"
+                            value={draft.to}
+                            onChange={(event) =>
+                              setFilterDrafts((drafts) => ({
+                                ...drafts,
+                                [group.key]: { ...draft, to: event.target.value },
+                              }))
+                            }
+                            className="rounded-lg border border-surface-variant bg-surface px-3 py-2 text-on-surface"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-stack-md flex justify-end gap-stack-sm">
+                        <button
+                          type="button"
+                          className="rounded-lg px-3 py-2 font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-high"
+                          onClick={() => clearCourseFilter(group.key)}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-primary px-3 py-2 font-label-caps text-label-caps text-on-primary hover:bg-primary-container"
+                          onClick={() => applyCourseFilter(group.key)}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {isExpanded && (
                     <div id={groupId} className="border-t border-surface-variant overflow-x-auto">
@@ -316,31 +386,52 @@ const Events = () => {
                         </tbody>
                       </table>
                       {totalPages > 1 && (
-                        <div className="flex items-center justify-between gap-gutter border-t border-surface-variant px-stack-md py-stack-sm">
-                          <Button
+                        <nav
+                          className="flex flex-wrap items-center justify-center gap-1 border-t border-surface-variant px-stack-md py-stack-sm"
+                          aria-label={`${group.courseCode} event pages`}
+                        >
+                          <button
                             type="button"
-                            className="min-w-24"
+                            className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40"
                             disabled={currentPage === 0}
                             onClick={() =>
                               setCoursePages((pages) => ({ ...pages, [group.key]: currentPage - 1 }))
                             }
+                            aria-label="Previous page"
                           >
-                            Previous
-                          </Button>
-                          <p className="font-body-sm text-on-surface-variant" aria-live="polite">
-                            Page {currentPage + 1} of {totalPages}
-                          </p>
-                          <Button
+                            <span className="material-symbols-outlined text-[1.15rem]" aria-hidden="true">arrow_back</span>
+                          </button>
+                          {Array.from({ length: totalPages }, (_, page) => (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => setCoursePages((pages) => ({ ...pages, [group.key]: page }))}
+                              aria-current={page === currentPage ? 'page' : undefined}
+                              aria-label={`Page ${page + 1}`}
+                              className={`flex h-9 min-w-9 items-center justify-center rounded-full px-2 font-data-mono text-body-sm transition-colors ${
+                                page === currentPage
+                                  ? 'bg-primary text-on-primary shadow-sm'
+                                  : 'text-on-surface-variant hover:bg-surface-container-high'
+                              }`}
+                            >
+                              {page + 1}
+                            </button>
+                          ))}
+                          <button
                             type="button"
-                            className="min-w-24"
+                            className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40"
                             disabled={currentPage === totalPages - 1}
                             onClick={() =>
                               setCoursePages((pages) => ({ ...pages, [group.key]: currentPage + 1 }))
                             }
+                            aria-label="Next page"
                           >
-                            Next
-                          </Button>
-                        </div>
+                            <span className="material-symbols-outlined text-[1.15rem]" aria-hidden="true">arrow_forward</span>
+                          </button>
+                          <span className="sr-only" aria-live="polite">
+                            Showing page {currentPage + 1} of {totalPages}
+                          </span>
+                        </nav>
                       )}
                     </div>
                   )}

@@ -59,7 +59,8 @@ const TimesheetDetails = () => {
   const [exporting, setExporting] = useState(false);
 
   const role = currentUser?.role?.toLowerCase();
-  const isLecturer = role === 'lecturer' || role === 'organiser' || role === 'admin';
+  const isReviewer = role === 'lecturer' || role === 'organiser' || role === 'admin';
+  const isSupervisor = role === 'lecturer';
   const isSubmitted = timesheet?.status === 'SUBMITTED';
   const isApproved = timesheet?.status === 'APPROVED';
   const displayName = timesheet?.name || 'Untitled';
@@ -74,10 +75,10 @@ const TimesheetDetails = () => {
       const tsRes = await execute(() => api.get(`/timesheets/${id}`));
       if (tsRes?.status === 200) {
         setTimesheet(tsRes.data);
-        // Lecturers only see the entries they supervise — a timesheet may span
-        // multiple courses with different lecturers
+        // Lecturers only see entries they supervise; organisers and admins
+        // review every entry in the same submitted queue shown by Analytics.
         const raw = tsRes.data.entries || [];
-        const scoped = isLecturer
+        const scoped = isSupervisor
           ? raw.filter((e) => e.supervisorId === currentUser.id)
           : raw;
         setEntries(parseEntries(scoped));
@@ -88,7 +89,7 @@ const TimesheetDetails = () => {
     };
 
     loadTimesheet();
-  }, [currentUser, authLoading, id, execute, isLecturer, reloadKey]);
+  }, [currentUser, authLoading, id, execute, isSupervisor, reloadKey]);
 
   // ── Redirect unauthenticated users ────────────────────────────────────────
 
@@ -156,7 +157,7 @@ const TimesheetDetails = () => {
   const statusMessage = STATUS_MESSAGES[timesheet.status] || '';
 
   const pendingEntryIds = entries.filter(
-    (e) => e.status !== 'APPROVED' && e.supervisorId === currentUser.id
+    (e) => e.status !== 'APPROVED' && (!isSupervisor || e.supervisorId === currentUser.id)
   );
   // Claimed events the tutor was not marked present for block approval — the
   // lecturer must reject the timesheet instead
@@ -164,9 +165,8 @@ const TimesheetDetails = () => {
   const canApprove =
     isSubmitted && pendingEntryIds.length > 0 && missingRegister.length === 0;
 
-  // Approve all of this lecturer's pending entries in one action — the backend
-  // promotes the timesheet to APPROVED once every entry (across all lecturers)
-  // has been approved
+  // Approve every pending entry this reviewer may act on. The backend promotes
+  // the timesheet to APPROVED once all entries have been approved.
   const handleApproveTimesheet = async () => {
     const ids = pendingEntryIds.map((e) => e.id);
     const results = await Promise.all(
@@ -177,7 +177,7 @@ const TimesheetDetails = () => {
       if (tsRes?.status === 200) {
         setTimesheet(tsRes.data);
         const raw = tsRes.data.entries || [];
-        const scoped = isLecturer
+        const scoped = isSupervisor
           ? raw.filter((e) => e.supervisorId === currentUser.id)
           : raw;
         setEntries(parseEntries(scoped));
@@ -243,7 +243,7 @@ const TimesheetDetails = () => {
           <div>
             <h2 className="font-display text-display text-primary">{displayName}</h2>
             <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
-              {isLecturer && timesheet.tutorName
+              {isReviewer && timesheet.tutorName
                 ? `${timesheet.tutorName} — ${timesheet.tutorEmail || ''}`
                 : 'Claim past events below to log the hours you have worked'}
             </p>
@@ -299,7 +299,7 @@ const TimesheetDetails = () => {
                 {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
               </span>
             </div>
-            {isLecturer && isSubmitted && (
+            {isReviewer && isSubmitted && (
               <div className="flex">
                 <Button
                   className="min-w-32 max-h-8 mr-3 bg-primary text-on-primary"
@@ -366,7 +366,7 @@ const TimesheetDetails = () => {
           )}
         </div>
 
-        {statusMessage && !isLecturer && (
+        {statusMessage && !isReviewer && (
           <div className="text-center py-stack-md">
             <p className="font-body-md text-on-surface-variant font-semibold">{statusMessage}</p>
           </div>

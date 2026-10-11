@@ -115,11 +115,12 @@ exports.getPendingReview = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  // Find submitted timesheets where this user is listed as supervisor on at least one entry
+  // Organisers and admins review the same submitted queue reported by Analytics.
+  // Lecturers remain limited to entries assigned to them as a supervisor.
   const timesheets = await prisma.timesheet.findMany({
     where: {
       status: 'SUBMITTED',
-      entries: { some: { supervisorId: user.id } },
+      ...(role === 'LECTURER' ? { entries: { some: { supervisorId: user.id } } } : {}),
     },
     include: {
       user: { select: { firstName: true, lastName: true, email: true } },
@@ -134,24 +135,22 @@ exports.getPendingReview = catchAsync(async (req, res, next) => {
     orderBy: { submittedAt: 'desc' },
   });
 
-  // Each lecturer only sees the entries they supervise — a timesheet may span
-  // multiple courses with different lecturers, and approval/rejection is per-
-  // lecturer (approve = all my entries approved; reject = the whole timesheet)
+  // A lecturer only sees their own entries, while organisers and admins need
+  // every entry in the system-wide review queue to approve or reject it.
   res.status(200).json(
-    await Promise.all(
-      timesheets.map(async (timesheet) => {
-        const filtered = {
-          ...timesheet,
-          entries: timesheet.entries.filter((e) => e.supervisorId === user.id),
-        };
-        const attendedEventIds = await getAttendedEventIds(timesheet.userId, filtered.entries);
-        return {
-          ...serializeTimesheetWithAttendance(filtered, attendedEventIds),
-          tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
-          tutorEmail: timesheet.user.email,
-        };
-      })
-    )
+    timesheets.map((timesheet) => {
+      const filtered = {
+        ...timesheet,
+        entries: role === 'LECTURER'
+          ? timesheet.entries.filter((e) => e.supervisorId === user.id)
+          : timesheet.entries,
+      };
+      return {
+        ...serializeTimesheet(filtered),
+        tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
+        tutorEmail: timesheet.user.email,
+      };
+    })
   );
 });
 
@@ -564,7 +563,7 @@ exports.approveEntry = catchAsync(async (req, res, next) => {
     error.statusCode = 404;
     return next(error);
   }
-  if (entry.supervisorId !== user.id) {
+  if (entry.supervisorId !== user.id && role === 'LECTURER') {
     const error = new Error('You can only approve entries where you are the supervisor');
     error.statusCode = 403;
     return next(error);

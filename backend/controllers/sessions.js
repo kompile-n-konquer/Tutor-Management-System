@@ -514,7 +514,14 @@ exports.getLecturerSessions = catchAsync(async (req, res, next) => {
           include: {
             user: { select: { firstName: true, lastName: true } },
             sessions: {
-              include: { courseSlot: { include: { timeSlot: true } } },
+              include: {
+                courseSlot: { include: { timeSlot: true } },
+                // The cover request attached to the session — the lecturer's
+                // Approve/Reject decision needs the requester's identity.
+                volunteerRequest: {
+                  include: { user: { select: { firstName: true, lastName: true } } },
+                },
+              },
               orderBy: [{ date: 'asc' }, { id: 'asc' }],
             },
           },

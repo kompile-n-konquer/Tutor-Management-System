@@ -1023,6 +1023,27 @@ describe('getLecturerSessions', () => {
     await getLecturerSessions(req, res, next);
     await flushMicrotasks();
 
+    // The lecturer's Approve/Reject UI reads volunteerRequest — assert the
+    // query actually loads the relation, not just that the mapping survives
+    // a mock that already carries the field.
+    expect(prisma.course.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          assignments: expect.objectContaining({
+            include: expect.objectContaining({
+              sessions: expect.objectContaining({
+                include: expect.objectContaining({
+                  volunteerRequest: expect.objectContaining({
+                    include: { user: { select: { firstName: true, lastName: true } } },
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+
     expect(res.json).toHaveBeenCalledWith({
       courses: [
         expect.objectContaining({

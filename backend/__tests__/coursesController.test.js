@@ -4,12 +4,17 @@ jest.mock('../prisma/client', () => ({
   course: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
     updateMany: jest.fn(),
     update: jest.fn(),
   },
   courseSlot: { deleteMany: jest.fn(), createMany: jest.fn() },
+  timeSlot: { findMany: jest.fn() },
+  // getCourse aggregates approved timesheets per tutor and reads the
+  // organiser's claimable-hours cap from SystemSetting
   timesheet: { groupBy: jest.fn() },
-  systemSetting: { findUnique: jest.fn(), findMany: jest.fn() },
+  systemSetting: { findMany: jest.fn(), findUnique: jest.fn() },
   $transaction: jest.fn(),
 }));
 

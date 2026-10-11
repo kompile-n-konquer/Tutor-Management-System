@@ -77,6 +77,17 @@ erDiagram
   TIME_SLOT ||--o{ AVAILABILITY : "used by"
   TIME_SLOT ||--o{ COURSE_SLOT : "used by"
 
+  USER ||--o{ SESSION_VOLUNTEER : "volunteers for"
+  USER ||--o{ EVENT_REGISTER : "marked present on"
+  USER ||--o{ SWAP_REQUEST : "trades events in"
+  USER ||--o{ ROLE_APPLICATION : "applies for role"
+  USER ||--o| TIMETABLE_PDF : "uploads"
+  COURSE ||--o{ EVENT : "schedules"
+  EVENT ||--o{ EVENT_REGISTER : "attendance list"
+  EVENT ||--o{ TIMESHEET_ENTRY : "claimed as"
+  SESSION ||--o| SESSION_VOLUNTEER : "has request"
+  EVENT ||--o{ SWAP_REQUEST : "involves"
+
   USER {
     int id PK
     string firebaseUid UK
@@ -145,18 +156,24 @@ erDiagram
   TIMESHEET {
     int id PK
     int userId FK
+    string name
     string payrollNumber
-    float totalHours
-    string status "DRAFT, SUBMITTED, APPROVED"
+    int totalHours
+    string status "DRAFT, SUBMITTED, APPROVED, REJECTED"
+    string rejectionReason
+    datetime submittedAt
+    datetime approvedAt
   }
   TIMESHEET_ENTRY {
     int id PK
     int timesheetId FK
     int courseId FK
+    int supervisorId FK
+    int eventId FK UK "set when auto-created from a claimed event"
     datetime workDate
     float duration
-    string taskType
-    boolean isApproved
+    string description "tutoring, marking, invigilation, admin"
+    string status "PENDING, APPROVED, REJECTED"
   }
   OVERFLOW_WORK {
     int id PK
@@ -172,6 +189,67 @@ erDiagram
     string value
     datetime updatedAt
   }
+  EVENT {
+    int id PK
+    int courseId FK
+    datetime date "UTC midnight; weekday drives timeslot lookup"
+    string description "tutoring, marking, invigilation, admin"
+    datetime createdAt
+    datetime updatedAt
+  }
+  EVENT_REGISTER {
+    int id PK
+    int eventId FK
+    int userId FK
+    datetime markedAt
+  }
+  SWAP_REQUEST {
+    int id PK
+    int requesterId FK
+    int recipientId FK
+    int requesterEventId FK
+    int recipientEventId FK "null = one-way handover"
+    string status "PENDING, ACCEPTED, APPROVED, REJECTED, CANCELLED"
+    string rejectionReason
+    datetime reviewedAt
+  }
+  SESSION_VOLUNTEER {
+    int id PK
+    int sessionId FK UK
+    int userId FK
+    string status "PENDING, APPROVED, REJECTED"
+    datetime createdAt
+  }
+  ROLE_APPLICATION {
+    int id PK
+    int userId FK
+    string requestedRole "TUTOR or LECTURER"
+    string status "PENDING, APPROVED, REJECTED"
+    float hourlyRate "tutor applications"
+    int maxHoursPerWeek "tutor applications"
+    string department "lecturer applications"
+    string rejectionReason
+    datetime submittedAt
+    datetime reviewedAt
+  }
+  TIMETABLE_PDF {
+    int id PK
+    int userId FK UK
+    string filename
+    string extractedSlots "JSON"
+    datetime uploadedAt
+  }
+  EMAIL_LOG {
+    int id PK
+    string eventType
+    string entityType
+    int entityId
+    string dedupeKey
+    string recipientEmail
+    string status "PENDING, SENT, FAILED"
+    datetime sentAt
+    string errorMessage
+  }
 ```
 
 ### Notes on modeling decisions
@@ -181,9 +259,9 @@ erDiagram
 - **`TutorAssignment` is the join entity** between `User` (tutor role) and `Course`, carrying only the `semester` — the many-to-many relationship of which users tutor which courses. Hours are not stored: they are derived from the course's slots (each slot rounds up to at least one whole hour), and the overall cap lives in `SystemSetting` (`TUTOR_MONTHLY_CLAIMABLE_HOURS`, set by an organiser).
 - **Availability vs `CourseSlot`**: a tutor's own weekly availability (`Availability`) is checked against each course's fixed teaching times (`CourseSlot`) to detect scheduling clashes — these are separate tables because tutors set availability once per term, while course slots are fixed by the timetable. Both reference the shared `TimeSlot` catalogue.
 
-:::note Models added after this diagram was drawn
+:::note
 
-`schema.prisma` has since gained three models that are not yet shown above: `Event` (a lecturer-scheduled calendar event on a course date, which tutors claim as a timesheet entry), `RoleApplication` (a student's application to become a tutor or lecturer, reviewed by the organiser), and `EmailLog` (an audit log for outgoing notification emails, with duplicate-send prevention).
+The ER diagram above mirrors the current `schema.prisma`, including the event attendance register (`EventRegister`) added with the events register feature: one row per tutor the owning lecturer marked present on an event, which timesheet approval checks before an event entry can be approved.
 
 :::
 

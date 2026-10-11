@@ -429,4 +429,79 @@ describe('event register', () => {
     expect(res.json).toHaveBeenCalledWith({ message: 'Register saved', presentIds: [9, 11] });
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('register guards reject invalid ids, missing events and non-owners', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'LECTURER' });
+
+    // Non-integer id never reaches the database
+    let next = jest.fn();
+    await getEventRegister({ ...mockReq(), params: { id: 'abc' } }, mockRes(), next);
+    await flushMicrotasks();
+    expectHttpError(next, 400, 'Event ID must be a number');
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+
+    // Unknown event
+    prisma.event.findUnique.mockResolvedValue(null);
+    next = jest.fn();
+    await getEventRegister({ ...mockReq(), params: { id: '99' } }, mockRes(), next);
+    await flushMicrotasks();
+    expectHttpError(next, 404, 'Event not found');
+
+    // Lecturer who does not own the course
+    prisma.event.findUnique.mockResolvedValue({
+      ...registerEvent,
+      course: { ...registerEvent.course, userId: 8 },
+    });
+    next = jest.fn();
+    await getEventRegister({ ...mockReq(), params: { id: '1' } }, mockRes(), next);
+    await flushMicrotasks();
+    expectHttpError(next, 403, 'You can only manage the register for events on courses you have created');
+  });
+
+  test('updateEventRegister rejects non-numeric and duplicate tutor ids', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'LECTURER' });
+    prisma.event.findUnique.mockResolvedValue(registerEvent);
+
+    let next = jest.fn();
+    await updateEventRegister(
+      { ...mockReq(), params: { id: '1' }, body: { presentIds: ['x'] } },
+      mockRes(),
+      next,
+    );
+    await flushMicrotasks();
+    expectHttpError(next, 400, 'Every tutor id must be a number');
+
+    next = jest.fn();
+    await updateEventRegister(
+      { ...mockReq(), params: { id: '1' }, body: { presentIds: [9, 9] } },
+      mockRes(),
+      next,
+    );
+    await flushMicrotasks();
+    expectHttpError(next, 400, 'Each tutor can only appear once on the register');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('updateEventRegister accepts an empty list and only clears the register', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 7, role: 'LECTURER' });
+    prisma.event.findUnique.mockResolvedValue(registerEvent);
+    prisma.$transaction.mockResolvedValue([]);
+
+    const res = mockRes();
+    const next = jest.fn();
+
+    await updateEventRegister(
+      { ...mockReq(), params: { id: '1' }, body: { presentIds: [] } },
+      res,
+      next,
+    );
+    await flushMicrotasks();
+
+    // Nobody marked present: the register is cleared, no tutor lookup or insert
+    expect(prisma.tutorAssignment.findMany).not.toHaveBeenCalled();
+    expect(prisma.eventRegister.createMany).not.toHaveBeenCalled();
+    expect(prisma.eventRegister.deleteMany).toHaveBeenCalledWith({ where: { eventId: 1 } });
+    expect(res.json).toHaveBeenCalledWith({ message: 'Register saved', presentIds: [] });
+    expect(next).not.toHaveBeenCalled();
+  });
 });

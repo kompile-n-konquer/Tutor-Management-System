@@ -40,7 +40,8 @@ describe('Placeholder — unbuilt backlog screens', () => {
     );
 
     expect(screen.getByText('Unique Screen Label')).toBeInTheDocument();
-    // The sidebar is rendered with the role from useAuth (mocked as tutor above).
-    expect(screen.getByText('Tutor Dashboard')).toBeInTheDocument();
+    // The sidebar is rendered with the role from useAuth (mocked as tutor above)
+    // — every staff role now shares the one unified Dashboard entry.
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });
 });

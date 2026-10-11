@@ -87,7 +87,7 @@ describe("AppLayout docked sidebar (md+)", () => {
     expect(screen.getByText("Account")).toBeInTheDocument();
 
     // Role links keep their icons and destinations.
-    const board = screen.getByText("Organiser Board").closest("a");
+    const board = screen.getByText("Allocation").closest("a");
     expect(board).toHaveAttribute("href", "/organiser");
     expect(board.querySelector(".material-symbols-outlined")).toHaveTextContent("dashboard");
 
@@ -115,7 +115,7 @@ describe("AppLayout docked sidebar (md+)", () => {
     expect(contentColumn()).toHaveClass("ml-sidebar-ml-rail");
     // Labels and section headings disappear …
     expect(screen.queryByText("Main Menu")).not.toBeInTheDocument();
-    expect(screen.queryByText("Organiser Board")).not.toBeInTheDocument();
+    expect(screen.queryByText("Allocation")).not.toBeInTheDocument();
     // … while the icon column keeps every item.
     const expected = NAV_LINKS.filter((link) => link.roles.includes("organiser"));
     expect(sidebarElement().querySelectorAll(".material-symbols-outlined")).toHaveLength(
@@ -126,7 +126,7 @@ describe("AppLayout docked sidebar (md+)", () => {
 
     expect(hamburger).toHaveAttribute("aria-expanded", "true");
     expect(sidebarElement()).toHaveClass("w-sidebar-width");
-    expect(screen.getByText("Organiser Board")).toBeInTheDocument();
+    expect(screen.getByText("Allocation")).toBeInTheDocument();
     expect(contentColumn()).toHaveClass("ml-sidebar-ml");
   });
 

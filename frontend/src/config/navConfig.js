@@ -4,7 +4,12 @@
 // "section" groups the link under a sidebar heading ("main" = Main Menu, "general" = General).
 
 export const NAV_LINKS = [
-  { to: "/tutor-dashboard", icon: "assignment_ind", label: "Tutor Dashboard", roles: ["tutor"], section: "main" },
+  // One Dashboard for every staff role — the sidebar label no longer names
+  // the role ("Tutor Dashboard", "Organiser Board", …); the page itself
+  // filters its content by the signed-in user's role.
+  { to: "/dashboard", icon: "space_dashboard", label: "Dashboard", roles: ["tutor", "lecturer", "organiser", "admin"], section: "main" },
+  { to: "/organiser", icon: "dashboard", label: "Allocation", roles: ["organiser"], section: "main" },
+  { to: "/organiser-analytics", icon: "analytics", label: "Analytics", roles: ["organiser"], section: "main" },
   { to: "/courses", icon: "menu_book", label: "Courses", roles: ["lecturer", "organiser"], section: "general" },
   { to: "/events", icon: "calendar_today", label: "Events", roles: ["tutor", "lecturer", "organiser"], section: "general" },
   { to: "/swaps", icon: "swap_horiz", label: "Session Swaps", roles: ["tutor"], section: "general" },
@@ -12,16 +17,9 @@ export const NAV_LINKS = [
   { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor"], section: "general" },
   { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["organiser", "tutor", "lecturer"], section: "general" },
   { to: "/timetable/edit", icon: "calendar_month", label: "Timetable", roles: ["tutor", "student"], section: "general" },
-
-  // Not yet built — flagged in the page-to-role mapping phase as a structural gap:
-  // { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"] },
-  { to: "/organiser", icon: "dashboard", label: "Organiser Board", roles: ["organiser"], section: "main" },
   { to: "/application-review", icon: "fact_check", label: "Applications", roles: ["organiser"], section: "general" },
   { to: "/swap-review", icon: "swap_horiz", label: "Swap Requests", roles: ["organiser"], section: "general" },
-  { to: "/organiser-analytics", icon: "analytics", label: "Analytics", roles: ["organiser"], section: "main" },
   { to: "/onboarding", icon: "upgrade", label: "Become a Tutor/Lecturer", roles: ["student"], section: "general" },
-  { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"], section: "main" },
-  { to: "/admin-view", icon: "admin_panel_settings", label: "Admin View", roles: ["admin"], section: "main" },
 ];
 
 // Rendered under the Account heading at the bottom of the sidebar. "Logout" is

@@ -34,7 +34,10 @@ describe('DashboardPreview', () => {
     // The dead Resolve Conflicts button was removed from the real sidebar and
     // from this replica of it.
     expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
-    expect(screen.getByText('Organiser Board')).toBeInTheDocument();
+    // The sidebar replica mirrors the unified navigation: one Dashboard entry
+    // per role, with the board (Allocation) and Analytics as separate tools.
+    expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
+    expect(screen.getByText('Allocation')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Lecturer' }));
     expect(screen.getByRole('tab', { name: 'Lecturer' })).toHaveAttribute('aria-selected', 'true');

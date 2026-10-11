@@ -31,18 +31,20 @@ describe('Sidebar — role-aware navigation rail', () => {
   test('defaults to the tutor navigation when no role is given', () => {
     renderSidebar();
 
-    expect(screen.getByText('Tutor Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Timesheets')).toBeInTheDocument();
-    expect(screen.queryByText('Allocation Board')).not.toBeInTheDocument();
+    expect(screen.queryByText('Allocation')).not.toBeInTheDocument();
   });
 
-  test('organisers see the board links and no dead conflict shortcut', () => {
+  test('organisers see the dashboard, allocation board and analytics — no tutor-only links', () => {
     renderSidebar('organiser');
 
-    expect(screen.getByText('Organiser Board')).toBeInTheDocument();
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Allocation')).toBeInTheDocument();
+    expect(screen.getByText('Analytics')).toBeInTheDocument();
     // The old Resolve Conflicts button had no handler — it must not come back.
     expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
-    expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByText('Volunteer View')).not.toBeInTheDocument();
   });
 
   test('lecturers no longer see the non-functional Resolve Conflicts shortcut', () => {
@@ -50,12 +52,13 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
   });
 
-  test('students see the onboarding link, and no tutor-only links', () => {
+  test('students see the onboarding link, and no dashboard or tutor-only links', () => {
     renderSidebar('student');
 
     expect(screen.getByText('Become a Tutor/Lecturer')).toBeInTheDocument();
     expect(screen.queryByText('Volunteer View')).not.toBeInTheDocument();
-    expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
+    // Students have no dashboard items — the unified dashboard is staff-only.
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
   });
 
   test('clicking Settings navigates to the settings page', () => {

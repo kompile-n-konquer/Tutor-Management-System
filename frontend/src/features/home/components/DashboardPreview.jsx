@@ -23,44 +23,47 @@ import {
 
 const ACCOUNT_LABELS = ["Profile", "Settings", "Logout"];
 
+// The sidebar replicas mirror the app's unified navigation: every staff
+// role gets the same "Dashboard" entry; organisers keep the allocation
+// board and analytics as separate tools.
 const TABS = [
   {
     id: "tutor",
     label: "Tutor",
-    slug: "tutor-dashboard",
+    slug: "dashboard",
     role: "tutor",
-    title: "Tutor Dashboard",
-    activeLabel: "Tutor Dashboard",
+    title: "Dashboard",
+    activeLabel: "Dashboard",
     showConflicts: false,
     user: { initials: "AM", name: "Alex Mercer", role: "Tutor" },
     sections: [
-      ["Main Menu", ["Tutor Dashboard"]],
+      ["Main Menu", ["Dashboard"]],
       ["General", ["Events", "Applications", "Volunteer View", "Timesheets", "Timetable"]],
     ],
   },
   {
     id: "organiser",
     label: "Organiser",
-    slug: "organiser-board",
+    slug: "dashboard",
     role: "organiser",
-    title: "Tutor Management System",
-    activeLabel: "Organiser Board",
+    title: "Dashboard",
+    activeLabel: "Dashboard",
     user: { initials: "SO", name: "System Organiser", role: "Organiser" },
     sections: [
-      ["Main Menu", ["Organiser Board", "Analytics"]],
+      ["Main Menu", ["Dashboard", "Allocation", "Analytics"]],
       ["General", ["Courses", "Events", "Timesheets", "Applications"]],
     ],
   },
   {
     id: "lecturer",
     label: "Lecturer",
-    slug: "timesheets",
+    slug: "dashboard",
     role: "lecturer",
-    title: "Timesheets",
-    activeLabel: "Timesheets",
+    title: "Dashboard",
+    activeLabel: "Dashboard",
     user: { initials: "JO", name: "James Okafor", role: "Lecturer" },
     sections: [
-      ["Main Menu", ["Lecturer View"]],
+      ["Main Menu", ["Dashboard"]],
       ["General", ["Courses", "Events", "Timesheets"]],
     ],
   },
@@ -68,10 +71,9 @@ const TABS = [
 
 // Used only when navConfig has no link with that label for the role.
 const FALLBACK_ICONS = {
-  "Tutor Dashboard": "badge",
-  "Organiser Board": "dashboard",
+  Dashboard: "space_dashboard",
+  Allocation: "dashboard",
   Analytics: "analytics",
-  "Lecturer View": "school",
   Courses: "menu_book",
   Events: "calendar_today",
   Applications: "workspace_premium",

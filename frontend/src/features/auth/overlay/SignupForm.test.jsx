@@ -45,7 +45,7 @@ const renderSignupForm = () =>
       <MemoryRouter initialEntries={['/signup']}>
         <Routes>
           <Route path="*" element={<SignupForm />} />
-          <Route path="/tutor-dashboard" element={<div>tutor-dashboard-page</div>} />
+          <Route path="/dashboard" element={<div>dashboard-page</div>} />
         </Routes>
       </MemoryRouter>
     </AuthOverlayProvider>,
@@ -113,9 +113,9 @@ describe('SignupForm — overlay Firebase account + backend profile creation', (
         firebaseUid: 'uid-42',
       }),
     );
-    // The refreshed role decides the landing page — tutor maps to /tutor-dashboard.
+    // The refreshed role decides the landing page — tutor maps to /dashboard.
     expect(mockRefreshRole).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
   });
 
   test('holds the overlay on a skeleton while the role is refreshed', async () => {
@@ -138,7 +138,7 @@ describe('SignupForm — overlay Firebase account + backend profile creation', (
     expect(screen.queryByLabelText('First Name')).not.toBeInTheDocument();
 
     resolveRefresh({ role: 'tutor' });
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
   });
 
   test('shows the mapped Firebase error and never calls the backend on failure', async () => {
@@ -152,7 +152,7 @@ describe('SignupForm — overlay Firebase account + backend profile creation', (
 
     expect(await screen.findByText('An account with this email already exists.')).toBeInTheDocument();
     expect(mockPost).not.toHaveBeenCalled();
-    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument();
   });
 
   test('offers the login switch instead of navigating to /login', () => {

@@ -22,7 +22,12 @@ const VALID_DESCRIPTIONS = ['tutoring', 'marking', 'invigilation', 'admin'];
 const parseEventDate = (value) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+
+  const [year, month, day] = value.split('-').map(Number);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? date
+    : null;
 };
 
 // Everything the event serialization needs from the event's course. Used both as
@@ -140,6 +145,28 @@ exports.getEvents = catchAsync(async (req, res, next) => {
     error.statusCode = 403;
     return next(error);
   }
+
+  const { from, to } = req.query || {};
+  const fromDate = from === undefined ? null : parseEventDate(from);
+  const toDate = to === undefined ? null : parseEventDate(to);
+
+  if ((from !== undefined && !fromDate) || (to !== undefined && !toDate)) {
+    const error = new Error('from and to must be valid dates in YYYY-MM-DD format');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  if (fromDate && toDate && fromDate > toDate) {
+    const error = new Error('from must be on or before to');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  const dateFilter = {
+    ...(fromDate ? { gte: fromDate } : {}),
+    ...(toDate ? { lte: toDate } : {}),
+  };
+  if (Object.keys(dateFilter).length > 0) where.date = dateFilter;
 
   const events = await prisma.event.findMany({
     where,

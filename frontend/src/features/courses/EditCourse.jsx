@@ -47,6 +47,7 @@ const EditCourse = () => {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
   const canViewCourses = role === 'lecturer' || role === 'organiser';
@@ -93,10 +94,11 @@ const EditCourse = () => {
       setSavedGrid(loadedGrid);
       setData(loadedData);
       setSavedData(loadedData);
+      setError('');
     };
 
     loadCourse();
-  }, [currentUser, loading, canViewCourses, courseId, execute]);
+  }, [currentUser, loading, canViewCourses, courseId, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !canViewCourses) return null;
@@ -282,7 +284,22 @@ const EditCourse = () => {
               </div>
             </div>
 
-            {error && <ErrorMessage>{error}</ErrorMessage>}
+            {error && (
+              <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+                <ErrorMessage>{error}</ErrorMessage>
+                {!course && (
+                  <Button
+                    className="min-w-32"
+                    onClick={() => {
+                      setError('');
+                      setReloadKey((key) => key + 1);
+                    }}
+                  >
+                    Try again
+                  </Button>
+                )}
+              </div>
+            )}
             {success && (
               <p className="font-body-md text-primary bg-primary/5 border border-primary/30 rounded-xl px-stack-md py-stack-sm">
                 {success}

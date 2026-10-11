@@ -38,6 +38,8 @@ const Settings = () => {
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const role = currentUser?.role?.toLowerCase();
   const isOrganiser = role === "organiser" || role === "admin";
@@ -54,6 +56,8 @@ const Settings = () => {
     const loadSettings = async () => {
       const response = await execute(() => api.get("/settings"));
       if (response && response.status === 200) {
+        setError("");
+        setLoadFailed(false);
         const hours = response.data.tutorMonthlyClaimableHours;
         setMonthlyHours(hours === null ? "" : String(hours));
         setSavedMonthlyHours(hours);
@@ -69,12 +73,13 @@ const Settings = () => {
         setSavedRates(rates);
         setPdfTemplateName(response.data.pdfTemplateFilename || null);
       } else {
-        setError("Could not load the settings. Please refresh the page.");
+        setError("Could not load the settings. Please try again.");
+        setLoadFailed(true);
       }
     };
 
     loadSettings();
-  }, [currentUser, loading, isOrganiser, execute]);
+  }, [currentUser, loading, isOrganiser, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser) return null;
@@ -223,7 +228,23 @@ const Settings = () => {
           </p>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            {loadFailed && (
+              <Button
+                className="min-w-32"
+                onClick={() => {
+                  setError("");
+                  setLoadFailed(false);
+                  setReloadKey((key) => key + 1);
+                }}
+              >
+                Try again
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="space-y-gutter">
           {/* Appearance applies to every signed-in user, not just organisers. */}

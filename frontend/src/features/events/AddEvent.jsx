@@ -19,6 +19,7 @@ const AddEvent = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [formKey, setFormKey] = useState(0); // remounts the form so it resets after saving
+  const [reloadKey, setReloadKey] = useState(0);
 
   const isLecturer = currentUser?.role?.toLowerCase() === 'lecturer';
 
@@ -54,10 +55,11 @@ const AddEvent = () => {
       setCourses(coursesResponse.data);
       setTimeSlots(slotsResponse.data);
       setLoaded(true);
+      setError('');
     };
 
     loadFormData();
-  }, [currentUser, loading, isLecturer, execute]);
+  }, [currentUser, loading, isLecturer, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !isLecturer) return null;
@@ -93,7 +95,20 @@ const AddEvent = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
         {success && (
           <p className="font-body-md text-primary bg-primary/5 border border-primary/30 rounded-xl px-stack-md py-stack-sm mb-gutter">
             {success}
@@ -113,7 +128,7 @@ const AddEvent = () => {
               <div className="h-64 rounded bg-surface-container-high/60" />
             </div>
           </div>
-        ) : courses.length === 0 ? (
+        ) : !error && courses.length === 0 ? (
           <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
             You need a course with tutoring timeslots before you can create an event.
           </p>

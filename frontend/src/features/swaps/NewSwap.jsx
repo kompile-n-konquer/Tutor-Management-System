@@ -25,6 +25,7 @@ const NewSwap = () => {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
 
@@ -45,7 +46,11 @@ const NewSwap = () => {
 
     const loadSessions = async () => {
       const response = await execute(() => api.get('/swaps/my-sessions'));
-      if (!response) return;
+      if (!response) {
+        setError('Could not load your sessions. Please try again.');
+        setLoaded(true);
+        return;
+      }
       if (response.status !== 200) {
         setError(response?.data?.message || 'Could not load your sessions. Please refresh the page.');
         setLoaded(true);
@@ -59,7 +64,7 @@ const NewSwap = () => {
     };
 
     loadSessions();
-  }, [currentUser, loading, role, execute, preselectedEventId]);
+  }, [currentUser, loading, role, execute, preselectedEventId, reloadKey]);
 
   // Recompute eligible partners whenever the offered session changes. The
   // dependent state is reset in the select's onChange, not here — resetting
@@ -115,7 +120,23 @@ const NewSwap = () => {
           </p>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="space-y-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            {loaded && sessions.length === 0 && (
+              <Button
+                className="min-w-32"
+                onClick={() => {
+                  setError('');
+                  setLoaded(false);
+                  setReloadKey((key) => key + 1);
+                }}
+              >
+                Try again
+              </Button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-stack-lg">
           <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
@@ -124,7 +145,7 @@ const NewSwap = () => {
             </label>
             {!loaded ? (
               <p className="font-body-md text-on-surface-variant py-stack-sm">Loading sessions...</p>
-            ) : sessions.length === 0 ? (
+            ) : !error && sessions.length === 0 ? (
               <p className="font-body-md text-on-surface-variant py-stack-sm">
                 You have no claimed sessions to offer. Claim a session on your timesheet first, or
                 go back to <span className="text-primary">Session Swaps</span>.

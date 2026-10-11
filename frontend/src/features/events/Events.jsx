@@ -34,6 +34,7 @@ const Events = () => {
   const [events, setEvents] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
   const canViewEvents = role === 'tutor' || role === 'lecturer' || role === 'organiser' || role === 'admin';
@@ -92,14 +93,15 @@ const Events = () => {
       const response = await execute(() => api.get('/events'));
       if (response && response.status === 200) {
         setEvents(response.data);
-      } else if (response) {
+        setError('');
+      } else {
         setError(response?.data?.message || 'Could not load the events. Please refresh the page.');
       }
       setLoaded(true);
     };
 
     loadEvents();
-  }, [currentUser, loading, canViewEvents, execute]);
+  }, [currentUser, loading, canViewEvents, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !canViewEvents) return null;
@@ -132,7 +134,20 @@ const Events = () => {
           )}
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-stack-lg flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
 
         {isLoading && !loaded ? (
           <div className="space-y-stack-sm" aria-hidden="true">

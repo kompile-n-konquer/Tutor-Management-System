@@ -402,4 +402,58 @@ describe('Cover — directed cover-offer hub', () => {
     expect(screen.getByText('Lerato Dlamini')).toBeInTheDocument();
     expect(screen.getByText('Approved')).toBeInTheDocument();
   });
+
+  test('waits out the auth loading state before touching the feeds', () => {
+    authState.loading = true;
+
+    const { container } = renderCover();
+
+    // Nothing renders and no feed is requested until auth settles.
+    expect(container.firstChild).toBeNull();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('shows the generic sessions error when a failure carries no message', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/mine') return Promise.resolve({ status: 500, data: {} });
+      return Promise.resolve({ status: 200, data: { sessions: [] } });
+    });
+
+    renderCover();
+
+    expect(
+      await screen.findByText('Could not load your sessions. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
+
+  test('treats payloads without a session ledger as empty feeds', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: {} });
+      if (url === '/sessions/volunteered') return Promise.resolve({ status: 200, data: {} });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderCover();
+
+    expect(await screen.findByText('No excused sessions are waiting for cover.')).toBeInTheDocument();
+    expect(screen.getByText('No cover offers are waiting on your response.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing is waiting on the lecturer right now.')).toBeInTheDocument();
+    expect(screen.getByText(/No approved covers yet/)).toBeInTheDocument();
+  });
+
+  test('renders placeholders when cover rows arrive without names', async () => {
+    stubGets({
+      mine: [makeMineSession({ id: 60, status: 'PENDING', volunteerRequest: null })],
+      volunteered: [
+        makeVolunteered({ id: 70, ledBy: null }),
+        makeVolunteered({ id: 71, status: 'APPROVED', volunteerStatus: 'APPROVED', ledBy: null }),
+      ],
+    });
+
+    renderCover();
+
+    expect(await screen.findByText('A covering tutor has been found')).toBeInTheDocument();
+    // One placeholder for the incoming offer, one for the confirmed cover.
+    expect(screen.getAllByText('A tutor')).toHaveLength(2);
+  });
 });

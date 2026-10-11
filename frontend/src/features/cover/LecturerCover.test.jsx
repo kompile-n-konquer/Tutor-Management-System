@@ -240,4 +240,97 @@ describe('LecturerCover — the lecturer’s cross-course cover hub', () => {
       await screen.findByText('Could not load the cover requests. Please refresh the page.'),
     ).toBeInTheDocument();
   });
+
+  test('renders placeholders for rows missing names and reasons', async () => {
+    stubLecturer([
+      makeCourse([
+        makeSession({
+          tutorName: null,
+          excuseReason: null,
+          volunteerRequest: { id: 5, status: 'PENDING', userId: 8, volunteerName: null },
+        }),
+        makeSession({
+          id: 2,
+          status: 'OFFERED',
+          tutorName: null,
+          excuseReason: null,
+          volunteerRequest: { id: 6, status: 'OFFERED', userId: 7, volunteerName: null },
+        }),
+        makeSession({
+          id: 3,
+          status: 'UNASSIGNED',
+          tutorName: null,
+          excuseReason: null,
+          volunteerRequest: null,
+        }),
+        // A scheduled session with no volunteer request belongs to no section.
+        makeSession({
+          id: 4,
+          status: 'SCHEDULED',
+          tutorName: null,
+          excuseReason: null,
+          volunteerRequest: null,
+        }),
+      ]),
+      makeCourse([
+        makeSession({
+          id: 5,
+          status: 'SCHEDULED',
+          tutorName: 'Sipho Backup',
+          volunteerRequest: { id: 8, status: 'APPROVED', userId: 6, volunteerName: null },
+        }),
+        makeSession({
+          id: 6,
+          status: 'SCHEDULED',
+          tutorName: null,
+          volunteerRequest: { id: 9, status: 'APPROVED', userId: 5, volunteerName: null },
+        }),
+      ]),
+    ]);
+
+    renderHub();
+
+    expect(await screen.findByText('Cover requested by')).toBeInTheDocument();
+    // One excuser placeholder per open-section row.
+    expect(screen.getAllByText('Unassigned tutor')).toHaveLength(3);
+    expect(screen.getAllByText('—')).toHaveLength(3);
+    // Approval, nominee and confirmed rows each fall back to "A tutor".
+    expect(screen.getAllByText('A tutor')).toHaveLength(3);
+    // A confirmed cover falls back to the session tutor's name before "A tutor".
+    expect(screen.getByText('Sipho Backup')).toBeInTheDocument();
+  });
+
+  test('treats a feed payload without courses as no cover activity', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: {} });
+
+    renderHub();
+
+    expect(await screen.findByText('Nothing is waiting for your approval.')).toBeInTheDocument();
+    expect(
+      screen.getByText('No directed offers are waiting on a tutor’s response.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('No sessions are waiting for a volunteer.')).toBeInTheDocument();
+    expect(screen.getByText('No confirmed covers coming up.')).toBeInTheDocument();
+  });
+
+  test('treats a course without sessions as empty', async () => {
+    mockGet.mockResolvedValue({
+      status: 200,
+      data: { courses: [{ id: 7, courseCode: 'COMS9999', courseName: 'Legacy Course' }] },
+    });
+
+    renderHub();
+
+    expect(await screen.findByText('Nothing is waiting for your approval.')).toBeInTheDocument();
+  });
+
+  test('falls back to the generic load error when a failure carries no message', async () => {
+    mockGet.mockResolvedValue({ status: 500, data: {} });
+
+    renderHub();
+
+    expect(
+      await screen.findByText('Could not load the cover requests. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
 });

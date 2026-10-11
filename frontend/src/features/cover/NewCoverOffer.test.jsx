@@ -325,4 +325,84 @@ describe('NewCoverOffer — offer an excused session to one tutor', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('button', { name: /send cover offer/i })).toBeInTheDocument();
   });
+
+  test('renders nothing while the auth state is still loading', () => {
+    authState.loading = true;
+
+    const { container } = renderNewCoverOffer();
+
+    expect(container.firstChild).toBeNull();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('stays on the sessions loading state when the request throws', async () => {
+    mockGet.mockRejectedValue(new Error('network down'));
+
+    renderNewCoverOffer();
+
+    expect(await screen.findByText('Loading sessions...')).toBeInTheDocument();
+  });
+
+  test('shows the generic sessions error when a failure carries no message', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/mine') return Promise.resolve({ status: 500, data: {} });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderNewCoverOffer();
+
+    expect(
+      await screen.findByText('Could not load your sessions. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
+
+  test('treats a payload without a session ledger as nothing to offer', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/mine') return Promise.resolve({ status: 200, data: {} });
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderNewCoverOffer();
+
+    expect(
+      await screen.findByText(/You have no excused sessions waiting for cover/i),
+    ).toBeInTheDocument();
+  });
+
+  test('shows the generic candidates error when a failure carries no message', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/mine') {
+        return Promise.resolve({ status: 200, data: { sessions: [makeSession()] } });
+      }
+      if (url === '/sessions/3/cover-candidates') {
+        return Promise.resolve({ status: 500, data: {} });
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderNewCoverOffer();
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: '3' } });
+
+    expect(
+      await screen.findByText('Could not load cover candidates. Please try again.'),
+    ).toBeInTheDocument();
+  });
+
+  test('keeps the nominee step hidden when the candidates request throws', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/mine') {
+        return Promise.resolve({ status: 200, data: { sessions: [makeSession()] } });
+      }
+      if (url === '/sessions/3/cover-candidates') {
+        return Promise.reject(new Error('network down'));
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderNewCoverOffer();
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: '3' } });
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/sessions/3/cover-candidates'));
+    expect(screen.queryByText('2. Who should take it over?')).not.toBeInTheDocument();
+  });
 });

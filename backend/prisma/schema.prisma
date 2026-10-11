@@ -33,6 +33,7 @@ model User {
   swapRequestsSent     SwapRequest[] @relation("SwapRequestsSent")
   swapRequestsReceived SwapRequest[] @relation("SwapRequestsReceived")
   volunteerRequests SessionVolunteer[]
+  eventAttendance EventRegister[]
 }
 
 // Join table between User (role TUTOR) and Course — one row records that a user
@@ -198,10 +199,26 @@ model Event {
   updatedAt   DateTime @updatedAt
   course      Course   @relation(fields: [courseId], references: [id], onUpdate: NoAction)
   claims      TimesheetEntry[]
+  register    EventRegister[]
   givenSwaps    SwapRequest[] @relation("SwapRequestGivenEvent")
   receivedSwaps SwapRequest[] @relation("SwapRequestReceivedEvent")
 
   @@index([courseId, date])
+}
+
+// Attendance register for an event: one row per tutor the owning lecturer
+// marked present on the day. Timesheet approval reads this table — an entry
+// claiming an event the tutor was not marked present for cannot be approved,
+// and the lecturer is pointed at rejection instead.
+model EventRegister {
+  id       Int      @id @default(autoincrement())
+  eventId  Int
+  userId   Int
+  markedAt DateTime @default(now())
+  event    Event    @relation(fields: [eventId], references: [id], onUpdate: NoAction)
+  user     User     @relation(fields: [userId], references: [id], onUpdate: NoAction)
+
+  @@unique([eventId, userId])
 }
 
 // A tutor-to-tutor request to trade an assigned session (a claimed event).

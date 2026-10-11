@@ -23,6 +23,7 @@ import Events from './features/events/Events.jsx';
 import AddEvent from './features/events/AddEvent.jsx';
 import EventDetails from './features/events/EventDetails.jsx';
 import EditEvent from './features/events/EditEvent.jsx';
+import EventRegister from './features/events/EventRegister.jsx';
 import Timesheets from './features/timesheets/Timesheets.jsx';
 import EditTimesheet from './features/timesheets/EditTimesheet.jsx';
 import TimesheetDetails from './features/timesheets/TimesheetDetails.jsx';
@@ -92,6 +93,7 @@ const router = createBrowserRouter([
           { index: true, element: <Events /> },
           { path: 'add', element: <AddEvent /> },
           { path: ':id', element: <EventDetails /> },
+          { path: ':id/register', element: <EventRegister /> },
           { path: ':id/edit', element: <EditEvent /> },
         ],
       },

@@ -63,6 +63,29 @@ const EVENT_CLAIM_INCLUDE = {
   },
 };
 
+// Register attendance for a timesheet's event-claimed entries: the set of
+// eventIds the timesheet's tutor was marked present for. The lecturer UI uses
+// this to disable approval and suggest a rejection reason; true/false per
+// entry, null for entries that are not event claims.
+const getAttendedEventIds = async (tutorId, entries) => {
+  const eventIds = [...new Set(entries.map((e) => e.eventId).filter(Boolean))];
+  if (eventIds.length === 0) return new Set();
+  const rows = await prisma.eventRegister.findMany({
+    where: { userId: tutorId, eventId: { in: eventIds } },
+    select: { eventId: true },
+  });
+  return new Set(rows.map((row) => row.eventId));
+};
+
+// serializeTimesheet plus the per-entry attended flag from the event register
+const serializeTimesheetWithAttendance = (timesheet, attendedEventIds) => ({
+  ...serializeTimesheet(timesheet),
+  entries: (timesheet.entries || []).map((entry) => ({
+    ...serializeEntry(entry),
+    attended: entry.eventId ? attendedEventIds.has(entry.eventId) : null,
+  })),
+});
+
 exports.getMyTimesheets = catchAsync(async (req, res, next) => {
   const user = await getUser(req.user.user_id);
 
@@ -115,17 +138,20 @@ exports.getPendingReview = catchAsync(async (req, res, next) => {
   // multiple courses with different lecturers, and approval/rejection is per-
   // lecturer (approve = all my entries approved; reject = the whole timesheet)
   res.status(200).json(
-    timesheets.map((timesheet) => {
-      const filtered = {
-        ...timesheet,
-        entries: timesheet.entries.filter((e) => e.supervisorId === user.id),
-      };
-      return {
-        ...serializeTimesheet(filtered),
-        tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
-        tutorEmail: timesheet.user.email,
-      };
-    })
+    await Promise.all(
+      timesheets.map(async (timesheet) => {
+        const filtered = {
+          ...timesheet,
+          entries: timesheet.entries.filter((e) => e.supervisorId === user.id),
+        };
+        const attendedEventIds = await getAttendedEventIds(timesheet.userId, filtered.entries);
+        return {
+          ...serializeTimesheetWithAttendance(filtered, attendedEventIds),
+          tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
+          tutorEmail: timesheet.user.email,
+        };
+      })
+    )
   );
 });
 
@@ -219,8 +245,10 @@ exports.getTimesheet = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  const attendedEventIds = await getAttendedEventIds(timesheet.userId, timesheet.entries);
+
   res.status(200).json({
-    ...serializeTimesheet(timesheet),
+    ...serializeTimesheetWithAttendance(timesheet, attendedEventIds),
     tutorName: `${timesheet.user.firstName} ${timesheet.user.lastName}`,
     tutorEmail: timesheet.user.email,
   });
@@ -540,6 +568,22 @@ exports.approveEntry = catchAsync(async (req, res, next) => {
     const error = new Error('You can only approve entries where you are the supervisor');
     error.statusCode = 403;
     return next(error);
+  }
+
+  // Register gate: an entry claiming an event the tutor was not marked present
+  // for cannot be approved — the lecturer rejects the timesheet instead
+  if (entry.eventId != null) {
+    const attended = await prisma.eventRegister.findFirst({
+      where: { eventId: entry.eventId, userId: timesheet.userId },
+      select: { id: true },
+    });
+    if (!attended) {
+      const error = new Error(
+        "The tutor was not marked present on this event's register — reject the timesheet instead"
+      );
+      error.statusCode = 409;
+      return next(error);
+    }
   }
 
   await prisma.timesheetEntry.update({

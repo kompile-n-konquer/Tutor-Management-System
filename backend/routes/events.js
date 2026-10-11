@@ -8,6 +8,8 @@ const {
   createEvent,
   getEvent,
   updateEvent,
+  getEventRegister,
+  updateEventRegister,
 } = require('../controllers/events');
 
 // Literal paths are registered before /:id so they are not matched as an id
@@ -17,5 +19,7 @@ router.get('/claimable', authenticateFirebaseToken, getClaimableEvents);
 router.post('/', authenticateFirebaseToken, createEvent);
 router.get('/:id', authenticateFirebaseToken, getEvent);
 router.put('/:id', authenticateFirebaseToken, updateEvent);
+router.get('/:id/register', authenticateFirebaseToken, getEventRegister);
+router.put('/:id/register', authenticateFirebaseToken, updateEventRegister);
 
 module.exports = router;

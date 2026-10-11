@@ -41,6 +41,7 @@ jest.mock('../prisma/client', () => {
     },
     systemSetting: { findUnique: jest.fn() },
     event: { findMany: jest.fn() },
+    eventRegister: { findMany: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn(),
   };
 });
@@ -160,6 +161,10 @@ describe('timesheet workflow — creation, review, corrections', () => {
     getTutorMonthlyClaimableHours.mockResolvedValue(null);
     getTutorEventClaimMonths.mockResolvedValue(null);
     monthsBefore.mockReturnValue(null);
+
+    // No register rows by default — register-attendance tests set their own
+    prisma.eventRegister.findMany.mockResolvedValue([]);
+    prisma.eventRegister.findFirst.mockResolvedValue(null);
   });
 
   describe('getMyTimesheets', () => {
@@ -337,6 +342,30 @@ describe('timesheet workflow — creation, review, corrections', () => {
           tutorName: 'Thabo Nkosi',
           tutorEmail: 'thabo@wits.ac.za',
           entries: [expect.objectContaining({ courseCode: 'COMS1015' })],
+        }),
+      );
+    });
+
+    test('flags each event-claimed entry with register attendance', async () => {
+      req.params.id = '1';
+      prisma.timesheet.findUnique.mockResolvedValue({
+        ...makeTimesheet({ entries: [makeEntry({ eventId: 11 }), makeEntry({ id: 72, eventId: null })] }),
+        user: { firstName: 'Thabo', lastName: 'Nkosi', email: 'thabo@wits.ac.za' },
+      });
+      prisma.eventRegister.findMany.mockResolvedValue([{ eventId: 11, userId: 5 }]);
+
+      await getTimesheet(req, res, next);
+
+      expect(prisma.eventRegister.findMany).toHaveBeenCalledWith({
+        where: { userId: 5, eventId: { in: [11] } },
+        select: { eventId: true },
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entries: [
+            expect.objectContaining({ eventId: 11, attended: true }),
+            expect.objectContaining({ eventId: null, attended: null }),
+          ],
         }),
       );
     });
@@ -792,6 +821,41 @@ describe('timesheet workflow — creation, review, corrections', () => {
       await approveEntry(req, res, next);
 
       expectHttpError(next, 403, 'You can only approve entries where you are the supervisor');
+    });
+
+    test("409s when the tutor was not marked present on the event's register", async () => {
+      prisma.timesheet.findUnique.mockResolvedValue(makeTimesheet({ status: 'SUBMITTED' }));
+      prisma.timesheetEntry.findFirst.mockResolvedValue({ id: 7, supervisorId: 9, eventId: 11 });
+      prisma.eventRegister.findFirst.mockResolvedValue(null);
+
+      await approveEntry(req, res, next);
+
+      expectHttpError(
+        next,
+        409,
+        "The tutor was not marked present on this event's register — reject the timesheet instead"
+      );
+      expect(prisma.timesheetEntry.update).not.toHaveBeenCalled();
+    });
+
+    test('approves an entry whose event the tutor attended', async () => {
+      prisma.timesheet.findUnique.mockResolvedValue(makeTimesheet({ status: 'SUBMITTED' }));
+      prisma.timesheetEntry.findFirst.mockResolvedValue({ id: 7, supervisorId: 9, eventId: 11 });
+      prisma.eventRegister.findFirst.mockResolvedValue({ id: 1 });
+      prisma.timesheetEntry.update.mockResolvedValue({});
+      prisma.timesheetEntry.findMany.mockResolvedValue([{ status: 'PENDING' }]);
+
+      await approveEntry(req, res, next);
+
+      expect(prisma.eventRegister.findFirst).toHaveBeenCalledWith({
+        where: { eventId: 11, userId: 5 },
+        select: { id: true },
+      });
+      expect(prisma.timesheetEntry.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: { status: 'APPROVED' },
+      });
+      expect(next).not.toHaveBeenCalled();
     });
 
     test('approves one entry while others are still pending', async () => {

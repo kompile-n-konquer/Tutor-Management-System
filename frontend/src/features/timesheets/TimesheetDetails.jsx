@@ -38,6 +38,9 @@ const parseEntries = (raw) =>
     duration: e.duration,
     description: e.description,
     status: e.status,
+    // Event-register attendance for claimed entries: true/false, null for
+    // entries that are not event claims
+    attended: e.attended ?? null,
   }));
 
 const TimesheetDetails = () => {
@@ -155,7 +158,11 @@ const TimesheetDetails = () => {
   const pendingEntryIds = entries.filter(
     (e) => e.status !== 'APPROVED' && e.supervisorId === currentUser.id
   );
-  const canApprove = isSubmitted && pendingEntryIds.length > 0;
+  // Claimed events the tutor was not marked present for block approval — the
+  // lecturer must reject the timesheet instead
+  const missingRegister = pendingEntryIds.filter((e) => e.attended === false);
+  const canApprove =
+    isSubmitted && pendingEntryIds.length > 0 && missingRegister.length === 0;
 
   // Approve all of this lecturer's pending entries in one action — the backend
   // promotes the timesheet to APPROVED once every entry (across all lecturers)
@@ -267,6 +274,20 @@ const TimesheetDetails = () => {
           </div>
         )}
 
+        {isLecturer && isSubmitted && missingRegister.length > 0 && (
+          <div className="bg-error/10 border border-error/30 rounded-xl px-stack-md py-stack-sm flex items-start gap-stack-sm">
+            <span className="material-symbols-outlined text-[18px] mt-0.5 text-error">warning</span>
+            <p className="text-error font-body-sm">
+              Approval is disabled: {timesheet.tutorName || 'the tutor'} was not marked present on
+              the event register for{' '}
+              {missingRegister
+                .map((e) => `${e.courseCode} on ${formatEventDay(e.workDate)}`)
+                .join(', ')}
+              . Reject the timesheet to let the tutor correct it.
+            </p>
+          </div>
+        )}
+
         {/* Entries */}
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md space-y-gutter">
           <div className="flex flex-wrap items-center justify-between">
@@ -289,7 +310,18 @@ const TimesheetDetails = () => {
                 </Button>
                 <Button
                   className="min-w-32 max-h-8 border-error text-error hover:bg-error/10"
-                  onClick={() => { setRejectionModal(true); setRejectionReason(''); setLocalError(''); }}
+                  onClick={() => {
+                    // Suggest a reason when register mismatches are the blocker
+                    const suggested =
+                      missingRegister.length > 0
+                        ? `Register mismatch: ${timesheet.tutorName || 'the tutor'} was not marked present on the register for ${missingRegister
+                            .map((e) => `${e.courseCode} on ${formatEventDay(e.workDate)}`)
+                            .join(', ')}.`
+                        : '';
+                    setRejectionModal(true);
+                    setRejectionReason(suggested);
+                    setLocalError('');
+                  }}
                 >
                   Reject
                 </Button>

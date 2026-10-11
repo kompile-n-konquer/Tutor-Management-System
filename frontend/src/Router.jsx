@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import RootLayout from './RootLayout.jsx';
 import ErrorPage from './components/error-page/ErrorPage.jsx';
@@ -10,7 +10,7 @@ import ConfirmationMessage from './features/auth/confirmation-message/Confirmati
 
 import Organiser from './features/organiser/Organiser.jsx';
 import OrganiserAnalytics from './features/organiser/OrganiserAnalytics.jsx';
-import TutorDashboard from './features/tutor-dashboard/TutorDashboard.jsx';
+import Dashboard from './features/dashboard/Dashboard.jsx';
 import VolunteerView from './features/volunteering/VolunteerView.jsx';
 import Profile from './features/profile/Profile.jsx';
 import EditProfile from './features/profile/EditProfile.jsx';
@@ -29,8 +29,6 @@ import TimesheetDetails from './features/timesheets/TimesheetDetails.jsx';
 import Applications from './features/applications/Applications.jsx';
 import OpportunityDetails from './features/applications/OpportunityDetails.jsx';
 import Settings from './features/settings/Settings.jsx';
-import LecturerView from './features/lecturer-view/LecturerView.jsx';
-import AdminView from './features/admin-view/AdminView.jsx';
 import OnboardingHub from './features/onboarding/OnboardingHub.jsx';
 import TutorApplication from './features/onboarding/TutorApplication.jsx';
 import LecturerApplication from './features/onboarding/LecturerApplication.jsx';
@@ -52,9 +50,12 @@ const router = createBrowserRouter([
       { path: 'login', element: <AuthEntryPage mode="login" /> },
       { path: 'forgot-password', element: <ForgotPassword /> },
       { path: 'confirmation-message', element: <ConfirmationMessage /> },
+      { path: 'dashboard', element: <Dashboard /> },
       { path: 'organiser', element: <Organiser /> },
       { path: 'organiser-analytics', element: <OrganiserAnalytics /> },
-      { path: 'tutor-dashboard', element: <TutorDashboard /> },
+      // The role dashboards were unified under /dashboard — the old deep
+      // links (and every in-app navigate() to them) land there instead.
+      { path: 'tutor-dashboard', element: <Navigate to="/dashboard" replace /> },
       { path: 'volunteer', element: <VolunteerView /> },
       { path: 'profile', element: <Profile /> },
       { path: 'profile/edit', element: <EditProfile /> },
@@ -93,8 +94,8 @@ const router = createBrowserRouter([
           { path: ':id/edit', element: <EditEvent /> },
         ],
       },
-      { path: 'lecturer-view', element: <LecturerView /> },
-      { path: 'admin-view', element: <AdminView /> },
+      { path: 'lecturer-view', element: <Navigate to="/dashboard" replace /> },
+      { path: 'admin-view', element: <Navigate to="/dashboard" replace /> },
       { path: 'onboarding', element: <OnboardingHub /> },
       { path: 'onboarding/tutor-application', element: <TutorApplication /> },
       { path: 'onboarding/lecturer-application', element: <LecturerApplication /> },

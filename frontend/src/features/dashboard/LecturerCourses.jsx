@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import AppLayout from "../../components/layout/AppLayout.jsx";
+import { Link } from "react-router-dom";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import { minutesToLabel } from "../../components/slot-grid/SlotGrid.jsx";
+import useAuth from "../../hooks/useAuth.js";
 import api from "../../utils/axiosInstance.js";
-import { useAuth } from "../context/AuthContext";
 import { formatSessionDate, formatSessionTimeRange } from "../../utils/formatSession.js";
 
 const startOfToday = () => {
@@ -213,8 +212,14 @@ function CourseSection({ course, onDecided }) {
   );
 }
 
-export default function LecturerView() {
-  const navigate = useNavigate();
+/**
+ * LecturerCourses
+ * The lecturer's section of the unified Dashboard: every course they own,
+ * its upcoming events and the session follow-ups (excuse / volunteer
+ * lifecycle) where cover requests are approved or rejected — the destination
+ * of the feed's "cover-decision" items.
+ */
+export default function LecturerCourses() {
   const { currentUser, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -241,10 +246,6 @@ export default function LecturerView() {
   }, []);
 
   useEffect(() => {
-    if (!authLoading && !currentUser) navigate("/login");
-  }, [authLoading, currentUser, navigate]);
-
-  useEffect(() => {
     // Wait for Firebase to restore the session — fetching before the user is
     // back sends the request without the ID token and it 401s.
     if (authLoading || !currentUser?.uid) return;
@@ -255,78 +256,76 @@ export default function LecturerView() {
   }, [fetchLecturerCourses, authLoading, currentUser?.uid, reloadKey]);
 
   return (
-    <AppLayout title="Lecturer View">
-      <div className="p-margin-page max-w-container-max mx-auto w-full">
-        <header className="mb-stack-lg">
-          <h1 className="font-display text-display text-on-surface">Your courses &amp; sessions</h1>
-          <p className="font-body-lg text-body-lg text-on-surface-variant mt-unit">
-            Every event you add becomes a session for each tutor assigned to that course — their
-            dashboards update automatically.
-          </p>
-        </header>
+    <section id="lecturer-courses" aria-label="Your courses and sessions" className="space-y-gutter">
+      <div>
+        <h2 className="font-headline-md text-headline-md text-on-surface">Your courses &amp; sessions</h2>
+        <p className="font-body-md text-body-md text-on-surface-variant mt-unit">
+          Every event you add becomes a session for each tutor assigned to that course — their
+          dashboards update automatically.
+        </p>
+      </div>
 
-        {error && (
-          <div className="mb-stack-lg space-y-unit">
-            <ErrorMessage>{error}</ErrorMessage>
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setReloadKey((key) => key + 1);
-              }}
-              className="cursor-pointer bg-primary text-on-primary rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-primary/90 transition-colors"
+      {error && (
+        <div className="space-y-unit">
+          <ErrorMessage>{error}</ErrorMessage>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setReloadKey((key) => key + 1);
+            }}
+            className="cursor-pointer bg-primary text-on-primary rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-primary/90 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-gutter" aria-hidden="true">
+          {[0, 1].map((card) => (
+            <div
+              key={card}
+              className="animate-pulse bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
             >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="space-y-gutter" aria-hidden="true">
-            {[0, 1].map((card) => (
-              <div
-                key={card}
-                className="animate-pulse bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
-              >
-                <div className="flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-lg py-stack-md border-b border-outline-variant">
-                  <div className="h-4 w-20 rounded bg-surface-container-high" />
-                  <div className="h-4 w-44 rounded bg-surface-container-high" />
-                  <div className="h-4 w-28 rounded bg-surface-container-high" />
+              <div className="flex flex-wrap items-center gap-x-stack-md gap-y-unit px-stack-lg py-stack-md border-b border-outline-variant">
+                <div className="h-4 w-20 rounded bg-surface-container-high" />
+                <div className="h-4 w-44 rounded bg-surface-container-high" />
+                <div className="h-4 w-28 rounded bg-surface-container-high" />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="p-stack-lg space-y-stack-md lg:border-r border-outline-variant/60">
+                  <div className="h-4 w-32 rounded bg-surface-container-high" />
+                  <div className="h-5 rounded bg-surface-container-high/60" />
+                  <div className="h-5 rounded bg-surface-container-high/60" />
+                  <div className="h-5 rounded bg-surface-container-high/60" />
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="p-stack-lg space-y-stack-md lg:border-r border-outline-variant/60">
-                    <div className="h-4 w-32 rounded bg-surface-container-high" />
-                    <div className="h-5 rounded bg-surface-container-high/60" />
-                    <div className="h-5 rounded bg-surface-container-high/60" />
-                    <div className="h-5 rounded bg-surface-container-high/60" />
-                  </div>
-                  <div className="p-stack-lg bg-surface-container-low space-y-stack-md">
-                    <div className="h-4 w-36 rounded bg-surface-container-high" />
-                    <div className="h-5 rounded bg-surface-container-high/60" />
-                    <div className="h-5 rounded bg-surface-container-high/60" />
-                  </div>
+                <div className="p-stack-lg bg-surface-container-low space-y-stack-md">
+                  <div className="h-4 w-36 rounded bg-surface-container-high" />
+                  <div className="h-5 rounded bg-surface-container-high/60" />
+                  <div className="h-5 rounded bg-surface-container-high/60" />
                 </div>
               </div>
-            ))}
-          </div>
-        ) : !error && courses.length === 0 ? (
-          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-unit">
-              No courses yet
-            </h2>
-            <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl">
-              You do not own any courses yet. Courses appear here once they are registered against
-              your lecturer profile.
-            </p>
-          </section>
-        ) : (
-          <div className="space-y-gutter">
-            {courses.map((course) => (
-              <CourseSection key={course.id} course={course} onDecided={fetchLecturerCourses} />
-            ))}
-          </div>
-        )}
-      </div>
-    </AppLayout>
+            </div>
+          ))}
+        </div>
+      ) : !error && courses.length === 0 ? (
+        <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
+          <h3 className="font-headline-md text-headline-md text-on-surface mb-unit">
+            No courses yet
+          </h3>
+          <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+            You do not own any courses yet. Courses appear here once they are registered against
+            your lecturer profile.
+          </p>
+        </section>
+      ) : (
+        <div className="space-y-gutter">
+          {courses.map((course) => (
+            <CourseSection key={course.id} course={course} onDecided={fetchLecturerCourses} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

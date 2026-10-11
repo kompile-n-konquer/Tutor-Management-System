@@ -69,8 +69,9 @@ export default defineConfig(({ mode }) => {
           'src/hooks/useAuth.js', // new hook from main's role-based views
           'src/utils/authLoader.js', // new loader from main's role-based views
           'src/constants/roles.js', // new constants from main's role-based views
-          'src/features/admin-view/AdminView.jsx', // new view from main's role-based views
-          'src/features/lecturer-view/LecturerView.jsx', // new view from main's role-based views
+          // Ported from main's LecturerView into the unified Dashboard; only
+          // imported through Dashboard, which stubs it in its suite.
+          'src/features/dashboard/LecturerCourses.jsx',
         ],
         thresholds: {
           statements: 90,

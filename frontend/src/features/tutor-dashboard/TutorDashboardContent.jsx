@@ -6,11 +6,12 @@ import { formatSessionTimeRange } from "../../utils/formatSession.js";
 
 /**
  * TutorDashboardContent
- * The presentational body of the tutor dashboard (course list, session ledger,
- * next-session / hours / cover-needed rail). It owns no data fetching: the
- * authenticated TutorDashboard feeds it live data inside AppLayout, while the
- * landing page's DashboardPreview feeds it sample data with `readOnly` set so
- * nothing in the preview can navigate or open forms.
+ * The presentational body of the tutor's dashboard section (course list,
+ * session ledger, next-session / hours / cover-needed rail). It owns no data
+ * fetching: the unified Dashboard's TutorSchedule feeds it live data in
+ * `embedded` mode (no page wrapper or header — the Dashboard provides both),
+ * while the landing page's DashboardPreview feeds it sample data with
+ * `readOnly` set so nothing in the preview can navigate or open forms.
  */
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -152,6 +153,8 @@ export default function TutorDashboardContent({
   weekScheduledHours = 0,
   isLoading = false,
   error = "",
+  loadError = "",
+  onRetry = noop,
   excusingSessionId = null,
   excuseReason = "",
   isExcusing = false,
@@ -162,6 +165,8 @@ export default function TutorDashboardContent({
   formatTime = formatSessionTimeRange,
   // Preview mode: no navigation, no focusable actions, heading demoted to h2.
   readOnly = false,
+  // Dashboard mode: the parent page owns the wrapper, padding and header.
+  embedded = false,
 }) {
   const Heading = readOnly ? "h2" : "h1";
   const todayStart = startOfDay(new Date()).getTime();
@@ -202,23 +207,28 @@ export default function TutorDashboardContent({
 
   const courseCodes = courses.map((course) => course.courseCode);
 
-  return (
-    <div className="p-margin-page max-w-container-max mx-auto w-full">
-      {/* ── Course context — what this tutor is approved to teach ── */}
-      <header className="mb-stack-lg">
-        <p className="font-label-caps text-label-caps text-primary uppercase tracking-widest mb-unit">
-          Tutor Dashboard
-        </p>
-        <Heading className="font-display text-display text-on-surface">
-          {firstName ? `${firstName}'s tutoring schedule` : "Your tutoring schedule"}
-        </Heading>
-      </header>
+  // Load failures stand alone — the empty state must never render alongside
+  // them or it reads as "no assignments" when the load actually failed.
+  // Excuse/validation errors keep using `error` above the ledger.
+  const loadFailure =
+    !isLoading && loadError ? (
+      <div className="mb-stack-lg flex flex-wrap items-center gap-stack-md">
+        <div className="flex-1 min-w-64">
+          <ErrorMessage>{loadError}</ErrorMessage>
+        </div>
+        <Button onClick={onRetry}>Try again</Button>
+      </div>
+    ) : null;
 
+  const body = (
+    <>
       {error && (
         <div className="mb-stack-lg">
           <ErrorMessage>{error}</ErrorMessage>
         </div>
       )}
+
+      {loadFailure}
 
       {isLoading ? (
         <div className="space-y-gutter" aria-hidden="true">
@@ -438,6 +448,24 @@ export default function TutorDashboardContent({
           </div>
         </>
       )}
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <div className="p-margin-page max-w-container-max mx-auto w-full">
+      {/* ── Course context — what this tutor is approved to teach ── */}
+      <header className="mb-stack-lg">
+        <p className="font-label-caps text-label-caps text-primary uppercase tracking-widest mb-unit">
+          Dashboard
+        </p>
+        <Heading className="font-display text-display text-on-surface">
+          {firstName ? `${firstName}'s tutoring schedule` : "Your tutoring schedule"}
+        </Heading>
+      </header>
+
+      {body}
     </div>
   );
 }

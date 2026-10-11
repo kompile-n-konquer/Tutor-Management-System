@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, screen, fireEvent, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 // Shared mutable auth state: the page itself reads `currentUser`/`loading`,
@@ -208,6 +208,69 @@ describe("Events — course grouping", () => {
     fireEvent.click(bodyRows()[0]);
 
     expect(screen.getByText("at:/events/12")).toBeInTheDocument();
+  });
+});
+
+describe("Events — filters and pagination", () => {
+  test("requests the selected date range and clears back to all events", async () => {
+    renderEvents();
+    await screen.findByText("CS101");
+
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-03-01" } });
+    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-03-31" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
+
+    await waitFor(() =>
+      expect(apiMock.get).toHaveBeenLastCalledWith("/events?from=2026-03-01&to=2026-03-31"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
+
+    await waitFor(() => expect(apiMock.get).toHaveBeenLastCalledWith("/events"));
+  });
+
+  test("supports before-only and after-only date requests", async () => {
+    renderEvents();
+    await screen.findByText("CS101");
+
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-03-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenLastCalledWith("/events?from=2026-03-01"));
+
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-03-31" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
+    await waitFor(() => expect(apiMock.get).toHaveBeenLastCalledWith("/events?to=2026-03-31"));
+  });
+
+  test("shows five events per course and paginates through the rest", async () => {
+    apiMock.get.mockResolvedValue({
+      status: 200,
+      data: Array.from({ length: 6 }, (_, index) => ({
+        ...EVENTS_FIXTURE[1],
+        id: index + 1,
+        date: `2026-03-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+        description: `event ${index + 1}`,
+      })),
+    });
+
+    renderEvents();
+    await screen.findByText("CS101");
+    fireEvent.click(expandButton("CS101"));
+
+    expect(bodyRows()).toHaveLength(5);
+    expect(screen.getByText("event 6")).toBeInTheDocument();
+    expect(screen.queryByText("event 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(bodyRows()).toHaveLength(1);
+    expect(screen.getByText("event 1")).toBeInTheDocument();
+    expect(screen.queryByText("event 6")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 });
 

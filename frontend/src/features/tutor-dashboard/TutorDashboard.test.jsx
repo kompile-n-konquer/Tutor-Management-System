@@ -156,6 +156,22 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
     expect(screen.getByText('of 10h scheduled')).toBeInTheDocument();
   });
 
+  test('shows the hours alone when no weekly cap is on file', async () => {
+    mockGet.mockResolvedValue({
+      status: 200,
+      data: makeFeed({ maxHoursPerWeek: null }),
+    });
+
+    renderDashboard();
+
+    // Without a cap there is no bar to draw — the card says so instead of
+    // showing "of —h scheduled" beside an empty progress track.
+    expect(await screen.findByText('2h')).toBeInTheDocument();
+    expect(screen.getByText('scheduled this week')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByText('No weekly hour limit is on file for you yet.')).toBeInTheDocument();
+  });
+
   test("drops sessions the API flags as not the tutor's own", async () => {
     mockGet.mockResolvedValue({
       status: 200,
@@ -344,5 +360,111 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
         await screen.findByText('Could not submit your excuse. Please try again later.'),
       ).toBeInTheDocument();
     });
+
+    test('shows a generic error when the excuse rejection carries no message', async () => {
+      mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
+      mockPatch.mockResolvedValue({ status: 400, data: {} });
+
+      renderDashboard();
+      fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
+      fireEvent.change(screen.getByLabelText(/reason for excusing yourself/i), {
+        target: { value: 'Sick' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /confirm excuse/i }));
+
+      expect(
+        await screen.findByText('Could not submit your excuse. Please try again later.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('groups the ledger by day and filters out past sessions', async () => {
+    mockGet.mockResolvedValue({
+      status: 200,
+      data: makeFeed({
+        courses: [
+          makeFeed().courses[0],
+          {
+            ...makeFeed().courses[0],
+            assignmentId: 12,
+            courseCode: 'CS305',
+            courseName: 'Database Systems',
+          },
+        ],
+        sessions: [
+          // Yesterday is behind us — it never reaches the ledger.
+          makeSession({ date: new Date(Date.now() - 86400000).toISOString(), status: 'UNASSIGNED' }),
+          makeSession({ id: 2, date: new Date().toISOString() }),
+          makeSession({ id: 3, date: new Date(Date.now() + 3 * 86400000).toISOString() }),
+        ],
+      }),
+    });
+
+    renderDashboard();
+
+    // Both future sessions lead — one chip each.
+    expect(await screen.findAllByText('You lead')).toHaveLength(2);
+    expect(screen.queryByText('Excused — awaiting volunteer')).not.toBeInTheDocument();
+    // The ledger heading and the next-session panel share the same date
+    // language, so "Today" may legitimately appear more than once.
+    expect(screen.getAllByText('Today').length).toBeGreaterThan(0);
+    const weekday = new Date(Date.now() + 3 * 86400000).toLocaleDateString(undefined, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+    });
+    // The ledger heading and the next-session panel share the same date language.
+    expect(screen.getAllByText(weekday).length).toBeGreaterThan(0);
+    expect(screen.getByText('CS305')).toBeInTheDocument(); // second assigned course
+  });
+
+  test('turns the weekly bar orange once the cap is exceeded', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: makeFeed({ weekScheduledHours: 12 }) });
+
+    renderDashboard();
+
+    expect(await screen.findByText('12h')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Scheduled hours this week' })).toHaveClass(
+      'bg-urgent-orange',
+    );
+  });
+
+  test('falls back to an em dash when no weekly cap is configured', async () => {
+    mockGet.mockResolvedValue({ status: 200, data: makeFeed({ maxHoursPerWeek: null }) });
+
+    renderDashboard();
+
+    expect(await screen.findByText('of —h scheduled')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Scheduled hours this week' })).toHaveAttribute(
+      'aria-valuemax',
+      '0',
+    );
+  });
+
+  test('summarises several cover sessions and tolerates a course-less row', async () => {
+    mockGet.mockResolvedValue({
+      status: 200,
+      data: makeFeed({
+        sessions: [
+          makeSession({ status: 'UNASSIGNED' }),
+          makeSession({ id: 2, status: 'UNASSIGNED', course: null, excuseReason: 'Sick' }),
+        ],
+      }),
+    });
+
+    renderDashboard();
+
+    expect(
+      await screen.findByText('You excused 2 sessions that still need a volunteer.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Session')).toBeInTheDocument(); // courseCode fallback
+  });
+
+  test('treats an empty 200 payload as no assignments', async () => {
+    mockGet.mockResolvedValue({ status: 200 });
+
+    renderDashboard();
+
+    expect(await screen.findByText('No course assignments yet')).toBeInTheDocument();
   });
 });

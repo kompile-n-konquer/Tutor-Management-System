@@ -321,4 +321,27 @@ describe('Swaps — tutor session swap tables', () => {
 
     expect(await screen.findByText('That action failed. Please try again.')).toBeInTheDocument();
   });
+
+  test('renders nothing while the auth state is still loading', () => {
+    authState.loading = true;
+
+    const { container } = renderSwaps();
+
+    expect(container).toBeEmptyDOMElement();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('shows a generic message when a failed sessions load carries none', async () => {
+    mockGet.mockImplementation((url) =>
+      url === '/swaps/my-sessions'
+        ? Promise.resolve({ status: 500, data: {} })
+        : Promise.resolve({ status: 200, data: [] }),
+    );
+
+    renderSwaps();
+
+    expect(
+      await screen.findByText('Could not load your sessions. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
 });

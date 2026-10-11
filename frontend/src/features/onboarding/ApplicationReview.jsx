@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
+import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import api from "../../utils/axiosInstance";
+import useAuth from "../../hooks/useAuth.js";
 import useAsync from "../../hooks/useAsync";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 const minutesToLabel = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
 export default function ApplicationReview() {
+  const { currentUser, loading: authLoading } = useAuth();
   const { execute } = useAsync();
   const { execute: executeAction, isLoading: isActing } = useAsync();
   const [applications, setApplications] = useState([]);
@@ -14,23 +17,38 @@ export default function ApplicationReview() {
   const [rank, setRank] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [actionMsg, setActionMsg] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
 
   async function loadApplications() {
     setLoading(true);
+    setLoadError("");
     const res = await execute(() => api.get("/onboarding/applications?status=PENDING"));
     if (res?.status === 200) {
       setApplications(res.data.applications || []);
+    } else {
+      // execute() swallows network errors (returns undefined), so a failed
+      // load must be surfaced here rather than left as an empty list.
+      setLoadError(
+        res?.data?.message || res?.data?.error || "Could not load the applications. Please try again."
+      );
     }
     setLoading(false);
   }
 
   useEffect(() => {
-    loadApplications();
+    // Wait for Firebase to restore the session before the first fetch — the
+    // axios interceptor reads auth.currentUser at request time and would
+    // otherwise send the request without a token (401 on hard refresh).
+    if (authLoading || !currentUser?.uid) return;
+    // Wrapped so no state updates run synchronously inside the effect.
+    (async () => {
+      await loadApplications();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, currentUser?.uid]);
 
   async function viewDetail(appId) {
     setSelected(appId);
@@ -102,6 +120,18 @@ export default function ApplicationReview() {
                       <div className="h-3 w-28 rounded bg-surface-container-high/60" />
                     </div>
                   ))}
+                </div>
+              ) : loadError ? (
+                <div className="p-stack-md space-y-stack-md">
+                  <ErrorMessage>{loadError}</ErrorMessage>
+                  <button
+                    type="button"
+                    onClick={loadApplications}
+                    className="inline-flex items-center gap-unit bg-primary text-on-primary px-6 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">refresh</span>
+                    Try again
+                  </button>
                 </div>
               ) : applications.length === 0 ? (
                 <p className="text-center font-body-sm text-on-surface-variant py-stack-lg">

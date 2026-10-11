@@ -4,8 +4,7 @@ import RootLayout from './RootLayout.jsx';
 import ErrorPage from './components/error-page/ErrorPage.jsx';
 
 import Home from './features/home/Home.jsx';
-import Login from './features/auth/login/Login.jsx';
-import Signup from './features/auth/signup/Signup.jsx';
+import AuthEntryPage from './features/auth/entry/AuthEntryPage.jsx';
 import ForgotPassword from './features/auth/forgot-password/ForgotPassword.jsx';
 import ConfirmationMessage from './features/auth/confirmation-message/ConfirmationMessage.jsx';
 
@@ -30,6 +29,7 @@ import TimesheetDetails from './features/timesheets/TimesheetDetails.jsx';
 import Applications from './features/applications/Applications.jsx';
 import OpportunityDetails from './features/applications/OpportunityDetails.jsx';
 import Settings from './features/settings/Settings.jsx';
+import Configurations from './features/settings/Configurations.jsx';
 import LecturerView from './features/lecturer-view/LecturerView.jsx';
 import AdminView from './features/admin-view/AdminView.jsx';
 import OnboardingHub from './features/onboarding/OnboardingHub.jsx';
@@ -47,8 +47,10 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { index: true, element: <Home /> },
-      { path: 'signup', element: <Signup /> },
-      { path: 'login', element: <Login /> },
+      // /signup and /login now open the auth overlay over the landing page —
+      // AuthEntryPage keeps the deep links working.
+      { path: 'signup', element: <AuthEntryPage mode="signup" /> },
+      { path: 'login', element: <AuthEntryPage mode="login" /> },
       { path: 'forgot-password', element: <ForgotPassword /> },
       { path: 'confirmation-message', element: <ConfirmationMessage /> },
       { path: 'organiser', element: <Organiser /> },
@@ -74,6 +76,7 @@ const router = createBrowserRouter([
         ],
       },
       { path: 'settings', element: <Settings /> },
+      { path: 'configurations', element: <Configurations /> },
       {
         path: 'courses',
         children: [

@@ -38,6 +38,7 @@ describe('Router — application route table', () => {
       'applications',
       'timesheets',
       'settings',
+      'configurations',
       'courses',
       'events',
       'lecturer-view',

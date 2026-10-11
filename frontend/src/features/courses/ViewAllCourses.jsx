@@ -37,6 +37,7 @@ const ViewAllCourses = () => {
       const response = await execute(() => api.get('/courses'));
       if (response && response.status === 200) {
         setCourses(response.data);
+        setError('');
       } else {
         setError(response?.data?.message || 'Could not load the courses. Please refresh the page.');
       }
@@ -74,6 +75,8 @@ const ViewAllCourses = () => {
     const response = await execute(() => api.get('/courses'));
     if (response && response.status === 200) {
       setCourses(response.data);
+    } else {
+      setError(response?.data?.message || 'Could not load the courses. Please refresh the page.');
     }
   };
 
@@ -122,7 +125,20 @@ const ViewAllCourses = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                reloadCourses();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
         {success && (
           <p className="font-body-md text-primary bg-primary/5 border border-primary/30 rounded-xl px-stack-md py-stack-sm mb-gutter">
             {success}
@@ -145,7 +161,7 @@ const ViewAllCourses = () => {
                 </div>
               ))}
             </div>
-          ) : courses.length === 0 ? (
+          ) : !error && courses.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No courses have been added yet.
             </p>

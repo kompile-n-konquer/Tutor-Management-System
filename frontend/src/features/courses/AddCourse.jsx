@@ -18,6 +18,7 @@ const AddCourse = () => {
   const [grid, setGrid] = useState({}); // { [slotId]: { [dayIndex]: 'selected' | 'empty' } }
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [data, setData] = useState({
     courseCode: '',
@@ -52,13 +53,14 @@ const AddCourse = () => {
 
         setTimeSlots(slots);
         setGrid(newGrid);
+        setError('');
       } else {
         setError('Could not load the time slots. Please refresh the page.');
       }
     };
 
     loadTimeSlots();
-  }, [currentUser, loading, isLecturer, execute]);
+  }, [currentUser, loading, isLecturer, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !isLecturer) return null;
@@ -236,7 +238,22 @@ const AddCourse = () => {
             </div>
           </div>
 
-          {error && <ErrorMessage>{error}</ErrorMessage>}
+          {error && (
+            <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+              <ErrorMessage>{error}</ErrorMessage>
+              {timeSlots.length === 0 && (
+                <Button
+                  className="min-w-32"
+                  onClick={() => {
+                    setError('');
+                    setReloadKey((key) => key + 1);
+                  }}
+                >
+                  Try again
+                </Button>
+              )}
+            </div>
+          )}
           {success && (
             <p className="font-body-md text-primary bg-primary/5 border border-primary/30 rounded-xl px-stack-md py-stack-sm">
               {success}

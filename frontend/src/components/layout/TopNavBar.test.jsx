@@ -76,6 +76,19 @@ describe('TopNavBar — page header with search and avatar', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
+  test('toggles back to light mode when clicked from dark', () => {
+    // The previous test leaves dark mode active; start from a clean slate.
+    window.localStorage.clear();
+    document.documentElement.className = '';
+    renderTopNavBar();
+
+    fireEvent.click(screen.getByRole('button', { name: /switch to dark mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /switch to light mode/i }));
+
+    expect(screen.getByRole('button', { name: /switch to dark mode/i })).toBeInTheDocument();
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
   test('navigates to the profile page from the avatar button', () => {
     renderTopNavBar();
 

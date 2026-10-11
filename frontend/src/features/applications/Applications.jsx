@@ -26,6 +26,7 @@ const Applications = () => {
   const [myApplications, setMyApplications] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const role = currentUser?.role?.toLowerCase();
   const canApply = role === 'student' || role === 'tutor';
@@ -56,12 +57,17 @@ const Applications = () => {
       }
       if (mineResponse.status === 200) {
         setMyApplications(mineResponse.data);
+      } else {
+        setError(mineResponse?.data?.message || 'Could not load your applications. Please refresh the page.');
+      }
+      if (opportunitiesResponse.status === 200 && mineResponse.status === 200) {
+        setError('');
       }
       setLoaded(true);
     };
 
     loadApplications();
-  }, [currentUser, loading, canApply, execute]);
+  }, [currentUser, loading, canApply, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser || !canApply) return null;
@@ -80,7 +86,20 @@ const Applications = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
 
         {/* Availability note — opportunities are already filtered by the student's timetable */}
         <div className="bg-primary/5 border border-primary/30 rounded-xl px-stack-md py-stack-sm mb-gutter flex flex-wrap items-center gap-gutter">
@@ -110,7 +129,7 @@ const Applications = () => {
                 </div>
               ))}
             </div>
-          ) : opportunities.length === 0 ? (
+          ) : !error && opportunities.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
               No opportunities are open for your availability right now. Check back later or update your timetable.
             </p>
@@ -194,7 +213,7 @@ const Applications = () => {
                 </div>
               ))}
             </div>
-          ) : myApplications.length === 0 ? (
+          ) : !error && myApplications.length === 0 ? (
             <p className="font-body-md text-on-surface-variant py-stack-md">
               You have not applied for any tutoring opportunities yet.
             </p>

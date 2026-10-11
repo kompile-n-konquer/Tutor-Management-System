@@ -1,36 +1,13 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // Shared mutable auth state so each test can pick the signed-in role.
 const authState = vi.hoisted(() => ({ currentUser: { role: 'organiser' }, loading: false }));
 const navigateMock = vi.hoisted(() => vi.fn());
-const apiMock = vi.hoisted(() => ({
-  get: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-}));
-// One stable object across renders — a fresh execute per render would change
-// the settings effect's deps every time and loop loadSettings forever.
-const useAsyncState = vi.hoisted(() => ({
-  execute: vi.fn(async () => ({
-    status: 200,
-    data: {
-      tutorMonthlyClaimableHours: 40,
-      tutorEventClaimMonths: 3,
-      hourlyRates: {},
-      pdfTemplateFilename: null,
-    },
-  })),
-  isLoading: false,
-}));
 
 vi.mock('../../components/layout/AppLayout', () => ({
   // Layout chrome is irrelevant here — pass the page content straight through.
   default: ({ children }) => <div>{children}</div>,
-}));
-vi.mock('../../utils/axiosInstance', () => ({ default: apiMock }));
-vi.mock('../../hooks/useAsync', () => ({
-  default: () => useAsyncState,
 }));
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => authState,
@@ -49,7 +26,7 @@ const renderSettings = () =>
     </ThemeProvider>,
   );
 
-describe('Settings — appearance card availability by role', () => {
+describe('Settings — per-user settings page', () => {
   beforeEach(() => {
     window.localStorage.clear();
     document.documentElement.className = '';
@@ -61,34 +38,33 @@ describe('Settings — appearance card availability by role', () => {
     document.documentElement.className = '';
   });
 
-  test('organisers see the appearance card and the system settings cards', async () => {
+  test('shows the appearance card to organisers without the system configuration', () => {
     authState.currentUser = { role: 'organiser' };
     renderSettings();
-
-    // Flush the async settings load so its state updates land inside act().
-    await act(async () => {});
 
     expect(
       screen.getByRole('heading', { name: /appearance & accessibility/i }),
     ).toBeInTheDocument();
+    // System configuration moved to the organiser-only Configurations page.
     expect(
-      screen.getByRole('heading', { name: /max claimable hours/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { name: /max claimable hours/i }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /hourly rates by year of study/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { name: /hourly rates by year of study/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /timesheet pdf template/i }),
+    ).not.toBeInTheDocument();
   });
 
-  test('tutors see the appearance card without the organiser-only settings', () => {
+  test('tutors see the appearance card with no system-settings placeholder', () => {
     authState.currentUser = { role: 'tutor' };
     renderSettings();
 
     expect(
       screen.getByRole('heading', { name: /appearance & accessibility/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: /system settings coming soon/i }),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/system settings coming soon/i)).not.toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: /max claimable hours/i }),
     ).not.toBeInTheDocument();

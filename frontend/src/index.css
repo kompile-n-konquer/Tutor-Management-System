@@ -313,3 +313,152 @@
   box-shadow: var(--shadow-bento);
   border-color: theme("colors.outline");
 }
+
+/* Landing page — smooth anchor scrolling only while the landing page is mounted */
+html:has(.landing-page) {
+  scroll-behavior: smooth;
+}
+
+/* Landing page hero ambience — subtle brand/amber radial glows */
+.hero-bg {
+  background-image:
+    radial-gradient(at 0% 0%, rgba(126, 34, 206, 0.07) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(253, 139, 0, 0.05) 0px, transparent 45%),
+    radial-gradient(at 50% 100%, rgba(56, 0, 82, 0.04) 0px, transparent 50%);
+}
+
+/* OLED dot-mesh texture used on the dark commitment banner */
+.dot-mesh {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Auth overlay — brand gradient cover that slides between the Login and
+   Sign Up halves. Same purple→amber ramp as the landing identity (brand-950
+   → brand-900 → plum → burnt amber). */
+.gradient-panel {
+  background: linear-gradient(
+    135deg,
+    #230034 0%,
+    #380052 25%,
+    #5c1049 50%,
+    #b8430b 78%,
+    #d97706 100%
+  );
+}
+
+/* Auth overlay — motion for the sliding gradient cover. Tailwind v4 compiles
+   translate-* to the native `translate` CSS property, so the transition
+   lists translate explicitly — `transition: transform` alone never caught
+   the cover's translate-x movement and the slide snapped instantly. */
+.smooth-slide {
+  transition:
+    translate 0.65s cubic-bezier(0.65, 0, 0.35, 1),
+    transform 0.65s cubic-bezier(0.65, 0, 0.35, 1);
+  will-change: translate;
+}
+
+/* Auth overlay — mode copy, re-keyed on every Login/Signup switch. The short
+   delay lets the cover start sliding first so the new heading lands as the
+   cover settles. transform + opacity only. */
+.auth-copy-swap {
+  animation: auth-copy-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+}
+@keyframes auth-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Auth overlay — trusted-device notice entrance. transform + opacity only,
+   so the card animates without ever touching a layout property. */
+.auth-rise {
+  animation: auth-rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes auth-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Auth overlay — "Remember this Device" control. The native checkbox stays in
+   the DOM (sr-only) for keyboard/screen-reader support; the visible box and
+   tick animate with transform + opacity only. */
+.remember-check .remember-box {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+.remember-check:hover .remember-box {
+  border-color: theme("colors.outline");
+}
+.remember-check .remember-tick {
+  transform: scale(0.4);
+  opacity: 0;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.16s ease;
+}
+.remember-check input:checked ~ .remember-box {
+  background-color: theme("colors.primary");
+  border-color: theme("colors.primary");
+}
+.remember-check input:checked ~ .remember-box .remember-tick {
+  transform: scale(1);
+  opacity: 1;
+}
+.remember-check input:focus-visible ~ .remember-box {
+  box-shadow: 0 0 0 3px color-mix(in srgb, theme("colors.primary") 30%, transparent);
+}
+
+/* Auth overlay — mount entrance (fade backdrop + rise-and-scale panel). The
+   modal is conditionally mounted, so plain keyframes cover the whole entrance
+   without any animation state in the component. */
+.auth-overlay-backdrop {
+  animation: overlay-fade 0.25s ease-out both;
+}
+.auth-overlay-panel {
+  animation: overlay-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes overlay-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .smooth-slide {
+    transition: none;
+  }
+  .auth-overlay-backdrop,
+  .auth-overlay-panel,
+  .auth-copy-swap,
+  .auth-rise {
+    animation: none;
+  }
+  .remember-check .remember-tick {
+    transition: none;
+  }
+}

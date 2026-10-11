@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AppLayout from "../../components/layout/AppLayout";
 import ErrorMessage from "../../components/error-message/ErrorMessage";
 import api from "../../utils/axiosInstance";
+import { useAuth } from "../context/AuthContext";
 
 // Hours are stored as whole numbers but the API may return a float after
 // aggregation, so keep the display compact (12 -> "12", 12.5 -> "12.5").
@@ -80,14 +81,21 @@ function AnalyticsSkeleton() {
 }
 
 export default function OrganiserAnalytics() {
+  const { currentUser, loading: authLoading } = useAuth();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Re-fetch on mount and whenever the Refresh button bumps reloadKey so the
-  // figures always come from the database rather than a cached snapshot.
+  // Re-fetch whenever the Refresh button or a failed load bumps reloadKey so
+  // the figures always come from the database rather than a cached snapshot.
   useEffect(() => {
+    // Wait for Firebase to restore the session before the first fetch — the
+    // axios interceptor reads auth.currentUser at request time and would
+    // otherwise send the request without a token (401 on hard refresh).
+    // (uid, not the user object — profile enrichment rebuilds its identity.)
+    if (authLoading || !currentUser?.uid) return;
+
     let cancelled = false;
 
     const fetchAnalytics = async () => {
@@ -99,11 +107,15 @@ export default function OrganiserAnalytics() {
         if (response.status === 200) {
           setData(response.data);
         } else {
-          setError(response?.data?.message || "Could not load the analytics. Please refresh the page.");
+          setError(
+            response?.data?.message ||
+              response?.data?.error ||
+              "Could not load the analytics. Please try again."
+          );
         }
       } catch {
         if (!cancelled) {
-          setError("Could not load the analytics. Please refresh the page.");
+          setError("Could not load the analytics. Please try again.");
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -114,7 +126,7 @@ export default function OrganiserAnalytics() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [reloadKey, authLoading, currentUser?.uid]);
 
   const totals = data?.totals ?? {};
   const staffing = data?.staffing ?? { required: 0, assigned: 0, understaffedCourses: 0, courses: [] };
@@ -156,8 +168,19 @@ export default function OrganiserAnalytics() {
         </div>
 
         {error && (
-          <div className="mb-stack-lg">
-            <ErrorMessage>{error}</ErrorMessage>
+          <div className="mb-stack-lg flex flex-wrap items-center gap-stack-md">
+            <div className="flex-1 min-w-64">
+              <ErrorMessage>{error}</ErrorMessage>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReloadKey((key) => key + 1)}
+              disabled={isLoading}
+              className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-stack-md py-stack-sm font-label-caps text-label-caps text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-lg">refresh</span>
+              Try again
+            </button>
           </div>
         )}
 

@@ -379,4 +379,81 @@ describe('NewSwap — offer a session swap', () => {
 
     expect(await screen.findByText('swaps-page')).toBeInTheDocument();
   });
+
+  test('redirects admins to the swap review page like organisers', async () => {
+    renderNewSwap({ role: 'ADMIN' });
+
+    expect(await screen.findByText('swap-review-page')).toBeInTheDocument();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('renders nothing while the auth state is still loading', () => {
+    authState.loading = true;
+
+    const { container } = renderNewSwap();
+
+    expect(container).toBeEmptyDOMElement();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('stays in the loading state when the sessions request throws', async () => {
+    mockGet.mockRejectedValue(new Error('network down'));
+
+    renderNewSwap();
+
+    // The hook swallows the throw and the loaded flag stays unset, so the
+    // select keeps its loading placeholder and no error banner appears.
+    expect(await screen.findByText('Loading sessions...')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Something went wrong! Please try again later.'),
+    ).not.toBeInTheDocument();
+  });
+
+  test('shows a generic message when a failed sessions load carries none', async () => {
+    mockGet.mockImplementation((url) =>
+      url === '/swaps/my-sessions'
+        ? Promise.resolve({ status: 500, data: {} })
+        : Promise.reject(new Error(`unexpected GET ${url}`)),
+    );
+
+    renderNewSwap();
+
+    expect(
+      await screen.findByText('Could not load your sessions. Please refresh the page.'),
+    ).toBeInTheDocument();
+  });
+
+  test('renders no candidates section when the candidates request throws', async () => {
+    mockGet.mockImplementation((url) =>
+      url === '/swaps/my-sessions'
+        ? Promise.resolve({ status: 200, data: [makeSession()] })
+        : Promise.reject(new Error('network down')),
+    );
+
+    renderNewSwap();
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: '3' } });
+
+    // The hook swallows the throw, so candidateData stays null: the whole
+    // candidates card is skipped and no error banner appears.
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/swaps/candidates/3'));
+    expect(screen.queryByText('2. Who should take it over?')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Something went wrong! Please try again later.'),
+    ).not.toBeInTheDocument();
+  });
+
+  test('shows a generic message when a failed candidates load carries none', async () => {
+    mockGet.mockImplementation((url) =>
+      url === '/swaps/my-sessions'
+        ? Promise.resolve({ status: 200, data: [makeSession()] })
+        : Promise.resolve({ status: 500, data: {} }),
+    );
+
+    renderNewSwap();
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: '3' } });
+
+    expect(
+      await screen.findByText('Could not load swap candidates. Please try again.'),
+    ).toBeInTheDocument();
+  });
 });

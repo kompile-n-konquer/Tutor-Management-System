@@ -20,14 +20,15 @@ describe('navConfig — sidebar link source of truth', () => {
     expect(labels).toEqual(['Courses', 'Events', 'Timesheets', 'Lecturer View']);
   });
 
-  test('organisers see courses, events, their board, application review, swap review, analytics and timesheets', () => {
+  test('organisers see courses, events, their board, configurations, application review, swap review, analytics and timesheets', () => {
     const labels = getNavLinksForRole('organiser').map((link) => link.label);
-    // Order follows NAV_LINKS: timesheets sits between events and the board.
+    // Order follows NAV_LINKS: configurations sits directly under the board.
     expect(labels).toEqual([
       'Courses',
       'Events',
       'Timesheets',
       'Organiser Board',
+      'Configurations',
       'Applications',
       'Swap Requests',
       'Analytics',

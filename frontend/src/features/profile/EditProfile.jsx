@@ -13,7 +13,7 @@ const YEARS_OF_STUDY = ['3rd year', 'honours', 'masters', 'phd'];
 export default function EditProfile() {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
-  const { execute, error } = useAsync();
+  const { execute, error, setError } = useAsync();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -21,6 +21,8 @@ export default function EditProfile() {
   const [yearOfStudy, setYearOfStudy] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Auth guard
   useEffect(() => {
@@ -39,11 +41,15 @@ export default function EditProfile() {
         setPhoneNumber(res.data.phoneNumber || '');
         setYearOfStudy(res.data.yearOfStudy || '');
         setEmail(res.data.email || '');
+        setLoadError('');
+      } else if (res) {
+        // A failed load must not leave the form silently blank
+        setLoadError(res?.data?.message || 'Could not load your profile. Please try again.');
       }
     };
 
     loadUser();
-  }, [currentUser, loading, execute]);
+  }, [currentUser, loading, execute, reloadKey]);
 
   if (loading) return null;
   if (!currentUser) return null;
@@ -62,6 +68,8 @@ export default function EditProfile() {
     setSubmitting(false);
     if (res?.status === 200) {
       navigate('/profile');
+    } else if (res) {
+      setError(res?.data?.message || 'Could not save your profile. Please try again.');
     }
   };
 
@@ -86,6 +94,20 @@ export default function EditProfile() {
         </div>
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
+        {loadError && (
+          <div className="flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{loadError}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setLoadError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-gutter">
           <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento space-y-stack-md">

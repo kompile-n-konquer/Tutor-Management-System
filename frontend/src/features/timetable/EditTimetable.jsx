@@ -31,6 +31,7 @@ const EditTimetable = () => {
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [appliedInfo, setAppliedInfo] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -47,6 +48,7 @@ const EditTimetable = () => {
         setLoadError('Could not load your availability. Please try again.');
         return;
       }
+      setLoadError('');
 
       const slots = response.data.timeSlots;
       const entries = response.data.availability;
@@ -74,7 +76,7 @@ const EditTimetable = () => {
     };
 
     loadAvailability();
-  }, [currentUser, loading, execute]);
+  }, [currentUser, loading, execute, reloadKey]);
 
   // Fetch upcoming sessions for tutors (the dashboard's source of truth).
   const fetchSessions = useCallback(async () => {
@@ -217,7 +219,20 @@ const EditTimetable = () => {
           </div>
         </div>
 
-        {loadError && <ErrorMessage>{loadError}</ErrorMessage>}
+        {loadError && (
+          <div className="flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{loadError}</ErrorMessage>
+            <Button
+              className="min-w-32"
+              onClick={() => {
+                setLoadError('');
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
         {saveError && <ErrorMessage>{saveError}</ErrorMessage>}
 
         <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento">

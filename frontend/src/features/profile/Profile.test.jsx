@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ThemeProvider from '../context/ThemeProvider.jsx';
 
@@ -76,6 +76,8 @@ const renderProfile = () =>
       <MemoryRouter initialEntries={['/profile']}>
         <Routes>
           <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/edit" element={<div>profile-edit-page</div>} />
+          <Route path="/timetable/edit" element={<div>timetable-edit-page</div>} />
           <Route path="/login" element={<div>login-page</div>} />
           <Route path="/" element={<div>home-page</div>} />
         </Routes>
@@ -100,14 +102,36 @@ describe('Profile — tutor profile with the availability grid', () => {
     vi.useRealTimers();
   });
 
-  test('renders nothing while the auth state is still loading', () => {
+  test('renders a loading skeleton while the auth state is still loading', () => {
     authState.loading = true;
     authState.currentUser = null;
 
     const { container } = renderProfile();
 
-    expect(container).toBeEmptyDOMElement();
+    // The page frame stays a skeleton — same treatment as every other
+    // loading state in the app — and no data is fetched yet.
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  test('the pencil opens the profile editor', async () => {
+    mockApi();
+
+    renderProfile();
+
+    expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Edit personal info'));
+    expect(screen.getByText('profile-edit-page')).toBeInTheDocument();
+  });
+
+  test('the availability header opens the timetable editor', async () => {
+    mockApi();
+
+    renderProfile();
+
+    expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Timetable' }));
+    expect(screen.getByText('timetable-edit-page')).toBeInTheDocument();
   });
 
   test('redirects to the login page when nobody is signed in', async () => {
@@ -189,7 +213,7 @@ describe('Profile — tutor profile with the availability grid', () => {
 
     renderProfile();
 
-    expect(await screen.findByText(/Third Student · Joined: March 2025/)).toBeInTheDocument();
+    expect(await screen.findByText(/Third · Member since March 2025/)).toBeInTheDocument();
     // The info card shows the capitalised year on its own.
     expect(screen.getByText('Third')).toBeInTheDocument();
   });
@@ -200,10 +224,9 @@ describe('Profile — tutor profile with the availability grid', () => {
     renderProfile();
 
     expect(await screen.findByText('082 123 4567')).toBeInTheDocument();
-    // No year of study → a generic "Student" headline and an em dash in the info card.
-    expect(screen.getByText('Student')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(screen.queryByText(/Joined:/)).not.toBeInTheDocument();
+    // Em dashes fill the rows the sparse record cannot answer.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText(/Member since/)).not.toBeInTheDocument();
   });
 
   test('tolerates an availability payload without lockedSlots', async () => {
@@ -251,6 +274,123 @@ describe('Profile — tutor profile with the availability grid', () => {
     renderProfile();
 
     expect(await screen.findByText('User')).toBeInTheDocument();
+  });
+
+  describe('role-specific panels', () => {
+    test('a lecturer sees their own courses instead of the availability grid', async () => {
+      roleState.value = 'lecturer';
+      mockApi({
+        profile: { ...USER_PROFILE, employeeNumber: '700123' },
+        lecturerCourses: [
+          {
+            id: 1,
+            courseCode: 'COMS3005',
+            courseName: 'Software Design',
+            tutors: [{ name: 'Alex Mercer' }, { name: 'Sam Lee' }],
+            events: [{ id: 'e1', date: '2026-09-20' }],
+            sessions: [
+              { id: 's1', date: '2026-09-21', status: 'PENDING' },
+              { id: 's2', date: '2026-09-15', status: 'SCHEDULED' },
+            ],
+          },
+        ],
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('My Courses')).toBeInTheDocument();
+      expect(screen.getByText('COMS3005')).toBeInTheDocument();
+      expect(screen.getByText('Software Design')).toBeInTheDocument();
+      expect(screen.getByText('2 tutors')).toBeInTheDocument();
+      expect(screen.getByText('1 upcoming event')).toBeInTheDocument();
+      // PENDING future session → one open follow-up; SCHEDULED ones don't count.
+      expect(screen.getByText('1 open follow-up')).toBeInTheDocument();
+      // Staff identity: the employee number chip replaces any student number.
+      expect(screen.getByText('Employee № 700123')).toBeInTheDocument();
+      // Staff roles have no tutoring availability grid.
+      expect(mockGet).toHaveBeenCalledWith('/sessions/lecturer');
+      expect(mockGet).not.toHaveBeenCalledWith('/availability');
+      expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
+      expect(screen.queryByText('Mon')).not.toBeInTheDocument();
+    });
+
+    test('a lecturer with no courses sees the empty state', async () => {
+      roleState.value = 'lecturer';
+      mockApi();
+
+      renderProfile();
+
+      expect(await screen.findByText(/You do not own any courses yet/)).toBeInTheDocument();
+    });
+
+    test('an organiser sees live platform aggregates instead of the availability grid', async () => {
+      roleState.value = 'organiser';
+      mockApi({
+        profile: { ...USER_PROFILE, employeeNumber: '700124' },
+        platformStats: {
+          totals: { tutors: 12, lecturers: 5, students: 240, courses: 9, events: 88, upcomingEvents: 7 },
+          timesheets: { signOffRate: 82 },
+          applications: {
+            role: { pending: 3, approved: 0, rejected: 0 },
+            course: { pending: 4, assigned: 0, rejected: 0 },
+          },
+        },
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Platform Overview')).toBeInTheDocument();
+      // The sidebar also renders a "Courses" link, so the stat tiles are
+      // asserted inside the overview card rather than on the whole page.
+      const overview = screen.getByText('Platform Overview').closest('.bg-surface-container-lowest');
+      expect(within(overview).getByText('Courses')).toBeInTheDocument();
+      expect(within(overview).getByText('9')).toBeInTheDocument();
+      expect(within(overview).getByText('Upcoming events')).toBeInTheDocument();
+      expect(within(overview).getByText('7')).toBeInTheDocument();
+      expect(within(overview).getByText('Timesheet sign-off')).toBeInTheDocument();
+      expect(within(overview).getByText('82%')).toBeInTheDocument();
+      expect(within(overview).getByText('Role applications pending')).toBeInTheDocument();
+      expect(within(overview).getByText('Course applications pending')).toBeInTheDocument();
+      expect(mockGet).toHaveBeenCalledWith('/analytics/organiser');
+      expect(mockGet).not.toHaveBeenCalledWith('/availability');
+      expect(mockGet).not.toHaveBeenCalledWith('/sessions/lecturer');
+      expect(screen.queryByText('Mon')).not.toBeInTheDocument();
+    });
+
+    test('an admin gets the same platform overview with system wording', async () => {
+      roleState.value = 'admin';
+      mockApi({
+        platformStats: {
+          totals: { tutors: 1, lecturers: 1, students: 1, courses: 1, events: 1, upcomingEvents: 1 },
+          timesheets: { signOffRate: 0 },
+          applications: {
+            role: { pending: 0, approved: 0, rejected: 0 },
+            course: { pending: 0, assigned: 0, rejected: 0 },
+          },
+        },
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Platform Overview')).toBeInTheDocument();
+      expect(screen.getByText(/system database/)).toBeInTheDocument();
+    });
+
+    test('hides the platform overview when the analytics request fails', async () => {
+      roleState.value = 'organiser';
+      mockGet.mockImplementation((url) => {
+        if (url === '/analytics/organiser') return Promise.reject(new Error('network down'));
+        if (url === `/users/${authState.currentUser?.uid}`) {
+          return Promise.resolve({ status: 200, data: USER_PROFILE });
+        }
+        return Promise.reject(new Error(`Unexpected GET ${url}`));
+      });
+
+      renderProfile();
+
+      expect(await screen.findByText('Alex Mercer')).toBeInTheDocument();
+      expect(screen.queryByText('Platform Overview')).not.toBeInTheDocument();
+    });
   });
 
   describe('delete account', () => {

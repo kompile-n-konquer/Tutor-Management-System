@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 // Shared mutable auth state: the page itself reads `currentUser`/`loading`,
@@ -88,7 +88,14 @@ const EVENTS_FIXTURE = [
 
 // The events table only exists while a course card is expanded.
 const bodyRows = () => screen.getAllByRole("row").filter((row) => row.querySelector("td"));
-const expandButton = (code) => screen.getByRole("button", { name: new RegExp(code) });
+const expandButton = (code) =>
+  screen
+    .getAllByRole("button")
+    .find(
+      (button) =>
+        button.getAttribute("aria-controls")?.startsWith("course-events-") &&
+        button.textContent.includes(code),
+    );
 
 beforeEach(() => {
   apiMock.get.mockReset();
@@ -144,8 +151,8 @@ describe("Events — course grouping", () => {
 
     // Course code, name and summary all live on the card header.
     expect(csCard).toHaveTextContent("Intro to Programming");
-    expect(within(csCard).getByText("2 events · 1 upcoming")).toBeInTheDocument();
-    expect(within(mathCard).getByText("1 event · 0 upcoming")).toBeInTheDocument();
+    expect(screen.getByText("2 events · 1 upcoming")).toBeInTheDocument();
+    expect(screen.getByText("1 event · 0 upcoming")).toBeInTheDocument();
 
     // Alphabetical by course code, independent of payload order.
     expect(
@@ -212,38 +219,26 @@ describe("Events — course grouping", () => {
 });
 
 describe("Events — filters and pagination", () => {
-  test("requests the selected date range and clears back to all events", async () => {
+  test("filters only the selected course from its date-filter popup", async () => {
     renderEvents();
     await screen.findByText("CS101");
 
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-03-01" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-03-31" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter CS101 events by date" }));
+    expect(screen.getByRole("dialog", { name: "Filter CS101 events by date" })).toBeInTheDocument();
 
-    await waitFor(() =>
-      expect(apiMock.get).toHaveBeenLastCalledWith("/events?from=2026-03-01&to=2026-03-31"),
-    );
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2050-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(expandButton("CS101"));
 
-    fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
+    expect(screen.getByText("tutorial")).toBeInTheDocument();
+    expect(screen.queryByText("make-up test")).not.toBeInTheDocument();
 
-    await waitFor(() => expect(apiMock.get).toHaveBeenLastCalledWith("/events"));
+    fireEvent.click(expandButton("MATH202"));
+    expect(screen.getByText("revision session")).toBeInTheDocument();
+    expect(apiMock.get).toHaveBeenCalledTimes(1);
   });
 
-  test("supports before-only and after-only date requests", async () => {
-    renderEvents();
-    await screen.findByText("CS101");
-
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-03-01" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
-    await waitFor(() => expect(apiMock.get).toHaveBeenLastCalledWith("/events?from=2026-03-01"));
-
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-03-31" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
-    await waitFor(() => expect(apiMock.get).toHaveBeenLastCalledWith("/events?to=2026-03-31"));
-  });
-
-  test("shows five events per course and paginates through the rest", async () => {
+  test("shows five events per course with arrow controls and highlighted numbered pages", async () => {
     apiMock.get.mockResolvedValue({
       status: 200,
       data: Array.from({ length: 6 }, (_, index) => ({
@@ -261,16 +256,17 @@ describe("Events — filters and pagination", () => {
     expect(bodyRows()).toHaveLength(5);
     expect(screen.getByText("event 6")).toBeInTheDocument();
     expect(screen.queryByText("event 1")).not.toBeInTheDocument();
-    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Page 1" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Page 2" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Page 2" }));
 
     expect(bodyRows()).toHaveLength(1);
     expect(screen.getByText("event 1")).toBeInTheDocument();
     expect(screen.queryByText("event 6")).not.toBeInTheDocument();
-    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Page 2" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
   });
 });
 

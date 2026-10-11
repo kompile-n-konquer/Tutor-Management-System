@@ -36,17 +36,17 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.queryByText('Allocation Board')).not.toBeInTheDocument();
   });
 
-  test('organisers see the board links and the conflict-resolution button', () => {
+  test('organisers see the board links and no conflict-resolution button', () => {
     renderSidebar('organiser');
 
     expect(screen.getByText('Organiser Board')).toBeInTheDocument();
-    expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
+    expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 
-  test('lecturers also see the conflict-resolution button', () => {
+  test('lecturers also do not see the conflict-resolution button', () => {
     renderSidebar('lecturer');
-    expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
+    expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
   });
 
   test('students see the onboarding link, and no tutor-only links', () => {

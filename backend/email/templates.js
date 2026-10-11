@@ -200,90 +200,6 @@ function stuckTimesheetReminderEmail({ recipientName, tutorName, timesheetId, to
   };
 }
 
-/**
- * 6. Swap Requested — sent to the tutor a swap is offered to. The organiser
- * must still approve before any session moves.
- */
-function swapRequestedEmail({ recipientName, requesterName, courseCode, courseName, sessionDate, twoWay, reason }) {
-  const details = [
-    ['Offered by', requesterName],
-    ['Session', courseCode && courseName ? `${courseCode} - ${courseName}` : courseCode || courseName],
-    ['Session date', sessionDate],
-    ['Trade type', twoWay ? 'Two-way (you give a session back)' : 'One-way (you take the session)'],
-  ];
-  if (reason) {
-    details.push(['Message', reason]);
-  }
-  const content = {
-    heading: 'A tutor offered you a session swap',
-    intro: `Hi ${recipientName}, ${requesterName} would like to trade a tutoring session with you. Accept or decline the request on the Session Swaps page:`,
-    details,
-    note: 'The session only changes hands once the organiser approves the swap.',
-  };
-  return {
-    subject: `${requesterName} offered you a session swap (${courseCode || 'session'})`,
-    html: renderLayout(content),
-    text: renderText(content),
-  };
-}
-
-/**
- * 7. Swap Responded — sent to the requester when the recipient accepts or
- * declines the trade.
- */
-function swapRespondedEmail({ recipientName, responderName, courseCode, sessionDate, accepted, rejectionReason }) {
-  const details = [
-    ['Session', courseCode],
-    ['Session date', sessionDate],
-    ['Response', accepted ? 'Accepted' : 'Declined'],
-  ];
-  if (rejectionReason) {
-    details.push(['Reason', rejectionReason]);
-  }
-  const content = {
-    heading: accepted ? 'Your swap request was accepted' : 'Your swap request was declined',
-    intro: accepted
-      ? `Hi ${recipientName}, ${responderName} agreed to trade with you. The swap now waits for organiser approval before the sessions move.`
-      : `Hi ${recipientName}, ${responderName} declined your session swap request:`,
-    details,
-  };
-  return {
-    subject: accepted
-      ? `${responderName} accepted your swap request (${courseCode})`
-      : `${responderName} declined your swap request (${courseCode})`,
-    html: renderLayout(content),
-    text: renderText(content),
-  };
-}
-
-/**
- * 8. Swap Reviewed — sent to both tutors when the organiser approves or
- * rejects an agreed swap.
- */
-function swapReviewedEmail({ recipientName, otherTutorName, courseCode, sessionDate, approved, rejectionReason }) {
-  const details = [
-    ['Session', courseCode],
-    ['Session date', sessionDate],
-    ['Other tutor', otherTutorName],
-  ];
-  if (!approved && rejectionReason) {
-    details.push(['Reason', rejectionReason]);
-  }
-  const content = {
-    heading: approved ? 'Your session swap was approved' : 'Your session swap was rejected',
-    intro: approved
-      ? `Hi ${recipientName}, the organiser approved the session trade with ${otherTutorName}. The session now belongs to the other tutor's record.`
-      : `Hi ${recipientName}, the organiser rejected the session trade with ${otherTutorName}. The sessions stay with their current tutors.`,
-    details,
-  };
-  return {
-    subject: approved
-      ? `Session swap approved (${courseCode})`
-      : `Session swap rejected (${courseCode})`,
-    html: renderLayout(content),
-    text: renderText(content),
-  };
-}
 
 module.exports = {
   escapeHtml,
@@ -292,7 +208,4 @@ module.exports = {
   timesheetApprovedEmail,
   timesheetRejectedEmail,
   stuckTimesheetReminderEmail,
-  swapRequestedEmail,
-  swapRespondedEmail,
-  swapReviewedEmail,
 };

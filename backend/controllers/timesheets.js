@@ -334,6 +334,34 @@ exports.updateTimesheet = catchAsync(async (req, res, next) => {
       : [];
   const eventsById = new Map(events.map((event) => [event.id, event]));
 
+  // Sessions a volunteer or nominated tutor covered through the excuse/cover
+  // flow: for those event days only the covering tutor may claim the work. The
+  // excusing tutor stays allocated to the course, so without this guard they
+  // could reclaim — and be paid for — a session somebody else actually ran.
+  // The coverage counts only while it is in force: a session re-excused by its
+  // coverer is no longer SCHEDULED and constrains nobody.
+  const coveredSessions =
+    events.length > 0
+      ? await prisma.session.findMany({
+          where: {
+            status: 'SCHEDULED',
+            date: { in: events.map((event) => event.date) },
+            courseSlot: { courseId: { in: [...new Set(events.map((event) => event.courseId))] } },
+            volunteerRequest: { status: 'APPROVED' },
+          },
+          include: {
+            courseSlot: { select: { courseId: true } },
+            volunteerRequest: { select: { userId: true } },
+          },
+        })
+      : [];
+  const coverageFor = (event) =>
+    coveredSessions.find(
+      (session) =>
+        session.courseSlot.courseId === event.courseId &&
+        session.date.getTime() === event.date.getTime(),
+    );
+
   const resolvedEntries = entries.map((entry) => {
     // Event claim — every field comes from the event itself
     const event = eventsById.get(Number(entry.eventId));
@@ -352,6 +380,16 @@ exports.updateTimesheet = catchAsync(async (req, res, next) => {
         `Events older than ${claimMonths} month${claimMonths === 1 ? '' : 's'} can no longer be claimed`
       );
       error.statusCode = 400;
+      return { error };
+    }
+    // Covered by someone else through the volunteer / directed-offer flow —
+    // the covering tutor claims this one, not the tutor who excused it.
+    const coverage = coverageFor(event);
+    if (coverage && coverage.volunteerRequest.userId !== user.id) {
+      const error = new Error(
+        'This session was covered by another tutor through the volunteer flow — only the covering tutor can claim it'
+      );
+      error.statusCode = 409;
       return { error };
     }
     const derived = deriveEventEntry(event);

@@ -175,7 +175,7 @@ model Session {
   assignmentId     Int
   date             DateTime
   courseSlotId     Int
-  status           String           @default("SCHEDULED") // SCHEDULED | UNASSIGNED | PENDING
+  status           String           @default("SCHEDULED") // SCHEDULED | UNASSIGNED | OFFERED | PENDING
   excuseReason     String?
   assignment       TutorAssignment  @relation(fields: [assignmentId], references: [id])
   courseSlot       CourseSlot       @relation(fields: [courseSlotId], references: [id], onUpdate: NoAction)
@@ -185,7 +185,7 @@ model SessionVolunteer {
   id        Int      @id @default(autoincrement())
   sessionId Int      @unique
   userId    Int
-  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  status    String   @default("PENDING") // OFFERED | PENDING | APPROVED | REJECTED | CANCELLED
   createdAt DateTime @default(now())
   session   Session  @relation(fields: [sessionId], references: [id])
   user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)

@@ -47,7 +47,8 @@ describe('Sidebar — role-aware navigation rail', () => {
 
     expect(screen.getByText('Organiser Board')).toBeInTheDocument();
     expect(screen.getByText('Configurations')).toBeInTheDocument();
-    expect(screen.getByText('Resolve Conflicts')).toBeInTheDocument();
+    // The old Resolve Conflicts button had no handler — it must not come back.
+    expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 

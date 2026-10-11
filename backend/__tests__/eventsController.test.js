@@ -33,8 +33,8 @@ const expectHttpError = (next, statusCode, message) => {
   expect(error.message).toBe(message);
 };
 
-function mockReq() {
-  return { user: { user_id: 'uid-123' }, params: {}, query: {} };
+function mockReq(query = {}) {
+  return { user: { user_id: 'uid-123' }, params: {}, query };
 }
 
 function mockRes() {

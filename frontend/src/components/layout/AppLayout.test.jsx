@@ -343,6 +343,7 @@ describe("sidebar navigation icons per role", () => {
     unmount();
 
     authState.role = "lecturer";
+    setViewport({ desktop: true });
     renderLayout();
     expect(screen.queryByText("Resolve Conflicts")).not.toBeInTheDocument();
     // The user card is the only thing left in the sidebar footer.

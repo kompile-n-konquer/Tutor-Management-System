@@ -2,12 +2,12 @@ import { describe, test, expect } from 'vitest';
 import { NAV_LINKS, FOOTER_LINKS, getNavLinksForRole } from './navConfig.js';
 
 describe('navConfig — sidebar link source of truth', () => {
-  test('tutors see the dashboard, events, swaps, applications, volunteering, timesheets and timetable', () => {
+  test('tutors see the dashboard, events, cover requests, applications, volunteering, timesheets and timetable', () => {
     const labels = getNavLinksForRole('tutor').map((link) => link.label);
     expect(labels).toEqual([
       'Tutor Dashboard',
       'Events',
-      'Session Swaps',
+      'Cover Requests',
       'Applications',
       'Volunteer View',
       'Timesheets',
@@ -15,12 +15,12 @@ describe('navConfig — sidebar link source of truth', () => {
     ]);
   });
 
-  test('lecturers see courses, events, timesheets and the lecturer view', () => {
+  test('lecturers see courses, events, cover requests, timesheets and the lecturer view', () => {
     const labels = getNavLinksForRole('lecturer').map((link) => link.label);
-    expect(labels).toEqual(['Courses', 'Events', 'Timesheets', 'Lecturer View']);
+    expect(labels).toEqual(['Courses', 'Events', 'Cover Requests', 'Timesheets', 'Lecturer View']);
   });
 
-  test('organisers see courses, events, their board, configurations, application review, swap review, analytics and timesheets', () => {
+  test('organisers see courses, events, their board, configurations, application review, analytics and timesheets', () => {
     const labels = getNavLinksForRole('organiser').map((link) => link.label);
     // Order follows NAV_LINKS: configurations sits directly under the board.
     expect(labels).toEqual([
@@ -30,7 +30,6 @@ describe('navConfig — sidebar link source of truth', () => {
       'Organiser Board',
       'Configurations',
       'Applications',
-      'Swap Requests',
       'Analytics',
     ]);
   });

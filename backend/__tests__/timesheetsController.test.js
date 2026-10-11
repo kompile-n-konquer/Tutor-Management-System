@@ -42,6 +42,7 @@ jest.mock('../prisma/client', () => {
     systemSetting: { findUnique: jest.fn() },
     event: { findMany: jest.fn() },
     eventRegister: { findMany: jest.fn(), findFirst: jest.fn() },
+    session: { findMany: jest.fn() },
     $transaction: jest.fn(),
   };
 });
@@ -156,6 +157,10 @@ describe('timesheet workflow — creation, review, corrections', () => {
     prisma.$transaction.mockImplementation(async (arg) =>
       Array.isArray(arg) ? Promise.all(arg) : arg(prisma.__tx),
     );
+
+    // No volunteer-covered sessions by default — the claim seam tests set
+    // their own coverage rows.
+    prisma.session.findMany.mockResolvedValue([]);
 
     // No organiser-set limits by default — each cap test sets its own.
     getTutorMonthlyClaimableHours.mockResolvedValue(null);
@@ -408,6 +413,9 @@ describe('timesheet workflow — creation, review, corrections', () => {
   describe('updateTimesheet — saving entries (drafts and corrections)', () => {
     // Shared happy-path fixtures: one claimed past event and its derived entry.
     const pastEvent = { id: 11, date: new Date(Date.now() - DAY) };
+    // The same event with its courseId filled in — the volunteer-coverage seam
+    // matches sessions by course + day, so those tests need it.
+    const coveredEvent = { id: 11, courseId: 3, date: pastEvent.date };
     const derivedEntry = {
       courseId: 3,
       supervisorId: 9,
@@ -643,6 +651,92 @@ describe('timesheet workflow — creation, review, corrections', () => {
       expect(next).toHaveBeenCalledTimes(1);
       expect(next.mock.calls[0][0]).toBe(boom);
       expect(res.status).not.toHaveBeenCalled();
+    });
+
+    test('409s when another tutor covered the session through the volunteer flow', async () => {
+      req.params.id = '1';
+      req.body = { entries: [{ eventId: 11 }] };
+      prisma.timesheet.findUnique.mockResolvedValue(makeTimesheet());
+      prisma.event.findMany.mockResolvedValue([coveredEvent]);
+      // A SCHEDULED session on course 3 on the claimed event's day, covered by
+      // tutor 9 — tutor 5 excused it, so the claim is not theirs to make.
+      prisma.session.findMany.mockResolvedValue([
+        {
+          id: 21,
+          date: coveredEvent.date,
+          courseSlot: { courseId: 3 },
+          volunteerRequest: { userId: 9 },
+        },
+      ]);
+
+      await updateTimesheet(req, res, next);
+
+      expect(prisma.session.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'SCHEDULED',
+            date: { in: [coveredEvent.date] },
+            courseSlot: { courseId: { in: [3] } },
+            volunteerRequest: { status: 'APPROVED' },
+          }),
+        }),
+      );
+      expectHttpError(
+        next,
+        409,
+        'This session was covered by another tutor through the volunteer flow — only the covering tutor can claim it',
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    test('lets the covering tutor claim the session they took over', async () => {
+      req.params.id = '1';
+      req.body = { entries: [{ eventId: 11 }] };
+      prisma.timesheet.findUnique
+        .mockResolvedValueOnce(makeTimesheet())
+        .mockResolvedValueOnce(makeTimesheet({ entries: [makeEntry()] }));
+      prisma.event.findMany.mockResolvedValue([coveredEvent]);
+      prisma.session.findMany.mockResolvedValue([
+        {
+          id: 21,
+          date: coveredEvent.date,
+          courseSlot: { courseId: 3 },
+          volunteerRequest: { userId: 5 },
+        },
+      ]);
+      deriveEventEntry.mockReturnValue(derivedEntry);
+
+      await updateTimesheet(req, res, next);
+
+      expect(prisma.__tx.timesheetEntry.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ timesheetId: 1, eventId: 11, status: 'PENDING' })],
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('ignores cover rows for other courses or other days', async () => {
+      req.params.id = '1';
+      req.body = { entries: [{ eventId: 11 }] };
+      prisma.timesheet.findUnique
+        .mockResolvedValueOnce(makeTimesheet())
+        .mockResolvedValueOnce(makeTimesheet({ entries: [makeEntry()] }));
+      prisma.event.findMany.mockResolvedValue([coveredEvent]);
+      // Same day but another course; same course but another day — neither
+      // constrains this tutor's claim.
+      prisma.session.findMany.mockResolvedValue([
+        { id: 21, date: coveredEvent.date, courseSlot: { courseId: 99 }, volunteerRequest: { userId: 9 } },
+        { id: 22, date: new Date(Date.now() - 5 * DAY), courseSlot: { courseId: 3 }, volunteerRequest: { userId: 9 } },
+      ]);
+      deriveEventEntry.mockReturnValue(derivedEntry);
+
+      await updateTimesheet(req, res, next);
+
+      expect(prisma.__tx.timesheetEntry.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ eventId: 11 })],
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(next).not.toHaveBeenCalled();
     });
   });
 

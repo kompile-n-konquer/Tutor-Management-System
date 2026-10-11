@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout.jsx";
 import Button from "../../components/button/Button.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
@@ -55,10 +55,13 @@ const sessionSlotMeta = (session) =>
   [session.courseSlot?.venue, session.courseSlot?.sessionType].filter(Boolean).join(" · ");
 
 // SCHEDULED sessions carry no state chip — the "You lead" line is their status.
-// Only excused and volunteered sessions get a chip.
+// Only excused, offered and volunteered sessions get a chip.
 const stateChipFor = (session) => {
   if (session.status === "UNASSIGNED") {
     return { className: "bg-urgent-orange/10 text-urgent-orange", label: "Excused — awaiting volunteer" };
+  }
+  if (session.status === "OFFERED") {
+    return { className: "bg-secondary-fixed text-on-secondary-container", label: "Cover offer sent" };
   }
   if (session.status === "PENDING") {
     return { className: "bg-trust-blue/10 text-trust-blue", label: "Volunteer pending" };
@@ -163,6 +166,7 @@ function SessionRow({ session, isExcusing, onExcuse, onCancel, onSubmit, isSubmi
 export default function TutorDashboard() {
   const { userProfile, currentUser, loading: authLoading } = useAuth();
   const { isFirstVisit, markSeen } = useFirstVisit("tutor-dashboard");
+  const navigate = useNavigate();
 
   const [courses, setCourses] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -174,6 +178,8 @@ export default function TutorDashboard() {
   const [excusingSessionId, setExcusingSessionId] = useState(null);
   const [excuseReason, setExcuseReason] = useState("");
   const [isExcusing, setIsExcusing] = useState(false);
+  // Success note shown once an excuse lands, with the jump to Cover Requests.
+  const [excuseSuccess, setExcuseSuccess] = useState(null);
 
   const fetchMySessions = useCallback(async () => {
     try {
@@ -213,12 +219,14 @@ export default function TutorDashboard() {
     setExcusingSessionId(sessionId);
     setExcuseReason(reason);
     setError("");
+    setExcuseSuccess(null);
   };
 
   const cancelExcuse = () => {
     setExcusingSessionId(null);
     setExcuseReason("");
     setError("");
+    setExcuseSuccess(null);
   };
 
   const handleExcuse = async (event, sessionId) => {
@@ -241,6 +249,7 @@ export default function TutorDashboard() {
       }
       // The session is now UNASSIGNED — reload so its excuse status is reflected.
       cancelExcuse();
+      setExcuseSuccess("Session excused — it is now open for cover.");
       await fetchMySessions();
     } catch {
       setError("Could not submit your excuse. Please try again later.");
@@ -399,6 +408,20 @@ export default function TutorDashboard() {
                 </div>
               ))}
             </section>
+
+            {excuseSuccess && (
+              <div
+                role="status"
+                className="mb-stack-md bg-primary-fixed rounded-lg px-stack-md py-stack-sm flex flex-wrap items-center gap-stack-md"
+              >
+                <p className="font-body-sm text-body-sm text-primary flex-1 min-w-[16rem]">
+                  {excuseSuccess}
+                </p>
+                <Button type="button" onClick={() => navigate("/cover")}>
+                  Set up cover
+                </Button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-gutter items-start">
               {/* ── The session ledger: every upcoming session assigned to this tutor ── */}

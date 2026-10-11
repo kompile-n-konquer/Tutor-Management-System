@@ -210,6 +210,13 @@ exports.getCourse = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // Lecturers can only view the courses they created (mirrors events.js)
+  if (role === 'LECTURER' && course.userId !== requestingUser.id) {
+    const error = new Error('You can only view courses you have created');
+    error.statusCode = 403;
+    return next(error);
+  }
+
   const assignedCount = course.assignments.length;
 
   // Per-tutor claim aggregates from APPROVED timesheets: hours claimed, how many

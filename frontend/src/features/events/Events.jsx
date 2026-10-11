@@ -354,7 +354,7 @@ const Events = () => {
                           </tr>
                         </thead>
                         <tbody className="font-body-md">
-                          {group.events.map((event) => (
+                          {visibleEvents.map((event) => (
                             <tr
                               key={event.id}
                               onClick={() => navigate(`/events/${event.id}`)}

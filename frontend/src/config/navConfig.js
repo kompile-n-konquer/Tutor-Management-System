@@ -7,7 +7,7 @@ export const NAV_LINKS = [
   { to: "/tutor-dashboard", icon: "assignment_ind", label: "Tutor Dashboard", roles: ["tutor"], section: "main" },
   { to: "/courses", icon: "menu_book", label: "Courses", roles: ["lecturer", "organiser"], section: "general" },
   { to: "/events", icon: "calendar_today", label: "Events", roles: ["tutor", "lecturer", "organiser"], section: "general" },
-  { to: "/swaps", icon: "swap_horiz", label: "Session Swaps", roles: ["tutor"], section: "general" },
+  { to: "/cover", icon: "sync_alt", label: "Cover Requests", roles: ["tutor", "lecturer"], section: "general" },
   { to: "/applications", icon: "workspace_premium", label: "Applications", roles: ["student", "tutor"], section: "general" },
   { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor"], section: "general" },
   { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["organiser", "tutor", "lecturer"], section: "general" },
@@ -19,7 +19,6 @@ export const NAV_LINKS = [
   // Organiser-only system configuration (claim policy, rates, PDF template).
   { to: "/configurations", icon: "tune", label: "Configurations", roles: ["organiser"], section: "main" },
   { to: "/application-review", icon: "fact_check", label: "Applications", roles: ["organiser"], section: "general" },
-  { to: "/swap-review", icon: "swap_horiz", label: "Swap Requests", roles: ["organiser"], section: "general" },
   { to: "/organiser-analytics", icon: "analytics", label: "Analytics", roles: ["organiser"], section: "main" },
   { to: "/onboarding", icon: "upgrade", label: "Become a Tutor/Lecturer", roles: ["student"], section: "general" },
   { to: "/lecturer-view", icon: "school", label: "Lecturer View", roles: ["lecturer"], section: "main" },

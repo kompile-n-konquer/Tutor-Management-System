@@ -14,8 +14,8 @@ export default function TopNavBar({
   const { isDark, setColorMode } = useTheme();
 
   return (
-    <header className="flex justify-between items-center h-16 px-gutter sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm">
-      <div className="flex items-center gap-stack-md">
+    <header className="flex justify-between items-center h-16 px-gutter md:px-stack-lg sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm">
+      <div className="flex items-center gap-stack-sm md:gap-stack-md min-w-0">
         {/* Toggles the sidebar: collapses the docked panel to an icon rail on
             md+ screens, and opens/closes the overlay drawer below that. */}
         <button
@@ -29,10 +29,10 @@ export default function TopNavBar({
         >
           <span className="material-symbols-outlined">menu</span>
         </button>
-        <span className="font-headline-md text-headline-md font-extrabold text-primary truncate">{title}</span>
+        <span className="font-headline-md text-[18px] md:text-headline-md font-extrabold text-primary truncate">{title}</span>
       </div>
 
-      <div className="flex items-center gap-stack-md">
+      <div className="flex items-center gap-stack-sm md:gap-stack-md shrink-0">
         {showSearch && <GlobalSearch />}
         <button
           type="button"

@@ -248,7 +248,7 @@ const TimesheetDetails = () => {
                 : 'Claim past events below to log the hours you have worked'}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {isApproved && (
               <Button
                 className="min-w-36 max-h-8"
@@ -335,7 +335,7 @@ const TimesheetDetails = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="responsive-table w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                     <th className="py-stack-sm px-stack-md">Course</th>
@@ -344,18 +344,18 @@ const TimesheetDetails = () => {
                     <th className="py-stack-sm px-stack-md">Hours</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-variant font-body-md">
+                <tbody className="font-body-md">
                   {entries.map((entry, index) => (
                     <tr key={entry.eventId ?? `entry-${index}`}>
-                      <td className="py-stack-sm px-stack-md">
+                      <td data-label="Course" className="py-stack-sm px-stack-md">
                         <span className="font-bold text-primary">{entry.courseCode}</span>
                         <span className="text-on-surface-variant"> - {entry.courseName}</span>
                       </td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Date" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {formatEventDay(entry.workDate)}
                       </td>
-                      <td className="py-stack-sm px-stack-md capitalize">{entry.description}</td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Description" className="py-stack-sm px-stack-md capitalize">{entry.description}</td>
+                      <td data-label="Hours" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {Number(entry.duration)} {Number(entry.duration) === 1 ? 'hr' : 'hrs'}
                       </td>
                     </tr>
@@ -390,7 +390,7 @@ const TimesheetDetails = () => {
                 rows={3}
                 className="w-full rounded-DEFAULT border-outline-variant bg-surface py-2 px-4 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm resize-none"
               />
-              <div className="flex gap-2 justify-end">
+              <div className="flex flex-wrap gap-2 justify-end">
                 
                 <button
                   onClick={() => setRejectionModal(false)}

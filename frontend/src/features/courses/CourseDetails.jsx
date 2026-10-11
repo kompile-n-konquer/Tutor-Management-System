@@ -156,7 +156,7 @@ const CourseDetails = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
               {/* Course details — left column */}
               <div className="lg:col-span-4">
-                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col lg:h-[500px]">
                   <div className="mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                     <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
                       Course Details
@@ -237,7 +237,7 @@ const CourseDetails = () => {
 
               {/* Tutoring slots — right column */}
               <div className="lg:col-span-8">
-                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col h-[500px]">
+                <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl p-stack-lg shadow-bento flex flex-col lg:h-[500px]">
                   <div className="flex items-center justify-between mb-stack-md pb-stack-sm border-b border-outline-variant/30">
                     <div>
                       <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
@@ -269,7 +269,7 @@ const CourseDetails = () => {
                 </p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="responsive-table w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                         <th className="py-stack-sm px-stack-md">Tutor</th>
@@ -279,12 +279,14 @@ const CourseDetails = () => {
                         <th className="py-stack-sm px-stack-md">Spent</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-surface-variant font-body-md">
+                    <tbody className="font-body-md">
                       {course.assignedTutors.map((tutor) => (
                         <tr key={tutor.userId}>
-                          <td className="py-stack-sm px-stack-md">
-                            <span className="font-semibold text-on-surface">{tutor.tutorName}</span>
-                            <p className="font-body-sm text-outline mt-1">{tutor.tutorEmail}</p>
+                          <td data-label="Tutor" className="py-stack-sm px-stack-md">
+                            <span className="cell-stack">
+                              <span className="font-semibold text-on-surface">{tutor.tutorName}</span>
+                              <p className="font-body-sm text-outline mt-1">{tutor.tutorEmail}</p>
+                            </span>
                           </td>
                           <td className="py-stack-sm px-stack-md">{tutor.semester}</td>
                           <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">

@@ -256,7 +256,7 @@ export default function LecturerView() {
 
   return (
     <AppLayout title="Lecturer View">
-      <div className="p-margin-page max-w-container-max mx-auto w-full">
+      <div className="p-gutter md:p-margin-page max-w-container-max mx-auto w-full">
         <header className="mb-stack-lg">
           <h1 className="font-display text-display text-on-surface">Your courses &amp; sessions</h1>
           <p className="font-body-lg text-body-lg text-on-surface-variant mt-unit">

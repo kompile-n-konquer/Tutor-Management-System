@@ -264,6 +264,75 @@
   width: 6px;
   height: 6px;
 }
+
+/*
+ * Responsive tables — data-heavy listings (courses, timesheets, swaps...) add
+ * the .responsive-table class plus data-label attributes on each <td>. On md+
+ * the table renders exactly as before; below md every row becomes a card: the
+ * thead is dropped and each td shows its data-label on the left with the value
+ * on the right. Row separators move here from the divide-y utility so the
+ * card mode can replace them with card borders. Multi-line cells wrap their
+ * children in .cell-stack so paragraphs stack against the right edge.
+ */
+@media (min-width: 768px) {
+  .responsive-table tbody tr + tr {
+    border-top: 1px solid var(--color-surface-variant);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .responsive-table thead {
+    display: none;
+  }
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100%;
+  }
+  .responsive-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .responsive-table tr {
+    padding: 10px 14px;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: 12px;
+    background: var(--color-surface-container-low);
+  }
+  .responsive-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 3px 0;
+  }
+  .responsive-table td[data-label]::before {
+    content: attr(data-label);
+    margin-right: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 20px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-on-surface-variant);
+  }
+  /* Cells without a label (action buttons, checkboxes) keep to the right. */
+  .responsive-table td:not([data-label]) {
+    justify-content: flex-end;
+  }
+  .responsive-table .cell-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 0;
+    text-align: right;
+  }
+}
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }

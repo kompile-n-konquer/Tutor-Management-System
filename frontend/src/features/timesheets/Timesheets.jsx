@@ -120,7 +120,7 @@ const Timesheets = () => {
                 : 'No timesheets are awaiting your review.'}
             </p>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <table className="responsive-table w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                   <th className="py-stack-sm px-stack-md">Name</th>
@@ -132,32 +132,34 @@ const Timesheets = () => {
                   <th className="py-stack-sm px-stack-md"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-variant font-body-md">
+              <tbody className="font-body-md">
                 {timesheets.map((timesheet) => {
                   const editable = timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED';
                   return (
                     <tr key={timesheet.id}>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">{timesheet.name}</td>
+                      <td data-label="Name" className="py-stack-sm px-stack-md font-data-mono text-body-sm">{timesheet.name}</td>
                       {isLecturer && (
-                        <td className="py-stack-sm px-stack-md">
-                          <span className="font-semibold text-on-surface">{timesheet.tutorName}</span>
-                          <span className="text-on-surface-variant text-xs ml-1">{timesheet.tutorEmail}</span>
+                        <td data-label="Tutor" className="py-stack-sm px-stack-md">
+                          <span className="cell-stack">
+                            <span className="font-semibold text-on-surface">{timesheet.tutorName}</span>
+                            <span className="text-on-surface-variant text-xs ml-1">{timesheet.tutorEmail}</span>
+                          </span>
                         </td>
                       )}
                       {!isLecturer && (
-                        <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                        <td data-label="Created" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                           {formatDate(timesheet.createdAt)}
                         </td>
                       )}
                       {!isLecturer && (
-                        <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                        <td data-label="Last Saved" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                           {formatDate(timesheet.updatedAt)}
                         </td>
                       )}
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Total Hours" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {(timesheet.entries || []).reduce((sum, e) => sum + Number(e.duration || 0), 0)}
                       </td>
-                      <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                      <td data-label="Status" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         <span
                           className={`px-2 py-1 rounded text-xs font-semibold font-data-mono ${STATUS_STYLES[timesheet.status] || ''}`}
                         >

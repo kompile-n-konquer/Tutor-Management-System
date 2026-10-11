@@ -344,7 +344,7 @@ const Events = () => {
 
                   {isExpanded && (
                     <div id={groupId} className="border-t border-surface-variant overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
+                      <table className="responsive-table w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                             <th className="py-stack-sm px-stack-md">Date</th>
@@ -353,17 +353,17 @@ const Events = () => {
                             <th className="py-stack-sm px-stack-md">Lecturer</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-surface-variant font-body-md">
-                          {visibleEvents.map((event) => (
+                        <tbody className="font-body-md">
+                          {group.events.map((event) => (
                             <tr
                               key={event.id}
                               onClick={() => navigate(`/events/${event.id}`)}
                               className="cursor-pointer hover:bg-surface-container-low transition-colors"
                             >
-                              <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                              <td data-label="Date" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                                 {formatDate(event.date)}
                               </td>
-                              <td className="py-stack-sm px-stack-md">
+                              <td data-label="Time" className="py-stack-sm px-stack-md">
                                 {event.times.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
                                     {event.times.map((time, index) => (
@@ -379,8 +379,8 @@ const Events = () => {
                                   <span className="text-outline text-sm">No timeslot on this weekday</span>
                                 )}
                               </td>
-                              <td className="py-stack-sm px-stack-md capitalize">{event.description}</td>
-                              <td className="py-stack-sm px-stack-md">{event.lecturer || 'Unknown'}</td>
+                              <td data-label="Description" className="py-stack-sm px-stack-md capitalize">{event.description}</td>
+                              <td data-label="Lecturer" className="py-stack-sm px-stack-md">{event.lecturer || 'Unknown'}</td>
                             </tr>
                           ))}
                         </tbody>

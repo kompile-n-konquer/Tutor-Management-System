@@ -171,6 +171,18 @@ const ViewAllCourses = () => {
                 <p className="font-body-sm text-on-surface-variant">
                   Select courses without allocated tutors to start their application process.
                 </p>
+                {/* The table header (with its select-all box) is hidden on
+                    phones, so the bulk action moves up here instead. */}
+                <label className="md:hidden flex items-center gap-2 font-body-sm text-on-surface-variant cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allEligibleSelected}
+                    onChange={toggleAll}
+                    disabled={eligibleCourses.length === 0}
+                    className="cursor-pointer"
+                  />
+                  Select all eligible
+                </label>
                 <div>
                   <Button
                     onClick={handleStartApplicationProcess}
@@ -184,7 +196,7 @@ const ViewAllCourses = () => {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="responsive-table w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
                       <th className="py-stack-sm px-stack-md">
@@ -204,7 +216,7 @@ const ViewAllCourses = () => {
                       <th className="py-stack-sm px-stack-md">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-variant font-body-md">
+                  <tbody className="font-body-md">
                     {courses.map((course) => {
                       const eligible = isEligible(course);
                       return (
@@ -227,28 +239,32 @@ const ViewAllCourses = () => {
                               className="cursor-pointer"
                             />
                           </td>
-                          <td className="py-stack-sm px-stack-md">
-                            <span className="font-bold text-primary">{course.courseCode}</span>
-                            <span className="text-on-surface-variant"> - {course.courseName}</span>
-                            <p className="font-body-sm text-outline mt-1">
-                              Min mark {course.minimumMark} · {course.claimableHours} claimable hour
-                              {course.claimableHours === 1 ? '' : 's'}
-                            </p>
+                          <td data-label="Course" className="py-stack-sm px-stack-md">
+                            <span className="cell-stack">
+                              <span>
+                                <span className="font-bold text-primary">{course.courseCode}</span>
+                                <span className="text-on-surface-variant"> - {course.courseName}</span>
+                              </span>
+                              <p className="font-body-sm text-outline mt-1">
+                                Min mark {course.minimumMark} · {course.slotsCount} tutoring slot
+                                {course.slotsCount === 1 ? '' : 's'}
+                              </p>
+                            </span>
                           </td>
-                          <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
+                          <td data-label="Added" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                             {formatDate(course.createdAt)}
                           </td>
-                          <td className="py-stack-sm px-stack-md">
+                          <td data-label="Lecturer" className="py-stack-sm px-stack-md">
                             {course.lecturer
                               ? `${course.lecturer.firstName} ${course.lecturer.lastName}`
                               : 'Unknown'}
                           </td>
-                          <td className="py-stack-sm px-stack-md">
+                          <td data-label="Tutors" className="py-stack-sm px-stack-md">
                             <span className="font-semibold text-on-surface">
                               {course.assignedTutors}/{course.tutorsRequired}
                             </span>
                           </td>
-                          <td className="py-stack-sm px-stack-md">
+                          <td data-label="Status" className="py-stack-sm px-stack-md">
                             {course.acceptingApplications ? (
                               <span className="bg-trust-blue/10 text-trust-blue px-2 py-1 rounded text-xs font-semibold">
                                 Accepting Applications

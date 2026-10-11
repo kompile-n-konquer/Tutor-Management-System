@@ -72,24 +72,7 @@ export default function Profile() {
       loadTimetable();
     }
 
-    loadTimetable();
   }, [currentUser, loading, executeTimetable]);
-
-  // Role-specific staff panels: courses for lecturers, platform aggregates
-  // for organisers and admins.
-  useEffect(() => {
-    if (loading || !currentUser || !role) return;
-
-    if (role === 'lecturer') {
-      (async () => {
-        await fetchLecturerCourses();
-      })();
-    } else if (role === 'organiser' || role === 'admin') {
-      (async () => {
-        await fetchPlatformStats();
-      })();
-    }
-  }, [currentUser, loading, role, fetchLecturerCourses, fetchPlatformStats]);
 
   // Fetch full user profile (phone, year of study, role identifiers) from the backend
   useEffect(() => {

@@ -20,6 +20,7 @@ const swapsRouter = require('./routes/swaps');
 const onboardingRouter = require('./routes/onboarding');
 const publicRouter = require('./routes/public');
 const analyticsRouter = require('./routes/analytics');
+const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/api/swaps', swapsRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/public', publicRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 app.all('/{*splat}', notFoundErrorHandler); // Handle not found routes
 app.use(globalErrorHandler); // Use the global error handling middleware

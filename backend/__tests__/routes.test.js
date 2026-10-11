@@ -7,6 +7,7 @@ const sessionsRouter = require('../routes/sessions');
 const authRouter = require('../routes/auth');
 const availabilityRouter = require('../routes/availability');
 const timesheetsRouter = require('../routes/timesheets');
+const dashboardRouter = require('../routes/dashboard');
 
 // Flattens an express Router into [{ path, methods, handlers }] entries.
 const routeTable = (router) =>
@@ -64,6 +65,12 @@ describe('routes wiring', () => {
       { path: '/:id/entries/:entryId/approve', methods: ['put'], handlers: 2 },
       { path: '/:id/reject', methods: ['put'], handlers: 2 },
       { path: '/:id/export', methods: ['get'], handlers: 2 },
+    ]);
+  });
+
+  test('dashboard routes expose the priority feed behind auth', () => {
+    expect(routeTable(dashboardRouter)).toEqual([
+      { path: '/', methods: ['get'], handlers: 2 }, // auth + controller
     ]);
   });
 });

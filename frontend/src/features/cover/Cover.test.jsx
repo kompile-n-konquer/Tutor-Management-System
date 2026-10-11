@@ -370,5 +370,36 @@ describe('Cover — directed cover-offer hub', () => {
     expect(screen.getByText('No excused sessions are waiting for cover.')).toBeInTheDocument();
     expect(screen.getByText('You have not offered any sessions to anyone yet.')).toBeInTheDocument();
     expect(screen.getByText('Nothing is waiting on the lecturer right now.')).toBeInTheDocument();
+    expect(screen.getByText(/No approved covers yet/)).toBeInTheDocument();
+  });
+
+  test('serves lecturers the cross-course cover hub on the same route', async () => {
+    mockGet.mockImplementation((url) => {
+      if (url === '/sessions/lecturer') {
+        return Promise.resolve({ status: 200, data: { courses: [] } });
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+
+    renderCover('LECTURER');
+
+    // The lecturer hub renders and the tutor feeds are never requested.
+    expect(await screen.findByText('Nothing is waiting for your approval.')).toBeInTheDocument();
+    expect(mockGet).not.toHaveBeenCalledWith('/sessions/mine');
+  });
+
+  test('lists approved covers the tutor is confirmed to run', async () => {
+    stubGets({
+      mine: [],
+      volunteered: [
+        makeVolunteered({ id: 50, status: 'APPROVED', volunteerStatus: 'APPROVED' }),
+      ],
+    });
+
+    renderCover();
+
+    expect(await screen.findByText('CS305')).toBeInTheDocument();
+    expect(screen.getByText('Lerato Dlamini')).toBeInTheDocument();
+    expect(screen.getByText('Approved')).toBeInTheDocument();
   });
 });

@@ -139,9 +139,17 @@ function CourseSection({ course, onDecided }) {
 
         {/* Session follow-ups — the excuse / volunteer lifecycle */}
         <div className="p-stack-lg bg-surface-container-low">
-          <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase mb-stack-md">
-            Session follow-ups
-          </h3>
+          <div className="flex items-baseline justify-between gap-stack-md mb-stack-md">
+            <h3 className="font-label-caps text-label-caps text-on-surface-variant uppercase">
+              Session follow-ups
+            </h3>
+            <Link
+              to="/cover"
+              className="font-label-caps text-label-caps text-primary underline-offset-2 hover:underline"
+            >
+              View all cover requests
+            </Link>
+          </div>
           {followUps.length === 0 ? (
             <p className="font-body-sm text-body-sm text-on-surface-variant">
               No follow-ups. Sessions appear here once a tutor excuses themselves or a student

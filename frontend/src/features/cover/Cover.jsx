@@ -7,6 +7,7 @@ import useAsync from '../../hooks/useAsync';
 import { useAuth } from '../context/AuthContext';
 import { formatSessionDate, formatSessionTimeRange } from '../../utils/formatSession';
 import { coverStatusBadge, coverStatusLabel } from './coverFormat';
+import LecturerCover from './LecturerCover.jsx';
 
 // The session cell shared by every table: course, date and slot. The course
 // code and name stay in separate spans, matching the tutor dashboard's rows.
@@ -26,9 +27,11 @@ const StatusPill = ({ status }) => (
   </span>
 );
 
-// The tutor's cover hub: the directed offers waiting on their response, their
-// own excused sessions still needing cover, the offers they sent out, and
-// everything now sitting with the lecturer.
+// The /cover hub is role-aware: tutors get the directed-offer hub below —
+// the offers waiting on their response, their own excused sessions still
+// needing cover, the offers they sent out, and everything now sitting with
+// the lecturer — while lecturers get their own cross-course view
+// (LecturerCover).
 const Cover = () => {
   const navigate = useNavigate();
   const { currentUser, loading } = useAuth();
@@ -47,7 +50,7 @@ const Cover = () => {
     if (loading) return;
     if (!currentUser) {
       navigate('/login');
-    } else if (role !== 'tutor') {
+    } else if (role !== 'tutor' && role !== 'lecturer') {
       navigate('/');
     }
   }, [currentUser, loading, navigate, role]);
@@ -84,7 +87,9 @@ const Cover = () => {
   }, [currentUser, loading, role, fetchData]);
 
   if (loading) return null;
-  if (!currentUser || role !== 'tutor') return null;
+  if (!currentUser || (role !== 'tutor' && role !== 'lecturer')) return null;
+  // Lecturers browse their own cross-course hub over the same route.
+  if (role === 'lecturer') return <LecturerCover />;
 
   const respond = async (sessionId, decision) => {
     setBusyId(sessionId);
@@ -133,6 +138,11 @@ const Cover = () => {
         note: 'You are set to cover this session',
       })),
   ];
+
+  // Approved covers the lecturer signed off — the session now sits on this
+  // tutor's dashboard like any scheduled session, but it is listed here so
+  // the outcome of their offer or volunteer request stays visible.
+  const confirmedCovers = volunteered.filter((session) => session.volunteerStatus === 'APPROVED');
 
   const isBusy = (id) => busyId === id || isLoading;
 
@@ -297,7 +307,7 @@ const Cover = () => {
               )}
             </div>
 
-            <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
+            <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md mb-gutter">
               <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-sm">
                 Awaiting the lecturer&rsquo;s decision
               </h3>
@@ -324,6 +334,43 @@ const Cover = () => {
                           </td>
                           <td className="py-stack-sm px-stack-md">
                             <StatusPill status={session.status} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md">
+              <h3 className="font-headline-md text-headline-md text-on-surface mb-stack-sm">
+                Covers you&rsquo;re confirmed to run
+              </h3>
+              {confirmedCovers.length === 0 ? (
+                <p className="font-body-md text-on-surface-variant py-stack-lg text-center">
+                  No approved covers yet — accepted offers and volunteer requests land here once
+                  the lecturer approves them.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-surface-variant font-label-caps text-label-caps text-on-surface-variant">
+                        <th className="py-stack-sm px-stack-md">Session</th>
+                        <th className="py-stack-sm px-stack-md">Excused by</th>
+                        <th className="py-stack-sm px-stack-md">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-variant font-body-md">
+                      {confirmedCovers.map((session) => (
+                        <tr key={session.id}>
+                          <SessionCell session={session} />
+                          <td className="py-stack-sm px-stack-md">
+                            {session.ledBy ?? 'A tutor'}
+                          </td>
+                          <td className="py-stack-sm px-stack-md">
+                            <StatusPill status={session.volunteerStatus} />
                           </td>
                         </tr>
                       ))}

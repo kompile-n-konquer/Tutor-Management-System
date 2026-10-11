@@ -15,9 +15,9 @@ describe('navConfig — sidebar link source of truth', () => {
     ]);
   });
 
-  test('lecturers see courses, events, timesheets and the lecturer view', () => {
+  test('lecturers see courses, events, cover requests, timesheets and the lecturer view', () => {
     const labels = getNavLinksForRole('lecturer').map((link) => link.label);
-    expect(labels).toEqual(['Courses', 'Events', 'Timesheets', 'Lecturer View']);
+    expect(labels).toEqual(['Courses', 'Events', 'Cover Requests', 'Timesheets', 'Lecturer View']);
   });
 
   test('organisers see courses, events, their board, application review, analytics and timesheets', () => {

@@ -7,7 +7,7 @@ export const NAV_LINKS = [
   { to: "/tutor-dashboard", icon: "assignment_ind", label: "Tutor Dashboard", roles: ["tutor"], section: "main" },
   { to: "/courses", icon: "menu_book", label: "Courses", roles: ["lecturer", "organiser"], section: "general" },
   { to: "/events", icon: "calendar_today", label: "Events", roles: ["tutor", "lecturer", "organiser"], section: "general" },
-  { to: "/cover", icon: "sync_alt", label: "Cover Requests", roles: ["tutor"], section: "general" },
+  { to: "/cover", icon: "sync_alt", label: "Cover Requests", roles: ["tutor", "lecturer"], section: "general" },
   { to: "/applications", icon: "workspace_premium", label: "Applications", roles: ["student", "tutor"], section: "general" },
   { to: "/volunteer", icon: "volunteer_activism", label: "Volunteer View", roles: ["tutor"], section: "general" },
   { to: "/timesheets", icon: "history_edu", label: "Timesheets", roles: ["organiser", "tutor", "lecturer"], section: "general" },

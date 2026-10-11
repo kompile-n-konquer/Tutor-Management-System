@@ -314,7 +314,7 @@ const TimesheetDetails = () => {
                     // Suggest a reason when register mismatches are the blocker
                     const suggested =
                       missingRegister.length > 0
-                        ? `Register mismatch: ${timesheet.tutorName || 'the tutor'} was not marked present on the register for ${missingRegister
+                        ? `You are not marked present on the register for ${missingRegister
                             .map((e) => `${e.courseCode} on ${formatEventDay(e.workDate)}`)
                             .join(', ')}.`
                         : '';

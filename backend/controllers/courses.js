@@ -117,7 +117,10 @@ exports.getCourses = catchAsync(async (req, res, next) => {
     return res.status(200).json([]);
   }
 
+  // A lecturer only sees the courses they created; organisers and admins
+  // administer the whole registry.
   const courses = await prisma.course.findMany({
+    where: role === 'LECTURER' ? { userId: requestingUser.id } : {},
     orderBy: { createdAt: 'desc' },
     include: {
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -148,6 +151,24 @@ exports.getCourses = catchAsync(async (req, res, next) => {
 });
 
 exports.getCourse = catchAsync(async (req, res, next) => {
+  const requestingUser = await prisma.user.findUnique({
+    where: { firebaseUid: req.user.user_id },
+  });
+  if (!requestingUser) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  // The course detail carries assigned tutor names and emails — staff-only
+  // data. Students and tutors work through GET /applications instead.
+  const role = requestingUser.role.toUpperCase();
+  if (role === 'STUDENT' || role === 'TUTOR') {
+    const error = new Error('Only staff can view the course registry');
+    error.statusCode = 403;
+    return next(error);
+  }
+
   const courseId = Number(req.params.courseId);
   if (!Number.isInteger(courseId)) {
     const error = new Error('courseId must be a number');
@@ -173,6 +194,13 @@ exports.getCourse = catchAsync(async (req, res, next) => {
   if (!course) {
     const error = new Error('Course not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers can only view the courses they created (mirrors events.js)
+  if (role === 'LECTURER' && course.userId !== requestingUser.id) {
+    const error = new Error('You can only view courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 
@@ -239,6 +267,14 @@ exports.updateCourse = catchAsync(async (req, res, next) => {
   if (!course) {
     const error = new Error('Course not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers can only update the courses they created; organisers and
+  // admins allocate across the whole registry by design.
+  if (role === 'LECTURER' && course.userId !== user.id) {
+    const error = new Error('You can only update courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 
@@ -357,6 +393,13 @@ exports.updateCourseSlots = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
+  // Lecturers can only replace the slots of the courses they created
+  if (role === 'LECTURER' && course.userId !== user.id) {
+    const error = new Error('You can only update the slots of courses you have created');
+    error.statusCode = 403;
+    return next(error);
+  }
+
   const { slots } = req.body;
   if (!Array.isArray(slots) || slots.length === 0) {
     const error = new Error('At least one tutoring slot is required');
@@ -431,11 +474,18 @@ exports.startApplicationProcess = catchAsync(async (req, res, next) => {
 
   const existingCourses = await prisma.course.findMany({
     where: { id: { in: parsedIds } },
-    select: { id: true },
+    select: { id: true, userId: true },
   });
   if (existingCourses.length !== parsedIds.length) {
     const error = new Error('One or more courses were not found');
     error.statusCode = 404;
+    return next(error);
+  }
+
+  // Lecturers can only open applications on the courses they created
+  if (role === 'LECTURER' && existingCourses.some((course) => course.userId !== user.id)) {
+    const error = new Error('You can only start the application process for courses you have created');
+    error.statusCode = 403;
     return next(error);
   }
 

@@ -187,23 +187,8 @@ export default function Sidebar({ desktop = false, expanded = true, open = false
           </div>
         </div>
 
-        {/* Footer — organiser/lecturer shortcut plus the signed-in user card */}
+        {/* Footer — the signed-in user card */}
         <div className="shrink-0 px-3 pb-3 space-y-stack-sm">
-          {(role === "organiser" || role === "lecturer") && (
-            <button
-              type="button"
-              title="Resolve Conflicts"
-              className={[
-                "flex items-center h-11 rounded-xl bg-urgent-orange text-on-urgent-orange",
-                "font-label-caps text-label-caps transition-opacity hover:opacity-90",
-                rail ? "justify-center" : "justify-center gap-stack-sm px-3",
-              ].join(" ")}
-            >
-              <span className="material-symbols-outlined text-[20px] shrink-0">warning</span>
-              {!rail && "Resolve Conflicts"}
-            </button>
-          )}
-
           <div
             className={`flex items-center rounded-xl bg-sidebar-surface-hover p-2 ${
               rail ? "justify-center" : "gap-3"

@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 
 const { mockAuth, mockPost, mockGet, mockRefreshRole } = vi.hoisted(() => ({
@@ -23,6 +23,9 @@ vi.mock('firebase/app', () => ({
 vi.mock('firebase/auth', () => ({
   getAuth: vi.fn(() => mockAuth),
   createUserWithEmailAndPassword: vi.fn(),
+  setPersistence: vi.fn(() => Promise.resolve()),
+  browserLocalPersistence: { type: 'LOCAL' },
+  browserSessionPersistence: { type: 'SESSION' },
 }));
 vi.mock('../../../utils/axiosInstance.js', () => ({
   default: { post: mockPost, get: mockGet },
@@ -33,17 +36,19 @@ vi.mock('../../../hooks/useAuth.js', () => ({
   default: () => ({ refreshRole: mockRefreshRole }),
 }));
 
-import Signup from './Signup.jsx';
+import AuthOverlayProvider from './AuthOverlayProvider.jsx';
+import SignupForm from './SignupForm.jsx';
 
-const renderSignup = () =>
+const renderSignupForm = () =>
   render(
-    <MemoryRouter initialEntries={['/signup']}>
-      <Routes>
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/tutor-dashboard" element={<div>tutor-dashboard-page</div>} />
-        <Route path="/volunteer" element={<div>volunteer-page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthOverlayProvider>
+      <MemoryRouter initialEntries={['/signup']}>
+        <Routes>
+          <Route path="*" element={<SignupForm />} />
+          <Route path="/tutor-dashboard" element={<div>tutor-dashboard-page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthOverlayProvider>,
   );
 
 const fillSignupForm = (overrides = {}) => {
@@ -60,13 +65,15 @@ const fillSignupForm = (overrides = {}) => {
   }
 };
 
-describe('Signup — Firebase account + backend profile creation', () => {
+describe('SignupForm — overlay Firebase account + backend profile creation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The remember-device preference lives in localStorage — keep tests isolated.
+    window.localStorage.clear();
   });
 
   test('keeps the create-account button disabled until the form is complete', () => {
-    renderSignup();
+    renderSignupForm();
 
     expect(screen.getByRole('button', { name: /create account/i })).toBeDisabled();
 
@@ -75,7 +82,7 @@ describe('Signup — Firebase account + backend profile creation', () => {
   });
 
   test('stays disabled while any required field is empty', () => {
-    renderSignup();
+    renderSignupForm();
 
     fillSignupForm({ 'Last Name': '' });
     expect(screen.getByRole('button', { name: /create account/i })).toBeDisabled();
@@ -85,7 +92,7 @@ describe('Signup — Firebase account + backend profile creation', () => {
     createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-42' } });
     mockPost.mockResolvedValue({ status: 201 });
     mockRefreshRole.mockResolvedValue({ role: 'tutor' });
-    renderSignup();
+    renderSignupForm();
 
     fillSignupForm();
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
@@ -111,11 +118,34 @@ describe('Signup — Firebase account + backend profile creation', () => {
     expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
   });
 
+  test('holds the overlay on a skeleton while the role is refreshed', async () => {
+    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-42' } });
+    mockPost.mockResolvedValue({ status: 201 });
+    let resolveRefresh;
+    mockRefreshRole.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    renderSignupForm();
+
+    fillSignupForm();
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    // The skeleton replaces the form while refreshRole is in flight, so the
+    // landing page behind the overlay is never exposed mid-hand-off.
+    expect(await screen.findByText('Preparing your dashboard…')).toBeInTheDocument();
+    expect(screen.queryByLabelText('First Name')).not.toBeInTheDocument();
+
+    resolveRefresh({ role: 'tutor' });
+    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+  });
+
   test('shows the mapped Firebase error and never calls the backend on failure', async () => {
     createUserWithEmailAndPassword.mockRejectedValue(
       new FirebaseError('auth/email-already-in-use', 'raw'),
     );
-    renderSignup();
+    renderSignupForm();
 
     fillSignupForm();
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
@@ -125,41 +155,42 @@ describe('Signup — Firebase account + backend profile creation', () => {
     expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
   });
 
-  test('keeps the user on the form when the backend profile creation fails', async () => {
-    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-7' } });
-    mockPost.mockResolvedValue({ status: 400 });
-    renderSignup();
+  test('offers the login switch instead of navigating to /login', () => {
+    renderSignupForm();
 
-    fillSignupForm();
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
-
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/users', expect.anything()));
-    expect(mockRefreshRole).not.toHaveBeenCalled();
-    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
   });
 
-  test('sends a profile without a role to the student home', async () => {
-    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-8' } });
+  test('checks Remember this Device by default and stores the device trust before creating the account', async () => {
+    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-42' } });
     mockPost.mockResolvedValue({ status: 201 });
-    mockRefreshRole.mockResolvedValue(null);
-    renderSignup();
+    mockRefreshRole.mockResolvedValue({ role: 'tutor' });
+    renderSignupForm();
+
+    expect(screen.getByRole('checkbox', { name: /remember this device/i })).toBeChecked();
 
     fillSignupForm();
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
 
-    expect(await screen.findByText('volunteer-page')).toBeInTheDocument();
+    await waitFor(() => expect(setPersistence).toHaveBeenCalledWith(mockAuth, browserLocalPersistence));
+    // Persistence is pointed at the tier before the account is created.
+    expect(setPersistence.mock.invocationCallOrder[0]).toBeLessThan(
+      createUserWithEmailAndPassword.mock.invocationCallOrder[0],
+    );
   });
 
-  test('maps an unknown role to the volunteer fallback route', async () => {
-    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-9' } });
+  test('opting out of device trust persists the choice and uses session persistence', async () => {
+    createUserWithEmailAndPassword.mockResolvedValue({ user: { uid: 'uid-42' } });
     mockPost.mockResolvedValue({ status: 201 });
-    mockRefreshRole.mockResolvedValue({ role: 'MYSTERY' });
-    renderSignup();
+    mockRefreshRole.mockResolvedValue({ role: 'tutor' });
+    renderSignupForm();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /remember this device/i }));
+    expect(window.localStorage.getItem('tutorflow-remember-device')).toBe('false');
 
     fillSignupForm();
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
 
-    expect(await screen.findByText('volunteer-page')).toBeInTheDocument();
+    await waitFor(() => expect(setPersistence).toHaveBeenCalledWith(mockAuth, browserSessionPersistence));
   });
 });

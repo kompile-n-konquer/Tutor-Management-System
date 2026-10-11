@@ -4,10 +4,13 @@ import AppLayout from "../../components/layout/AppLayout";
 import Button from "../../components/button/Button";
 import Input from "../../components/input/Input";
 import ErrorMessage from "../../components/error-message/ErrorMessage";
+import useAuth from "../../hooks/useAuth";
 import api from "../../utils/axiosInstance";
 
 export default function TutorApplication() {
   const navigate = useNavigate();
+  const { currentUser, loading: authLoading } = useAuth();
+  const [reloadKey, setReloadKey] = useState(0);
   const [form, setForm] = useState({
     courseId: "",
     courseMark: "",
@@ -25,13 +28,24 @@ export default function TutorApplication() {
   // Courses the student can tutor without their availability clashing with
   // the course's session slots (the lecturer specifies those slots).
   useEffect(() => {
+    if (!authLoading && !currentUser) navigate("/login");
+  }, [authLoading, currentUser, navigate]);
+
+  useEffect(() => {
+    // Wait for Firebase to restore the session — fetching before the user is
+    // back sends the request without the ID token and it 401s.
+    if (authLoading || !currentUser?.uid) return;
     let cancelled = false;
 
     const fetchEligibleCourses = async () => {
       try {
         const res = await api.get("/onboarding/tutor-eligible-courses");
-        if (!cancelled && res.status === 200) {
+        if (cancelled) return;
+        if (res.status === 200) {
           setEligibleCourses(res.data.eligibleCourses || []);
+          setCoursesError("");
+        } else {
+          setCoursesError(res?.data?.message || "Could not load courses. Please try again.");
         }
       } catch {
         if (!cancelled) {
@@ -48,7 +62,7 @@ export default function TutorApplication() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoading, currentUser?.uid, reloadKey]);
 
   const selectedCourse = eligibleCourses.find((c) => String(c.id) === String(form.courseId));
 
@@ -170,6 +184,17 @@ export default function TutorApplication() {
           {coursesError && (
             <div className="mb-stack-md">
               <ErrorMessage>{coursesError}</ErrorMessage>
+              <button
+                type="button"
+                onClick={() => {
+                  setCoursesError("");
+                  setCoursesLoading(true);
+                  setReloadKey((key) => key + 1);
+                }}
+                className="mt-unit bg-primary text-on-primary px-4 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+              >
+                Try again
+              </button>
             </div>
           )}
 

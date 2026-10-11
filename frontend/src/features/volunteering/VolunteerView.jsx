@@ -3,35 +3,50 @@ import AppLayout from "../../components/layout/AppLayout.jsx";
 import Button from "../../components/button/Button.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import api from "../../utils/axiosInstance.js";
+import useAuth from "../../hooks/useAuth.js";
 import { formatSessionDate, formatSessionTimeRange, sessionDurationHours } from "../../utils/formatSession.js";
 
 export default function VolunteerView() {
+  const { currentUser, loading: authLoading } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [successMessage, setSuccessMessage] = useState("");
   const [volunteeringId, setVolunteeringId] = useState(null);
 
   useEffect(() => {
+    // Wait for Firebase to restore the session before the first fetch — the
+    // axios interceptor reads auth.currentUser at request time and would
+    // otherwise send the request without a token (401 on hard refresh).
+    if (authLoading || !currentUser?.uid) return;
+
     const fetchUnassignedSessions = async () => {
+      setIsLoading(true);
+      setLoadError("");
       try {
         // The endpoint only returns excused sessions for courses where this
         // tutor's own application mark meets the course minimum.
         const response = await api.get("/sessions/unassigned");
         if (response.status !== 200) {
-          setError(response.data?.message || "Could not load volunteer opportunities. Please try again later.");
+          setLoadError(
+            response.data?.message ||
+              response.data?.error ||
+              "Could not load volunteer opportunities. Please try again later."
+          );
           return;
         }
         setSessions(response.data);
       } catch {
-        setError("Could not load volunteer opportunities. Please try again later.");
+        setLoadError("Could not load volunteer opportunities. Please try again later.");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUnassignedSessions();
-  }, []);
+  }, [reloadKey, authLoading, currentUser?.uid]);
 
   const handleVolunteer = async (sessionId) => {
     setVolunteeringId(sessionId);
@@ -83,6 +98,13 @@ export default function VolunteerView() {
                 <div className="h-10 rounded bg-surface-container-high/60 mt-stack-md" />
               </div>
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-wrap items-center gap-stack-md">
+            <div className="flex-1 min-w-64">
+              <ErrorMessage>{loadError}</ErrorMessage>
+            </div>
+            <Button onClick={() => setReloadKey((key) => key + 1)}>Try again</Button>
           </div>
         ) : sessions.length === 0 ? (
           <p className="font-body-md text-on-surface-variant">No sessions currently need a volunteer. Check back later.</p>

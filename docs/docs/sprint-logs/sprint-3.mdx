@@ -1,0 +1,142 @@
+---
+sidebar_position: 3
+title: "Sprint 3"
+dateRange: "[start date — fill in] → [end date — fill in]"
+---
+
+# Sprint 3
+**([start date — fill in] → [end date — fill in])**
+
+*(Mirrors the Gitea Milestone for Sprint 3, used as the sprint's defined goal and scope. Milestone date: 28 Sep 2026.)*
+
+## Goal
+
+Deliver the MS3 testing and quality milestone alongside the stakeholder-driven usability work: full backend and frontend test suites with 90% coverage gates enforced in CI, the accessibility theme system and dark mode prompted by client feedback, the landing page redesign, and the excuse/volunteer tutor workflow.
+
+## Scope — Implementation
+
+- MS3 testing milestone (PR #53): full backend (16 suites / 291 tests) and frontend (34 files / 261 tests) suites, 90% coverage thresholds enforced in CI
+- Timesheet workflow, allocation removal, route wiring, and excuse/volunteer lifecycle covered by new tests
+- Coverage gaps reviewed as a team, identified and logged for follow-up
+- Accessibility theme system (PR #65): light / dark / follow-system modes, high-contrast mode, and colour-vision-deficiency palettes — implemented in response to the 17 Aug client meeting
+- Dark-mode toggle in the top nav (PR #70)
+- Landing page redesign: hero, benefits, features, contact and footer sections rebuilt as a modular Home page
+- Tutor excuse / volunteer feature (PR #48, issue #37): focused tutor dashboard with assigned courses, upcoming sessions, and "Excuse myself" action
+- CI/CD: SonarQube analysis workflow and Ubuntu runner set up
+- Personalised tutor dashboard greeting; custom 404 page
+- Vercel deployment config finalised
+
+## Stakeholder Feedback
+
+The client's Google Form feedback responses informed what we worked on this sprint:
+
+- [Feedback responses (Google Sheets)](https://docs.google.com/spreadsheets/d/1dR0Zjm33K4H9dFHzR67vC4q3cshSmrG80VnppzVAiRc/edit?usp=sharing)
+
+## What Each Member Worked On
+
+### Ndumiso
+
+This sprint I delivered the MS3 testing milestone on PR #53 ("test: full backend + frontend suites, 90% coverage thresholds enforced"), keeping the branch continuously green against a fast-moving main. I expanded the test suites to the intermediate-tier features — timesheet workflow, allocation removal, route wiring, and the excuse/volunteer lifecycle — then merged main (PR #48) into the branch and resolved all eight conflicting files in favour of main's event-driven session model, volunteer lifecycle, tutor-only Volunteer View, and rewritten tutor dashboard. To hold the enforced 90% coverage gates after the merge, I added 21 backend tests to sessionsController.test.js (bringing sessions.js to 99.6% statements / 99.4% branches), realigned five frontend suites to the new skeleton loaders, copy, and feed shapes — including a full rewrite of TutorDashboard.test.jsx — and extended the Profile and EditTimetable tests for role-based session feeds, the locked-slot grid, and profile fallbacks, lifting frontend branch coverage from 83.9% to 94.3%. Along the way I fixed a real unhandled-rejection bug in EditTimetable.jsx, removed stray debug logging, and cleaned useless artefacts (the empty root package-lock.json and an unreferenced screenshot). The sprint closed with both suites fully green (backend: 16 suites / 291 tests; frontend: 34 files / 261 tests), a clean L3 security review, CI green on test-backend, test-frontend, and sonarqube for merge commit `a0ff6c1`, and PR #53 verified mergeable and ready for review.
+
+### Nhlamulo
+
+- Landing page redesign (`Landing.jsx`): header nav ("Benefits" / "Features" / "Contact") now scrolls to same-page anchor sections; hero heading replaced with "Tutoring made easier."; empty gradient placeholder removed.
+- Removed the "Engineered for Efficiency" section and its three cards.
+- New Benefits section — two cards aimed at organisers (allocation board: marks/availability/weekly hour limits) and tutors (timesheets, hour logging, session excusals).
+- New Features section — six brief cards: Allocation Board, Timesheets, Session Excusals, Tutor Applications, Overflow Work, Role-Based Access.
+- "Commitment to Excellence" box: link updated to https://www.wits.ac.za/csam/, copy replaced with the CSAM programmes description.
+- New Contact section — cards for all six team members.
+- Footer simplified to "Tutor Flow" / "COMS3011A — Software Design Project" / "Kompile and Konquer"; Privacy Policy/Terms/Help Center links removed.
+- Section vertical padding reduced (py-32 → py-20) across the page — later implemented and improved by Mogomotsi.
+
+### Mogomotsi
+
+- **Landing page:** replaced the single `Landing.jsx` with a modular Home page split into Navbar, Hero, Benefits, Features, Commitment, Contact and Footer components. Added a landing-specific `brand` and `ink` colour palette and glow shadows to the Tailwind config, merged with the new themed (CSS-variable) palette so no colours were lost. Built an interactive dashboard preview in the hero with Tutor, Organiser and Lecturer tabs showing the app's real pages with sample data. Fixed missing landing page colours after pulling from main.
+- **Excuse / volunteer feature:** removed redundant content from the tutor flow; replaced the generic, complex dashboard with a focused tutor dashboard showing assigned courses, upcoming sessions grouped by day, and an "Excuse myself" action. Excused sessions now show clearly as awaiting a volunteer, with a "Cover needed" prompt linking to the Volunteer View.
+- **CI/CD:** set up the SonarQube analysis workflow and an Ubuntu runner for the pipeline. Updated the workflow so it runs on whichever runner is available instead of being pinned to a tagged machine that could be switched off.
+- **Challenges:** the SonarQube runner dependency (a workflow pinned to one machine's runner tag blocks the whole pipeline when that machine is off), and a merge conflict on the Tailwind config between the landing page branch and main.
+
+### Nduvho
+
+**`feat/session-swaps` — Peer-to-Peer Tutor Session Swaps with Organiser Approval**
+
+- **Swaps list & creation:** tutors can view their swap requests (`/swaps`) and offer one of their allocated sessions in exchange for another tutor's session (`/swaps/new`).
+- **Organiser review:** organisers review, approve, or reject swap requests via `/swap-review`; approved swaps exchange the sessions between tutors.
+- **Backend:** new `SwapRequest` Prisma model with sent/received user relations, `/api/swaps` routes and controller, plus validation rules preventing invalid swaps (own sessions, already-swapped or past sessions).
+- **Email notifications:** swap requested, responded, and reviewed notifications via the existing Resend notifier.
+- **Navigation:** sidebar entries added — "Session Swaps" (tutor) and "Swap Requests" (organiser), integrated with the new section-grouped nav config.
+- **Maintenance:** merged latest main (excuse/volunteer feature, analytics, sidebar sections) with conflicts resolved in `schema.prisma` and `navConfig.js`; all backend (191) and frontend (108) tests passing.
+
+### Tlhalefo
+
+*[To be filled in — what Tlhalefo worked on this sprint.]*
+
+### Kgaogelo
+
+*[To be filled in — what Kgaogelo worked on this sprint.]*
+
+## Sprint Review
+
+### Ndumiso — MS3 Testing & Quality Gate
+
+**The good:** We shipped the MS3 testing milestone on PR #53 with full backend and frontend suites (16 suites / 291 tests and 34 files / 261 tests respectively) and 90% coverage thresholds enforced in CI, so quality can no longer silently regress. Despite main moving twice during the sprint, we resolved all 8–10 conflicting files each time without losing either side's work, kept the branch continuously green, and the test effort paid off beyond coverage — it caught a real unhandled-rejection bug in the availability editor and surfaced stray debug logging. The PR closed the sprint mergeable, CI-green (backend, frontend, SonarQube), and with a clean L3 security review.
+
+**The bad:** Coverage on main's new UI work (dashboard, profile) landed as debt — after the final merge, frontend branch coverage had fallen to 83.9% and needed a late, unplanned push of ~30 tests to recover the gate; ideally those tests would have been written against the feature PR (#48) before it merged, not after. Our frontend tests also proved brittle: main's copy and skeleton-loader changes broke 15+ tests at once, showing we over-assert on exact wording and DOM details rather than behaviour. Finally, long-lived branch-vs-main friction cost us repeated conflict-clearing sessions, and a few hygiene lapses (a debug `console.log` and junk root files) slipped through review and had to be cleaned up here — a reminder to keep PRs short-lived and review hygiene stricter.
+
+### Nhlamulo
+
+We could have done better to work a bit more together and spread the workload over the course of the sprint, but we got the work done, which is what I appreciate about my groupmates. They definitely don't skimp out in putting in the work.
+
+### Mogomotsi
+
+**Next sprint:** With glow shadows, interactive tabs, and new brand colours, run a Lighthouse performance audit on the landing page — make sure it loads quickly, images are compressed, and accessibility (ARIA labels on the interactive tabs) is solid. Also ensure mobile responsiveness for the hero: interactive dashboard previews inside hero sections are notoriously difficult to scale down, so the Tutor, Organiser, and Lecturer tabs must stack or scroll elegantly on mobile devices.
+
+### Nduvho
+
+*[To be filled in — Nduvho's sprint review.]*
+
+### Tlhalefo
+
+*[To be filled in — Tlhalefo's sprint review.]*
+
+### Kgaogelo
+
+*[To be filled in — Kgaogelo's sprint review.]*
+
+## Ceremonies Held
+
+- **Sprint Planning:** done — two working/planning meetings held (25 and 26 September) to discuss and work through what we wanted to implement for Sprint 3.
+- **Daily Standups:** continuing via WhatsApp check-ins — not yet a formal documented ceremony.
+- **Coverage Review:** done — MS3 coverage report reviewed as a team, gaps identified and logged (see logged follow-up gaps below).
+- **Sprint Retrospective:** to be run — Scrum Master to own and document.
+
+## Coverage Review — Gaps Identified and Logged
+
+`npm run test:coverage` was run on both sides. Backend (Jest, two-layer gate: per-module 90% + global ratchet floors) finished at 59.08% statements / 50.00% branches / 63.20% functions / 59.24% lines, with `controllers/timesheets.js` at 99.72% statements and `controllers/allocation.js` at 100% statements — both gate layers pass. Frontend (Vitest, 90% global thresholds) finished at 98.58% / 90.85% / 97.97% / 98.67% — all four metrics above the gate.
+
+Logged follow-up gaps (priority order):
+
+1. `controllers/applications.js`: 0% (327 lines)
+2. `controllers/events.js`: 0% (392 lines)
+3. `controllers/settings.js`: 0% (293 lines)
+4. `controllers/courses.js`: 6.96% (most handlers unexercised)
+5. `controllers/auth.js`: 60.9% (profile-update paths, lines 122–179)
+6. `email/notifier.js`, `email/resend.js`, `email/templates.js`: no tests at all
+7. `utils/availabilityLocks.js`: 27.27%; `utils/systemSettings.js`: 66.66%; `utils/roles.js`: 60%
+
+Frontend residual gaps are branch coverage only, all above 82%: TutorDashboard 82.75%, Signup 83.33%, Profile 85.5%, Timetable 85.18%, VolunteerView 85%.
+
+Ratchet note: the next suite (applications, events, or settings) should raise the global floors in `backend/jest.config.js`, and `timesheets.js` is now a candidate for promotion from the ratchet bucket to the per-module 90% gate list.
+
+**Known open item:** the overflow claim/approval flow cannot be tested because the feature is not implemented — `OverflowWork` exists only as a schema model in `schema.prisma`; there is no controller, route, or frontend code on main. It remains an open backlog item (assigned at the 13 Sep team meeting). When implemented, it must ship with its own suite. This is the one Intermediate-tier item MS3 leaves open on the testing side.
+
+## Evidence
+
+- [x] Gitea Milestone for Sprint 3, with a written goal and scope
+- [x] PR and commit history showing incremental, reviewed delivery (PR #53 mergeable, CI-green, clean L3 security review)
+- [x] CI green on test-backend, test-frontend, and SonarQube for merge commit `a0ff6c1`
+- [x] Coverage report reviewed as a team, gaps identified and logged
+- [x] Accessibility theme system shipped in response to client feedback (24 new tests)
+- [ ] Sprint review held with client tutor — pending
+- [ ] Sprint retrospective notes — pending
+- [ ] Daily standup log — pending, if formally adopted this sprint

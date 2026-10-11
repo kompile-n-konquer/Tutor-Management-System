@@ -115,6 +115,9 @@ const Swaps = () => {
     setSessions(sessionsResponse.data);
     if (swapsResponse.status === 200) {
       setSwaps(swapsResponse.data);
+      setError('');
+    } else {
+      setError(swapsResponse?.data?.message || 'Could not load your swap requests. Please refresh the page.');
     }
     setLoaded(true);
   }, [execute]);
@@ -166,7 +169,21 @@ const Swaps = () => {
           </div>
         </div>
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && (
+          <div className="mb-gutter flex flex-wrap items-center gap-gutter">
+            <ErrorMessage>{error}</ErrorMessage>
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                fetchData();
+              }}
+              className="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+            >
+              Try again
+            </button>
+          </div>
+        )}
         {actionError && <ErrorMessage>{actionError}</ErrorMessage>}
 
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md mb-gutter">

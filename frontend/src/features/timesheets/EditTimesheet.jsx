@@ -77,6 +77,8 @@ const EditTimesheet = () => {
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const nameInputRef = useRef(null);
@@ -173,11 +175,16 @@ const EditTimesheet = () => {
           setEntries([]);
           setOwnClaimedEvents([]);
         }
+        setLoadError('');
+      } else {
+        // A failed load must not fall through to the "new timesheet" editor —
+        // the tutor would unknowingly start a blank draft instead
+        setLoadError(res?.data?.message || 'Could not load the timesheet. Please try again.');
       }
     };
 
     loadTimesheet();
-  }, [currentUser, authLoading, id, execute]);
+  }, [currentUser, authLoading, id, execute, reloadKey]);
 
   // ── Inline name editing ──────────────────────────────────────────────────
 
@@ -330,6 +337,27 @@ const EditTimesheet = () => {
 
   if (authLoading) return null;
   if (!currentUser) return null;
+
+  // The timesheet failed to load — surface it with a retry instead of letting
+  // the page fall through to the "new timesheet" editor
+  if (!timesheet && loadError) {
+    return (
+      <AppLayout role={role} title="Timesheet">
+        <div className="p-gutter md:p-margin-page space-y-gutter">
+          <ErrorMessage>{loadError}</ErrorMessage>
+          <Button
+            className="min-w-32"
+            onClick={() => {
+              setLoadError('');
+              setReloadKey((key) => key + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
 
   // Non-editable timesheets are displayed on the read-only details page — redirect
   // before rendering so the edit UI is never shown for submitted/approved timesheets

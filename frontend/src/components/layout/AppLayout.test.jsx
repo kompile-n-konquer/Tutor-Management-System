@@ -151,7 +151,7 @@ describe("AppLayout docked sidebar (md+)", () => {
     // … while the icon column keeps every item.
     const expected = NAV_LINKS.filter((link) => link.roles.includes("organiser"));
     expect(sidebarElement().querySelectorAll(".material-symbols-outlined")).toHaveLength(
-      expected.length + FOOTER_LINKS.length + 1, // + the Resolve Conflicts shortcut
+      expected.length + FOOTER_LINKS.length,
     );
 
     fireEvent.click(hamburger);
@@ -335,7 +335,7 @@ describe("sidebar navigation icons per role", () => {
     expect(screen.getByText("Account")).toBeInTheDocument();
   });
 
-  test("the Resolve Conflicts shortcut only appears for organisers and lecturers", () => {
+  test("the dead Resolve Conflicts shortcut is gone for every role", () => {
     authState.role = "tutor";
     setViewport({ desktop: true });
     const { unmount } = renderLayout();
@@ -344,6 +344,8 @@ describe("sidebar navigation icons per role", () => {
 
     authState.role = "lecturer";
     renderLayout();
-    expect(screen.getByText("Resolve Conflicts")).toBeInTheDocument();
+    expect(screen.queryByText("Resolve Conflicts")).not.toBeInTheDocument();
+    // The user card is the only thing left in the sidebar footer.
+    expect(screen.getByText("Alex Organiser")).toBeInTheDocument();
   });
 });

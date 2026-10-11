@@ -105,10 +105,12 @@ Legend for the **Access** column: 🔓 no token required, ✅ any authenticated 
 | PUT | `/courses/open-applications` | LECTURER, ORGANISER, ADMIN | Open courses for applications |
 | GET | `/availability` | ✅ | Own availability grid + locked slots |
 | PUT | `/availability` | ✅ | Replace own availability |
-| GET | `/applications` | STUDENT, TUTOR | Tutoring opportunities matching availability |
+| GET | `/applications` | STUDENT, TUTOR | Tutoring opportunities matching availability, annotated with transcript qualification |
 | GET | `/applications/mine` | ✅ | Own course applications |
+| GET | `/applications/transcript` | STUDENT, TUTOR | Own parsed transcript course marks |
+| POST | `/applications/transcript` | STUDENT, TUTOR | Upload a transcript PDF — parsed into verified course marks |
 | GET | `/applications/:courseId` | STUDENT, TUTOR | One opportunity's details |
-| POST | `/applications/:courseId/apply` | STUDENT, TUTOR | Apply with a course mark |
+| POST | `/applications/:courseId/apply` | STUDENT, TUTOR | Apply with a course mark (a verified transcript mark takes precedence) |
 | POST | `/onboarding/apply` | ✅ | Apply for the TUTOR or LECTURER role |
 | GET | `/onboarding/tutor-eligible-courses` | ✅ | Courses that fit the caller's availability |
 | GET | `/onboarding/my-applications` | ✅ | Own role applications |

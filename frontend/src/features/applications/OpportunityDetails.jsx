@@ -81,6 +81,10 @@ const OpportunityDetails = () => {
       setGrid(
         buildGrid(slotsResponse.data, opportunityResponse.data.slots, opportunityResponse.data.lockedSlots)
       );
+      // A mark verified from the uploaded transcript prefills — and locks — the form
+      if (opportunityResponse.data.transcriptMark !== null && opportunityResponse.data.transcriptMark !== undefined) {
+        setMark(String(opportunityResponse.data.transcriptMark));
+      }
       setError('');
     };
 
@@ -97,15 +101,19 @@ const OpportunityDetails = () => {
       day: 'numeric',
     });
 
-  // The apply button stays disabled until a valid mark that meets the minimum is entered
+  // The apply button stays disabled until a valid mark that meets the minimum is entered.
+  // A transcript-verified mark fills the field automatically and cannot be edited —
+  // the backend also replaces a self-declared mark with the verified one
   const parsedMark = Number(mark);
   const markEntered = mark !== '';
   const markValid = markEntered && !Number.isNaN(parsedMark) && parsedMark >= 0 && parsedMark <= 100;
   const belowMinimum = markValid && parsedMark < opportunity?.minimumMark;
   const canSubmit = markValid && !belowMinimum;
+  const markVerified = opportunity?.transcriptMark !== null && opportunity?.transcriptMark !== undefined;
 
   const handleChange = (event) => {
     setError('');
+    if (markVerified) return; // the transcript-verified mark cannot be overridden
     setMark(event.target.value);
   };
 
@@ -284,23 +292,46 @@ const OpportunityDetails = () => {
                 </>
               ) : (
                 <form onSubmit={handleApply}>
-                  <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
-                    Apply to tutor {opportunity.courseCode}
-                  </h2>
+                  <div className="flex flex-wrap items-center justify-between gap-gutter">
+                    <h2 className="font-headline-md text-headline-md font-bold text-on-surface mb-stack-md">
+                      Apply to tutor {opportunity.courseCode}
+                    </h2>
+                    {markVerified && (
+                      <span className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">verified</span>
+                        Verified from your transcript
+                      </span>
+                    )}
+                  </div>
                   <p className="font-body-md text-on-surface-variant mb-stack-md">
-                    Enter the final mark you obtained for {opportunity.courseCode}. You need at least{' '}
-                    <span className="font-data-mono font-semibold text-on-surface">{opportunity.minimumMark}</span>{' '}
-                    to apply.
+                    {markVerified ? (
+                      <>
+                        Your transcript verifies a final mark of{' '}
+                        <span className="font-data-mono font-semibold text-on-surface">
+                          {opportunity.transcriptMark}
+                        </span>{' '}
+                        for {opportunity.courseCode}. You need at least{' '}
+                        <span className="font-data-mono font-semibold text-on-surface">{opportunity.minimumMark}</span>{' '}
+                        to apply.
+                      </>
+                    ) : (
+                      <>
+                        Enter the final mark you obtained for {opportunity.courseCode}. You need at least{' '}
+                        <span className="font-data-mono font-semibold text-on-surface">{opportunity.minimumMark}</span>{' '}
+                        to apply.
+                      </>
+                    )}
                   </p>
 
                   <div className="max-w-sm">
                     <Input
-                      labelText="Your Mark for this Course"
+                      labelText={markVerified ? 'Your Verified Mark for this Course' : 'Your Mark for this Course'}
                       icon="grade"
                       type="number"
                       placeholder="75"
                       value={mark}
                       onChange={handleChange}
+                      disabled={markVerified}
                     />
                   </div>
 

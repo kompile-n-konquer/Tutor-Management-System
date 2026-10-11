@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/button/Button';
@@ -28,6 +28,14 @@ const Applications = () => {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Transcript verification state — the parsed marks qualify the student for
+  // courses whose minimum mark they meet
+  const [transcript, setTranscript] = useState(null);
+  const [transcriptError, setTranscriptError] = useState('');
+  const [qualifiedOnly, setQualifiedOnly] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   const role = currentUser?.role?.toLowerCase();
   const canApply = role === 'student' || role === 'tutor';
 
@@ -44,11 +52,15 @@ const Applications = () => {
     if (loading || !currentUser || !canApply) return;
 
     const loadApplications = async () => {
-      const [opportunitiesResponse, mineResponse] = await execute(() =>
-        Promise.all([api.get('/applications'), api.get('/applications/mine')])
+      const [opportunitiesResponse, mineResponse, transcriptResponse] = await execute(() =>
+        Promise.all([
+          api.get('/applications', { params: qualifiedOnly ? { qualifiedOnly: 'true' } : {} }),
+          api.get('/applications/mine'),
+          api.get('/applications/transcript'),
+        ])
       );
 
-      if (!opportunitiesResponse || !mineResponse) return;
+      if (!opportunitiesResponse || !mineResponse || !transcriptResponse) return;
 
       if (opportunitiesResponse.status !== 200) {
         setError(opportunitiesResponse?.data?.message || 'Could not load the opportunities. Please refresh the page.');
@@ -60,6 +72,13 @@ const Applications = () => {
       } else {
         setError(mineResponse?.data?.message || 'Could not load your applications. Please refresh the page.');
       }
+      // 404 simply means no transcript has been uploaded yet — that is the
+      // normal state for a new student, not an error
+      if (transcriptResponse.status === 200) {
+        setTranscript(transcriptResponse.data);
+      } else {
+        setTranscript(null);
+      }
       if (opportunitiesResponse.status === 200 && mineResponse.status === 200) {
         setError('');
       }
@@ -67,12 +86,37 @@ const Applications = () => {
     };
 
     loadApplications();
-  }, [currentUser, loading, canApply, execute, reloadKey]);
+  }, [currentUser, loading, canApply, execute, reloadKey, qualifiedOnly]);
 
   if (loading) return null;
   if (!currentUser || !canApply) return null;
 
   const formatDate = (isoString) => new Date(isoString).toLocaleDateString();
+
+  const handleTranscriptUpload = async () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) {
+      setTranscriptError('Choose an academic transcript PDF to upload first.');
+      return;
+    }
+
+    setUploading(true);
+    setTranscriptError('');
+
+    const formData = new FormData();
+    formData.append('transcript', file);
+    const response = await execute(() => api.post('/applications/transcript', formData));
+    setUploading(false);
+
+    if (response && response.status === 201) {
+      setTranscript(response.data);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      // The verified marks change which opportunities qualify, so reload the list
+      setReloadKey((key) => key + 1);
+    } else {
+      setTranscriptError(response?.data?.message || 'Could not upload the transcript. Please try again.');
+    }
+  };
 
   return (
     <AppLayout role="student" title="Applications">
@@ -113,6 +157,101 @@ const Applications = () => {
           </p>
         </div>
 
+        {/* Transcript verification — uploaded marks are parsed and used to work out
+            which opportunities the student already qualifies for */}
+        <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md mb-gutter">
+          <div className="flex flex-wrap items-start justify-between gap-gutter">
+            <div className="flex items-start gap-gutter">
+              <span className="material-symbols-outlined text-primary mt-1">verified</span>
+              <div>
+                <h2 className="font-headline-md text-headline-md font-bold text-on-surface">
+                  Transcript Verification
+                </h2>
+                <p className="font-body-md text-on-surface-variant mt-1">
+                  Upload your academic transcript and we will read your final marks to work out
+                  which tutoring opportunities you already qualify for.
+                </p>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={qualifiedOnly}
+                disabled={!transcript}
+                onChange={(event) => setQualifiedOnly(event.target.checked)}
+                className="accent-primary h-4 w-4"
+              />
+              <span className="font-body-sm text-on-surface">Only show courses I qualify for</span>
+            </label>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            aria-label="Academic transcript PDF"
+            onChange={() => setTranscriptError('')}
+          />
+
+          {transcriptError && (
+            <div className="mt-stack-md">
+              <ErrorMessage>{transcriptError}</ErrorMessage>
+            </div>
+          )}
+
+          {transcript ? (
+            <>
+              <div className="mt-stack-md flex flex-wrap items-center gap-gutter">
+                <span className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  {transcript.courses.length} course{transcript.courses.length === 1 ? '' : 's'} verified
+                </span>
+                <span className="font-body-sm text-on-surface-variant font-data-mono">
+                  {transcript.fileName}
+                </span>
+                {transcript.studentNumber && (
+                  <span className="font-body-sm text-on-surface-variant">
+                    Student ID {transcript.studentNumber}
+                  </span>
+                )}
+                <span className="font-body-sm text-outline">Parsed {formatDate(transcript.parsedAt)}</span>
+                <Button
+                  className="min-w-32 ml-auto"
+                  disabled={uploading}
+                  loading={uploading}
+                  onClick={handleTranscriptUpload}
+                >
+                  Replace Transcript
+                </Button>
+              </div>
+              <div className="mt-stack-md flex flex-wrap gap-1">
+                {transcript.courses.map((course) => (
+                  <span
+                    key={course.courseCode}
+                    title={course.courseName}
+                    className="bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-data-mono"
+                  >
+                    {course.courseCode} · {course.mark}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="mt-stack-md flex flex-wrap items-center gap-gutter">
+              <Button
+                className="min-w-48"
+                disabled={uploading}
+                loading={uploading}
+                onClick={handleTranscriptUpload}
+              >
+                Upload Transcript PDF
+              </Button>
+              <span className="font-body-sm text-outline">PDF up to 10 MB. In-progress courses without a final mark are ignored.</span>
+            </div>
+          )}
+        </div>
+
         <div className="bg-surface-container-lowest rounded-xl border border-surface-variant shadow-sm p-stack-md mb-gutter">
           {isLoading && !loaded ? (
             <div className="space-y-stack-sm py-stack-sm" aria-hidden="true">
@@ -142,6 +281,7 @@ const Applications = () => {
                     <th className="py-stack-sm px-stack-md">Tutoring Slots</th>
                     <th className="py-stack-sm px-stack-md">Added</th>
                     <th className="py-stack-sm px-stack-md">Lecturer</th>
+                    <th className="py-stack-sm px-stack-md">Verified Mark</th>
                     <th className="py-stack-sm px-stack-md">Tutors</th>
                     <th className="py-stack-sm px-stack-md">Status</th>
                     <th className="py-stack-sm px-stack-md"></th>
@@ -171,6 +311,21 @@ const Applications = () => {
                         {formatDate(opportunity.createdAt)}
                       </td>
                       <td className="py-stack-sm px-stack-md">{opportunity.lecturer || 'Unknown'}</td>
+                      <td className="py-stack-sm px-stack-md">
+                        {opportunity.transcriptMark === null || opportunity.transcriptMark === undefined ? (
+                          <span className="text-outline" title="Upload your transcript to verify your mark">
+                            —
+                          </span>
+                        ) : opportunity.qualified ? (
+                          <span className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-semibold font-data-mono">
+                            {opportunity.transcriptMark} · Qualifies
+                          </span>
+                        ) : (
+                          <span className="bg-error/10 text-error px-2 py-1 rounded text-xs font-semibold font-data-mono">
+                            {opportunity.transcriptMark} · Below min
+                          </span>
+                        )}
+                      </td>
                       <td className="py-stack-sm px-stack-md">
                         <span className="font-semibold text-on-surface font-data-mono">
                           {opportunity.assignedTutors}/{opportunity.tutorsRequired}

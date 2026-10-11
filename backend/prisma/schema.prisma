@@ -33,6 +33,7 @@ model User {
   swapRequestsSent     SwapRequest[] @relation("SwapRequestsSent")
   swapRequestsReceived SwapRequest[] @relation("SwapRequestsReceived")
   volunteerRequests SessionVolunteer[]
+  transcript       Transcript?
 }
 
 // Join table between User (role TUTOR) and Course — one row records that a user
@@ -77,6 +78,20 @@ model Course {
   timesheetEntries TimesheetEntry[]
   assignments      TutorAssignment[]
   events           Event[]
+}
+
+/// A student's uploaded academic transcript (PDF) parsed into course marks for
+/// verification. One active transcript per user — uploading a new one replaces it.
+/// Parsed courses are stored as a JSON array of { courseCode, courseName, mark };
+/// in-progress courses whose final mark is masked on the transcript are omitted.
+model Transcript {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique // one active transcript per user
+  fileName      String   // stored file name in backend/uploads/
+  studentNumber String?  // student ID printed on the transcript, for organiser reference
+  coursesJson   String   @db.NVarChar(Max) // JSON string of the parsed course marks; a full transcript easily exceeds 1000 chars
+  parsedAt      DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id])
 }
 
 model SystemSetting {

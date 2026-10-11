@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const Input = ({ onChange, type, placeholder, value, labelText, icon, isPassword }) => {
+const Input = ({ onChange, type, placeholder, value, labelText, icon, isPassword, disabled }) => {
     const [showPassword, setShowPassword] = useState(false);
 
     const id = labelText
@@ -33,7 +33,8 @@ const Input = ({ onChange, type, placeholder, value, labelText, icon, isPassword
                     type={inputType}
                     placeholder={placeholder}
                     onChange={onChange}
-                    className={`peer w-full rounded-DEFAULT border-outline-variant bg-surface py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm ${
+                    disabled={disabled}
+                    className={`peer w-full rounded-DEFAULT border-outline-variant bg-surface py-2 font-body-md text-on-surface placeholder:text-outline focus:border-primary focus:bg-surface-container-lowest transition-colors h-11 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${
                         icon ? "pl-10" : "px-4"
                     } ${isPassword ? "pr-10" : icon ? "pr-4" : ""}`}
                 />

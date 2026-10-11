@@ -3,6 +3,12 @@ const catchAsync = require('../utils/catchAsync');
 const getLockedSlots = require('../utils/availabilityLocks');
 const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
 const { slotHours } = require('../utils/claimRules');
+const { parseTranscriptPdf, buildMarkLookup, lookupMark } = require('../utils/transcriptParser');
+const fs = require('fs');
+const path = require('path');
+
+// Uploaded transcripts live in the same uploads directory as the claim template
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
 // Only students and tutors take part in the tutor application workflow
 const isApplicantRole = (role) => role === 'STUDENT' || role === 'TUTOR';
@@ -35,6 +41,18 @@ const assignedWeeklyHours = async (userId) => {
     (total, assignment) => total + weeklyClaimableHours(assignment.course.slots),
     0
   );
+};
+
+// The user's verified transcript marks indexed for registry-code lookup, or
+// null when no transcript has been uploaded or its stored JSON is unreadable
+const getTranscriptLookup = async (userId) => {
+  const transcript = await prisma.transcript.findUnique({ where: { userId } });
+  if (!transcript) return null;
+  try {
+    return buildMarkLookup(JSON.parse(transcript.coursesJson));
+  } catch (error) {
+    return null;
+  }
 };
 
 // Shapes a course (with its slots + owner) into the opportunity payload for students
@@ -74,7 +92,7 @@ exports.getOpportunities = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  const [courses, availability, applications] = await Promise.all([
+  const [courses, availability, applications, transcriptLookup] = await Promise.all([
     prisma.course.findMany({
       where: { acceptingApplications: true },
       include: {
@@ -92,14 +110,30 @@ exports.getOpportunities = catchAsync(async (req, res, next) => {
       select: { dayOfWeek: true, timeSlotId: true },
     }),
     prisma.application.findMany({ where: { userId: user.id } }),
+    getTranscriptLookup(user.id),
   ]);
 
   // Only courses whose tutoring slots all fall inside the user's availability are returned,
-  // and courses already applied to are excluded — they count as applications, not opportunities
+  // and courses already applied to are excluded — they count as applications, not opportunities.
+  // Each opportunity carries the user's verified transcript mark for the course so the
+  // qualification against the minimum mark can be shown (null = not on the transcript)
   const appliedCourseIds = new Set(applications.map((application) => application.courseId));
-  const opportunities = courses
+  let opportunities = courses
     .filter((course) => coversAllSlots(course.slots, availability) && !appliedCourseIds.has(course.id))
-    .map((course) => serializeOpportunity(course));
+    .map((course) => {
+      const transcriptMark = transcriptLookup ? lookupMark(transcriptLookup, course.courseCode) : null;
+      return {
+        ...serializeOpportunity(course),
+        transcriptMark,
+        qualified: transcriptMark === null ? null : transcriptMark >= course.minimumMark,
+      };
+    });
+
+  // ?qualifiedOnly=true narrows the list to the courses whose minimum mark the
+  // verified transcript marks already meet
+  if (req.query.qualifiedOnly === 'true' && transcriptLookup) {
+    opportunities = opportunities.filter((opportunity) => opportunity.qualified === true);
+  }
 
   res.status(200).json(opportunities);
 });
@@ -170,18 +204,23 @@ exports.getOpportunity = catchAsync(async (req, res, next) => {
 
   // Hours cap: once the organiser has set a maximum, the page replaces the apply form with a
   // notice when accepting this course would push the student above it
-  const [maxClaimableHours, assignedHours] = await Promise.all([
+  const [maxClaimableHours, assignedHours, transcriptLookup] = await Promise.all([
     getTutorMonthlyClaimableHours(),
     assignedWeeklyHours(user.id),
+    getTranscriptLookup(user.id),
   ]);
   const hoursExceeded =
     maxClaimableHours !== null && assignedHours + weeklyClaimableHours(course.slots) > maxClaimableHours;
+
+  const transcriptMark = transcriptLookup ? lookupMark(transcriptLookup, course.courseCode) : null;
 
   res.status(200).json({
     ...serializeOpportunity(course),
     assignedHours,
     maxClaimableHours,
     hoursExceeded,
+    transcriptMark,
+    qualified: transcriptMark === null ? null : transcriptMark >= course.minimumMark,
     lockedSlots: course.slots
       .filter((slot) => lockedKeys.has(`${slot.dayOfWeek}-${slot.timeSlotId}`))
       .map((slot) => ({ dayOfWeek: slot.dayOfWeek, timeSlotId: slot.timeSlotId })),
@@ -265,9 +304,17 @@ exports.createApplication = catchAsync(async (req, res, next) => {
     return next(error);
   }
 
-  if (parsedCourseMark < course.minimumMark) {
+  // A verified transcript mark, when the transcript covers this course, replaces
+  // the self-declared one — a typed-in mark cannot override the official record
+  const transcriptLookup = await getTranscriptLookup(user.id);
+  const verifiedMark = transcriptLookup ? lookupMark(transcriptLookup, course.courseCode) : null;
+  const finalMark = verifiedMark ?? parsedCourseMark;
+
+  if (finalMark < course.minimumMark) {
     const error = new Error(
-      `Your mark does not meet the minimum mark of ${course.minimumMark} required for this course`
+      verifiedMark === null
+        ? `Your mark does not meet the minimum mark of ${course.minimumMark} required for this course`
+        : `Your verified transcript mark (${verifiedMark}) does not meet the minimum mark of ${course.minimumMark} required for this course`
     );
     error.statusCode = 403;
     return next(error);
@@ -292,7 +339,7 @@ exports.createApplication = catchAsync(async (req, res, next) => {
     data: {
       userId: user.id,
       courseId: course.id,
-      courseMark: parsedCourseMark,
+      courseMark: finalMark,
     },
   });
 
@@ -300,6 +347,7 @@ exports.createApplication = catchAsync(async (req, res, next) => {
     id: application.id,
     courseId: application.courseId,
     courseMark: application.courseMark,
+    markVerified: verifiedMark !== null,
     status: application.status,
     appliedAt: application.appliedAt,
   });
@@ -336,4 +384,124 @@ exports.getMyApplications = catchAsync(async (req, res, next) => {
       appliedAt: application.appliedAt,
     }))
   );
+});
+
+// --- Academic transcript upload and verification ---
+
+// Accepts a transcript PDF, parses the completed courses and their final marks
+// out of it, and stores them as the user's verified marks. Uploading again
+// replaces the previous transcript (and deletes its file from disk).
+exports.uploadTranscript = catchAsync(async (req, res, next) => {
+  const firebaseUid = req.user.user_id;
+
+  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  const role = user.role.toUpperCase();
+  if (!isApplicantRole(role)) {
+    const error = new Error('Only students and tutors can upload an academic transcript');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  if (!req.file) {
+    const error = new Error('No PDF file was provided');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  let parsed;
+  try {
+    parsed = await parseTranscriptPdf(fs.readFileSync(req.file.path));
+  } catch (parseError) {
+    fs.unlink(req.file.path, () => {}); // never keep a file we could not read
+    const error = new Error('The PDF could not be read. Please upload a valid academic transcript');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  if (parsed.courses.length === 0) {
+    fs.unlink(req.file.path, () => {}); // nothing verifiable — do not keep the file
+    const error = new Error('No completed courses with final marks could be read from this transcript');
+    error.statusCode = 400;
+    return next(error);
+  }
+
+  // The new upload replaces the previous one — remove the old file from disk
+  const existing = await prisma.transcript.findUnique({ where: { userId: user.id } });
+  if (existing) {
+    const oldPath = path.join(UPLOADS_DIR, existing.fileName);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const transcript = await prisma.transcript.upsert({
+    where: { userId: user.id },
+    update: {
+      fileName: req.file.filename,
+      studentNumber: parsed.studentNumber,
+      coursesJson: JSON.stringify(parsed.courses),
+      parsedAt: new Date(),
+    },
+    create: {
+      userId: user.id,
+      fileName: req.file.filename,
+      studentNumber: parsed.studentNumber,
+      coursesJson: JSON.stringify(parsed.courses),
+    },
+  });
+
+  res.status(201).json({
+    id: transcript.id,
+    fileName: transcript.fileName,
+    studentNumber: transcript.studentNumber,
+    parsedAt: transcript.parsedAt,
+    courses: parsed.courses,
+  });
+});
+
+// Returns the marks parsed from the user's currently uploaded transcript
+exports.getMyTranscript = catchAsync(async (req, res, next) => {
+  const firebaseUid = req.user.user_id;
+
+  const user = await prisma.user.findUnique({ where: { firebaseUid } });
+  if (!user) {
+    const error = new Error('User not found. Please check if the user exists');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  const role = user.role.toUpperCase();
+  if (!isApplicantRole(role)) {
+    const error = new Error('Only students and tutors can view their academic transcript');
+    error.statusCode = 403;
+    return next(error);
+  }
+
+  const transcript = await prisma.transcript.findUnique({ where: { userId: user.id } });
+  if (!transcript) {
+    const error = new Error('No transcript has been uploaded yet');
+    error.statusCode = 404;
+    return next(error);
+  }
+
+  let courses;
+  try {
+    courses = JSON.parse(transcript.coursesJson);
+  } catch (parseError) {
+    const error = new Error('The stored transcript could not be read. Please upload it again');
+    error.statusCode = 500;
+    return next(error);
+  }
+
+  res.status(200).json({
+    id: transcript.id,
+    fileName: transcript.fileName,
+    studentNumber: transcript.studentNumber,
+    parsedAt: transcript.parsedAt,
+    courses,
+  });
 });

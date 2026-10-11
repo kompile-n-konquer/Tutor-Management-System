@@ -175,7 +175,7 @@ function Pool({ id, label, count, tutors, cardRefs, focus, onCardKeyDown, onCard
 }
 
 export default function Organiser() {
-  const { currentUser, role } = useAuth();
+  const { currentUser, role, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [availableTutors, setAvailableTutors] = useState([]);
@@ -183,6 +183,7 @@ export default function Organiser() {
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [poolsLoading, setPoolsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [dragOverPool, setDragOverPool] = useState(null);
   const [mutatingId, setMutatingId] = useState(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
@@ -258,8 +259,13 @@ export default function Organiser() {
   const course = courses.find((c) => c.id === selectedCourse);
   const pools = { available: availableTutors, allocated: allocatedTutors };
 
-  // Fetch the course list once on mount
+  // Fetch the course list once Firebase has restored the session, and again
+  // whenever the Try again button bumps reloadKey after a failed load.
   useEffect(() => {
+    // Wait for auth to settle before the first fetch — the axios interceptor
+    // reads auth.currentUser at request time and would otherwise send the
+    // request without a token (401 on hard refresh).
+    if (authLoading || !currentUser?.uid) return;
     let cancelled = false;
 
     async function fetchCourses() {
@@ -276,6 +282,12 @@ export default function Organiser() {
           if (mappedCourses.length > 0 && selectedCourse == null) {
             setSelectedCourse(mappedCourses[0].id);
           }
+        } else {
+          setFetchError(
+            coursesRes?.data?.message ||
+              coursesRes?.data?.error ||
+              "Could not load the courses. Please try again."
+          );
         }
       } catch (err) {
         if (!cancelled) setFetchError(err.message || "Network error");
@@ -287,7 +299,7 @@ export default function Organiser() {
     fetchCourses();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, currentUser?.uid, reloadKey]);
 
   // Fetch the tutor pools for the selected course. Each course has its own
   // available list (the applicants who applied to tutor that course) and its
@@ -309,14 +321,23 @@ export default function Organiser() {
         ]);
         if (cancelled) return;
 
+        if (availableRes.status !== 200 || assignedRes.status !== 200) {
+          setFetchError(
+            availableRes?.data?.message ||
+              availableRes?.data?.error ||
+              "Could not load the tutors for this course. Please try again."
+          );
+          return;
+        }
+
         setAvailableTutors(
-          availableRes.status === 200 && availableRes.data?.availableTutors
+          availableRes.data?.availableTutors
             ? availableRes.data.availableTutors.slice(0, MAX_AVAILABLE_TUTORS).map(mapApiTutor)
             : [],
         );
 
         setAllocatedTutors(
-          assignedRes.status === 200 && assignedRes.data?.assignedTutors
+          assignedRes.data?.assignedTutors
             ? assignedRes.data.assignedTutors.map(mapApiAssignedTutor)
             : [],
         );
@@ -329,7 +350,7 @@ export default function Organiser() {
 
     fetchPools();
     return () => { cancelled = true; };
-  }, [selectedCourse]);
+  }, [selectedCourse, reloadKey]);
 
   // Refetch tutor pools after mutations (courses stay stable)
   async function refetchPools(courseId) {
@@ -758,6 +779,14 @@ export default function Organiser() {
               <div className="text-center">
                 <span className="material-symbols-outlined text-4xl text-urgent-orange">error</span>
                 <p className="font-body-sm text-on-surface-variant mt-stack-sm">{fetchError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((key) => key + 1)}
+                  className="mt-stack-md inline-flex items-center gap-2 bg-primary text-on-primary px-stack-md py-stack-sm rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+                >
+                  <span className="material-symbols-outlined text-lg">refresh</span>
+                  Try again
+                </button>
               </div>
             </div>
           ) : !course ? (

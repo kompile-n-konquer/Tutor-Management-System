@@ -13,32 +13,43 @@ const STATUS_BADGE = {
 
 export default function OnboardingHub() {
   const navigate = useNavigate();
-  const { role, loading: authLoading } = useAuth();
+  const { loading: authLoading, currentUser } = useAuth();
   const { execute } = useAsync();
 
   const [applications, setApplications] = useState([]);
   const [hasAvailability, setHasAvailability] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (!authLoading && !currentUser) navigate("/login");
+  }, [authLoading, currentUser, navigate]);
+
+  useEffect(() => {
+    // Wait for Firebase to restore the session — fetching before the user is
+    // back sends the request without the ID token and it 401s.
+    if (authLoading || !currentUser?.uid) return;
     let cancelled = false;
 
     async function load() {
       const res = await execute(() => api.get("/onboarding/my-applications"));
-      if (!cancelled && res?.status === 200) {
+      if (cancelled) return;
+      if (res?.status === 200) {
         setApplications(res.data.applications || []);
         setHasAvailability(res.data.hasAvailability ?? false);
+        setLoadError("");
+      } else {
+        setLoadError(res?.data?.message || "Could not load your applications. Please try again.");
       }
-      if (!cancelled) setLoadingData(false);
+      setLoadingData(false);
     }
 
     load();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading]);
+  }, [authLoading, currentUser?.uid, reloadKey, execute]);
 
   if (authLoading || loadingData) {
     return (
@@ -81,6 +92,23 @@ export default function OnboardingHub() {
             Apply to become a Tutor or Lecturer. Your application will be reviewed by an organiser.
           </p>
         </div>
+
+        {loadError && (
+          <div className="bg-surface-container-lowest p-stack-md rounded-xl border border-outline-variant shadow-bento flex flex-wrap items-center justify-between gap-stack-md">
+            <p className="font-body-md text-on-surface">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoadError("");
+                setLoadingData(true);
+                setReloadKey((key) => key + 1);
+              }}
+              className="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-caps text-label-caps hover:opacity-90 transition-opacity"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {/* ── Role option cards ─────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">

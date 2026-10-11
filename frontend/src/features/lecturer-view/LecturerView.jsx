@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout.jsx";
 import ErrorMessage from "../../components/error-message/ErrorMessage.jsx";
 import { minutesToLabel } from "../../components/slot-grid/SlotGrid.jsx";
 import api from "../../utils/axiosInstance.js";
+import { useAuth } from "../context/AuthContext";
 import { formatSessionDate, formatSessionTimeRange } from "../../utils/formatSession.js";
 
 const startOfToday = () => {
@@ -223,11 +224,15 @@ function CourseSection({ course, onDecided }) {
 }
 
 export default function LecturerView() {
+  const navigate = useNavigate();
+  const { currentUser, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   const fetchLecturerCourses = useCallback(async () => {
+    setIsLoading(true);
     try {
       const response = await api.get("/sessions/lecturer");
       if (response.status !== 200) {
@@ -246,11 +251,18 @@ export default function LecturerView() {
   }, []);
 
   useEffect(() => {
+    if (!authLoading && !currentUser) navigate("/login");
+  }, [authLoading, currentUser, navigate]);
+
+  useEffect(() => {
+    // Wait for Firebase to restore the session — fetching before the user is
+    // back sends the request without the ID token and it 401s.
+    if (authLoading || !currentUser?.uid) return;
     // Wrapped so no state updates run synchronously inside the effect.
     (async () => {
       await fetchLecturerCourses();
     })();
-  }, [fetchLecturerCourses]);
+  }, [fetchLecturerCourses, authLoading, currentUser?.uid, reloadKey]);
 
   return (
     <AppLayout title="Lecturer View">
@@ -264,8 +276,18 @@ export default function LecturerView() {
         </header>
 
         {error && (
-          <div className="mb-stack-lg">
+          <div className="mb-stack-lg space-y-unit">
             <ErrorMessage>{error}</ErrorMessage>
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setReloadKey((key) => key + 1);
+              }}
+              className="cursor-pointer bg-primary text-on-primary rounded-lg px-3 py-1.5 font-label-caps text-label-caps uppercase hover:bg-primary/90 transition-colors"
+            >
+              Try again
+            </button>
           </div>
         )}
 
@@ -297,7 +319,7 @@ export default function LecturerView() {
               </div>
             ))}
           </div>
-        ) : courses.length === 0 ? (
+        ) : !error && courses.length === 0 ? (
           <section className="bg-surface-container-lowest border border-outline-variant rounded-xl p-stack-lg">
             <h2 className="font-headline-md text-headline-md text-on-surface mb-unit">
               No courses yet

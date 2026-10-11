@@ -36,15 +36,16 @@ describe('Sidebar — role-aware navigation rail', () => {
     expect(screen.queryByText('Allocation Board')).not.toBeInTheDocument();
   });
 
-  test('organisers see the board links and no conflict-resolution button', () => {
+  test('organisers see the board links and no dead conflict shortcut', () => {
     renderSidebar('organiser');
 
     expect(screen.getByText('Organiser Board')).toBeInTheDocument();
+    // The old Resolve Conflicts button had no handler — it must not come back.
     expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
     expect(screen.queryByText('Tutor Dashboard')).not.toBeInTheDocument();
   });
 
-  test('lecturers also do not see the conflict-resolution button', () => {
+  test('lecturers no longer see the non-functional Resolve Conflicts shortcut', () => {
     renderSidebar('lecturer');
     expect(screen.queryByText('Resolve Conflicts')).not.toBeInTheDocument();
   });

@@ -1,6 +1,7 @@
 const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const { dayOfWeekFor, deriveTimes } = require('../utils/claimRules');
+const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
 
 // Session lifecycle:
 //   SCHEDULED  — derived from an Event on the tutor's assigned course (never stored)
@@ -371,18 +372,27 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
   });
 
   // The weekly cap the tutor agreed to when their tutor application was
-  // approved — the approved RoleApplication is the only place the schema
-  // stores it, and the dashboard's hours bar is drawn against it.
-  const tutorApplication = await prisma.roleApplication.findFirst({
+  // approved — the approved RoleApplication is the only tutor-specific place
+  // the schema stores it, and the dashboard's hours bar is drawn against it.
+  // Tutors can also reach the role through the organiser's allocation flow,
+  // which promotes an applicant without an application review; for them the
+  // cap is the organiser's Max Claimable Hours setting — the same ceiling the
+  // allocation and application flows already enforce on assigned weekly
+  // hours. A rejected or pending application's declared hours confer nothing,
+  // so they never stand in for the limit.
+  const approvedApplication = await prisma.roleApplication.findFirst({
     where: { userId, requestedRole: 'TUTOR', status: 'APPROVED' },
     orderBy: { submittedAt: 'desc' },
   });
+  const maxHoursPerWeek =
+    approvedApplication?.maxHoursPerWeek ?? (await getTutorMonthlyClaimableHours());
 
   // Allocated hours come from the sessions the tutor still leads, not from
   // the course's slots: excusing oneself (UNASSIGNED) or a pending volunteer
   // (PENDING) immediately reduces the figure. Sessions are dated instances of
   // the course's events, so the hours are counted per teaching week — the
-  // Monday-to-Sunday week of the tutor's next scheduled session.
+  // Monday-to-Sunday week of the tutor's next scheduled session, or the
+  // current calendar week when nothing is ahead.
   const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
   // occurrences is sorted chronologically, so the first entry is the earliest
@@ -393,45 +403,39 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
       occurrence.status === 'SCHEDULED' && occurrence.date.getTime() >= todayStart.getTime(),
   );
 
-  let teachingWeekStart = null;
-  if (myUpcomingSessions.length > 0) {
-    // Session dates are stored at UTC midnight, so the window uses UTC days.
-    teachingWeekStart = new Date(myUpcomingSessions[0].date);
-    teachingWeekStart.setUTCHours(0, 0, 0, 0);
-    teachingWeekStart.setUTCDate(teachingWeekStart.getUTCDate() - ((teachingWeekStart.getUTCDay() + 6) % 7));
-  }
-  const teachingWeekEnd = teachingWeekStart
-    ? teachingWeekStart.getTime() + 7 * MILLISECONDS_PER_DAY
-    : null;
+  // The teaching week in focus: the Monday-to-Sunday week of the tutor's next
+  // still-scheduled session. With nothing ahead at all the current calendar
+  // week stands in, so the "This week" card and the per-course allocated
+  // hours keep sharing one window. Days that already passed still count —
+  // they are hours the tutor has led against this week's cap. Session dates
+  // are stored at UTC midnight, so the window uses UTC days.
+  const teachingWeekAnchor =
+    myUpcomingSessions.length > 0 ? myUpcomingSessions[0].date : currentWeekStart;
+  const teachingWeekStart = new Date(teachingWeekAnchor);
+  teachingWeekStart.setUTCHours(0, 0, 0, 0);
+  teachingWeekStart.setUTCDate(teachingWeekStart.getUTCDate() - ((teachingWeekStart.getUTCDay() + 6) % 7));
+  const teachingWeekEnd = teachingWeekStart.getTime() + 7 * MILLISECONDS_PER_DAY;
 
   const inTeachingWeek = (occurrence) => {
-    if (!teachingWeekStart) return false;
     const time = occurrence.date.getTime();
     return time >= teachingWeekStart.getTime() && time < teachingWeekEnd;
   };
 
-  // The dashboard's "This week" card answers a different question than the
-  // teaching week above: how much of the tutor's weekly cap does the current
-  // calendar week use? Its window is the Monday-to-Sunday week containing
-  // today, and days that already passed still count — those are hours the
-  // tutor has already led against this week's cap.
-  const currentWeekEnd = currentWeekStart.getTime() + 7 * MILLISECONDS_PER_DAY;
-
+  // The dashboard's "This week" card sums the teaching week in focus, so its
+  // figure always matches the per-course allocated hours on the same screen
+  // instead of reading 0h once the current calendar week has nothing left and
+  // every session sits in the following week. Already-led days of the week
+  // still count — the bar tracks how much of the cap the week has used.
   const weekScheduledHours =
     Math.round(
       occurrences
-        .filter(
-          (occurrence) =>
-            occurrence.status === 'SCHEDULED' &&
-            occurrence.date.getTime() >= currentWeekStart.getTime() &&
-            occurrence.date.getTime() < currentWeekEnd,
-        )
+        .filter((occurrence) => occurrence.status === 'SCHEDULED' && inTeachingWeek(occurrence))
         .reduce((total, occurrence) => total + sessionHours(occurrence), 0) * 10,
     ) / 10;
 
   res.json({
-    maxHoursPerWeek: tutorApplication?.maxHoursPerWeek ?? null,
-    // The current calendar week's own still-scheduled hours — the figure the
+    maxHoursPerWeek,
+    // The teaching-week-in-focus still-scheduled hours — the figure the
     // dashboard's "This week" card and its progress bar are drawn against.
     weekScheduledHours,
     courses: assignments.map((assignment) => ({
@@ -443,14 +447,17 @@ exports.getMySessions = catchAsync(async (req, res, next) => {
       lecturerName: assignment.course.user
         ? `${assignment.course.user.firstName} ${assignment.course.user.lastName}`
         : null,
-      // Hours this tutor is still scheduled to run for the course in the
-      // teaching week — their own sessions only, so excusing one lowers it.
+      // Hours this tutor is scheduled to run for the course in the teaching
+      // week in focus — their own sessions only, past days included so the
+      // rows add up to the card. Excusing one lowers the figure immediately.
       allocatedHours:
         Math.round(
-          myUpcomingSessions
+          occurrences
             .filter(
               (occurrence) =>
-                occurrence.courseId === assignment.course.id && inTeachingWeek(occurrence),
+                occurrence.courseId === assignment.course.id &&
+                occurrence.status === 'SCHEDULED' &&
+                inTeachingWeek(occurrence),
             )
             .reduce((total, occurrence) => total + sessionHours(occurrence), 0) * 10,
         ) / 10,

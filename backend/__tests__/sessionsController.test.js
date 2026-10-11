@@ -14,7 +14,13 @@ jest.mock('../prisma/client', () => ({
   $transaction: jest.fn(),
 }));
 
+// The cap fallback reads the organiser's claimable-hours setting.
+jest.mock('../utils/systemSettings', () => ({
+  getTutorMonthlyClaimableHours: jest.fn(),
+}));
+
 const prisma = require('../prisma/client');
+const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
 const {
   getMySessions,
   getLecturerSessions,
@@ -61,6 +67,8 @@ beforeEach(() => {
   // Run transactional callbacks against the same mock object so the tx.*
   // calls inside the interactive transactions remain observable.
   prisma.$transaction.mockImplementation((callback) => callback(prisma));
+  // Most tests run with no organiser cap configured; cap tests set their own.
+  getTutorMonthlyClaimableHours.mockResolvedValue(null);
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -288,6 +296,10 @@ describe('getMySessions', () => {
     expect(prisma.roleApplication.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 1, requestedRole: 'TUTOR', status: 'APPROVED' } }),
     );
+    // An approved application carrying hours is the cap — no fallback lookup.
+    expect(prisma.roleApplication.findFirst).toHaveBeenCalledTimes(1);
+    // The organiser's claimable-hours setting is never consulted for it.
+    expect(getTutorMonthlyClaimableHours).not.toHaveBeenCalled();
 
     // Only the Monday 08:00–09:30 session counts: 1.5 hours, not the 1.5h
     // excused session nor the other tutor's session.
@@ -300,7 +312,7 @@ describe('getMySessions', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('reports weekScheduledHours for the current Monday-to-Sunday week, separate from the teaching week', async () => {
+  test("reports weekScheduledHours for the week of the tutor's next session, matching the course rows", async () => {
     prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
     prisma.roleApplication.findFirst.mockResolvedValue({ maxHoursPerWeek: 10 });
     prisma.tutorAssignment.findMany.mockResolvedValue([
@@ -318,8 +330,88 @@ describe('getMySessions', () => {
 
     prisma.event.findMany.mockResolvedValue([]);
 
-    // Anchor on the current Monday-to-Sunday week so the test is
-    // date-independent whichever day it runs.
+    // Anchor on the current Monday, then place every fixture session in the
+    // FOLLOWING Monday-to-Sunday week so the test is date-independent
+    // whichever day it runs: that next week is always the teaching week the
+    // card follows — exactly a Saturday dashboard whose remaining sessions
+    // all sit in the coming week.
+    const thisMonday = new Date();
+    thisMonday.setUTCHours(0, 0, 0, 0);
+    thisMonday.setUTCDate(thisMonday.getUTCDate() - ((thisMonday.getUTCDay() + 6) % 7));
+    const nextMonday = new Date(thisMonday.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const dayNext = (offset) => new Date(nextMonday.getTime() + offset * 24 * 60 * 60 * 1000);
+
+    const baseSession = {
+      status: 'SCHEDULED',
+      excuseReason: null,
+      assignment: {
+        userId: 1,
+        courseId: 100,
+        course: { courseCode: 'COMS1015', courseName: 'Introduction to Programming' },
+        user: { firstName: 'Thabo', lastName: 'Demotutor' },
+      },
+      courseSlot: {
+        id: 31,
+        dayOfWeek: 0,
+        venue: 'Lab 2',
+        sessionType: 'Tutorial',
+        timeSlot: { id: 3, startMinute: 480, endMinute: 570 },
+      },
+    };
+
+    prisma.session.findMany.mockResolvedValue([
+      // Next week's Monday and Friday 08:00–09:30 sessions — the hours of the
+      // week the tutor is heading into.
+      { ...baseSession, id: 21, date: dayNext(0) },
+      // Excused next week — excluded from the card.
+      { ...baseSession, id: 22, date: dayNext(2), status: 'UNASSIGNED', excuseReason: 'Medical appointment' },
+      // Another tutor's session next week — never this tutor's hours.
+      { ...baseSession, id: 23, date: dayNext(3), assignment: { ...baseSession.assignment, userId: 9 } },
+      { ...baseSession, id: 24, date: dayNext(4) },
+    ]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    // The card follows the teaching week of the tutor's next still-scheduled
+    // session, so it reports the same 3h the course rows allocate for that
+    // week — never the excused session nor the other tutor's session.
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxHoursPerWeek: 10,
+        weekScheduledHours: 3,
+        courses: [expect.objectContaining({ courseCode: 'COMS1015', allocatedHours: 3 })],
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the current calendar week when the tutor has no sessions ahead', async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    prisma.roleApplication.findFirst.mockResolvedValue({ maxHoursPerWeek: 10 });
+    prisma.tutorAssignment.findMany.mockResolvedValue([
+      {
+        id: 11,
+        semester: '2026-S2',
+        course: {
+          id: 100,
+          courseCode: 'COMS1015',
+          courseName: 'Introduction to Programming',
+          user: { firstName: 'Sarah', lastName: 'Van Wyk' },
+        },
+      },
+    ]);
+
+    prisma.event.findMany.mockResolvedValue([]);
+
+    // Sessions only within the current Monday-to-Sunday week: whichever day
+    // the test runs they are either still ahead (the teaching week is this
+    // week) or already led (the card falls back to this week) — the hours
+    // count either way.
     const thisMonday = new Date();
     thisMonday.setUTCHours(0, 0, 0, 0);
     thisMonday.setUTCDate(thisMonday.getUTCDate() - ((thisMonday.getUTCDay() + 6) % 7));
@@ -353,8 +445,6 @@ describe('getMySessions', () => {
       { ...baseSession, id: 23, date: dayAt(3), assignment: { ...baseSession.assignment, userId: 9 } },
       // Later this week — counts.
       { ...baseSession, id: 24, date: dayAt(4) },
-      // Next week — feeds the teaching-week allocatedHours, not this card.
-      { ...baseSession, id: 25, date: dayAt(8) },
     ]);
 
     const req = mockReq();
@@ -364,14 +454,48 @@ describe('getMySessions', () => {
     await getMySessions(req, res, next);
     await flushMicrotasks();
 
-    // Monday's and Friday's 08:00–09:30 sessions are 3h in the current week;
-    // next Tuesday's 1.5h, the excused session and the other tutor's session
-    // never reach the card.
+    // Monday's and Friday's 08:00–09:30 sessions are 3h; the excused session
+    // and the other tutor's session never reach the card. The rows follow the
+    // same window, so they add up to the card's figure.
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         maxHoursPerWeek: 10,
         weekScheduledHours: 3,
+        courses: [expect.objectContaining({ courseCode: 'COMS1015', allocatedHours: 3 })],
       }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("falls back to the organiser's claimable-hours cap when no approved application carries hours", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: 1, role: 'TUTOR' });
+    // The tutor reached the role through the organiser's allocation flow —
+    // no approved application exists, so the cap is the organiser's Max
+    // Claimable Hours setting, the same ceiling the allocation flow enforces
+    // on assigned weekly hours. A rejected application's declared hours never
+    // stand in for the limit.
+    prisma.roleApplication.findFirst.mockResolvedValue(null);
+    getTutorMonthlyClaimableHours.mockResolvedValue(10);
+    prisma.tutorAssignment.findMany.mockResolvedValue([]);
+    prisma.event.findMany.mockResolvedValue([]);
+    prisma.session.findMany.mockResolvedValue([]);
+
+    const req = mockReq();
+    const res = mockRes();
+    const next = jest.fn();
+
+    await getMySessions(req, res, next);
+    await flushMicrotasks();
+
+    // Only the approved-application lookup runs — there is no second
+    // roleApplication query; the setting is the fallback.
+    expect(prisma.roleApplication.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.roleApplication.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 1, requestedRole: 'TUTOR', status: 'APPROVED' } }),
+    );
+    expect(getTutorMonthlyClaimableHours).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ maxHoursPerWeek: 10, weekScheduledHours: 0 }),
     );
     expect(next).not.toHaveBeenCalled();
   });

@@ -51,6 +51,8 @@ const TimesheetDetails = () => {
   const [rejectionModal, setRejectionModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [localError, setLocalError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
 
   const role = currentUser?.role?.toLowerCase();
@@ -76,11 +78,14 @@ const TimesheetDetails = () => {
           ? raw.filter((e) => e.supervisorId === currentUser.id)
           : raw;
         setEntries(parseEntries(scoped));
+        setLoadError('');
+      } else {
+        setLoadError(tsRes?.data?.message || 'Could not load the timesheet. Please try again.');
       }
     };
 
     loadTimesheet();
-  }, [currentUser, authLoading, id, execute, isLecturer]);
+  }, [currentUser, authLoading, id, execute, isLecturer, reloadKey]);
 
   // ── Redirect unauthenticated users ────────────────────────────────────────
 
@@ -100,6 +105,26 @@ const TimesheetDetails = () => {
 
   if (authLoading) return null;
   if (!currentUser) return null;
+
+  // The load failed — surface it with a retry instead of leaving the skeleton up forever.
+  if (!timesheet && loadError) {
+    return (
+      <AppLayout role={role} title="Timesheet">
+        <div className="p-gutter md:p-margin-page space-y-gutter">
+          <ErrorMessage>{loadError}</ErrorMessage>
+          <Button
+            className="min-w-32"
+            onClick={() => {
+              setLoadError('');
+              setReloadKey((key) => key + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
 
   // Shaped placeholder while the timesheet loads so the page never flashes blank.
   if (!timesheet) {

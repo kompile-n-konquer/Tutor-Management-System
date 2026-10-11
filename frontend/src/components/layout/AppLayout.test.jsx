@@ -303,10 +303,18 @@ describe("sidebar navigation icons per role", () => {
     expect(screen.getByText("Account")).toBeInTheDocument();
   });
 
-  test("the Resolve Conflicts shortcut no longer appears for any role", () => {
+  test("the dead Resolve Conflicts shortcut is gone for every role", () => {
+    authState.role = "tutor";
+    setViewport({ desktop: true });
+    const { unmount } = renderLayout();
+    expect(screen.queryByText("Resolve Conflicts")).not.toBeInTheDocument();
+    unmount();
+
     authState.role = "lecturer";
     setViewport({ desktop: true });
     renderLayout();
     expect(screen.queryByText("Resolve Conflicts")).not.toBeInTheDocument();
+    // The user card is the only thing left in the sidebar footer.
+    expect(screen.getByText("Alex Organiser")).toBeInTheDocument();
   });
 });

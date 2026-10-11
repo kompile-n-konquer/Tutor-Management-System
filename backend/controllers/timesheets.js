@@ -6,6 +6,7 @@ const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { getTutorMonthlyClaimableHours, getTutorEventClaimMonths, HOURLY_RATE_KEYS, PDF_TEMPLATE_KEY } = require('../utils/systemSettings');
 const { monthsBefore, findExcessiveWindow, deriveEventEntry, deriveTimes, dayOfWeekFor } = require('../utils/claimRules');
 const { notifyTimesheetApproved, notifyTimesheetRejected } = require('../email/notifier');
+const { emitDashboardChange } = require('../realtime/io');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
@@ -499,6 +500,14 @@ exports.submitTimesheet = catchAsync(async (req, res, next) => {
     },
   });
 
+  // The supervisors of the submitted entries — a timesheet may span several
+  // courses with different lecturers — each gain a review item, the organiser
+  // queue counts one more, and the tutor's own draft item disappears.
+  const supervisorIds = [...new Set(timesheet.entries.map((entry) => entry.supervisorId))];
+  emitDashboardChange([user.id, ...supervisorIds], 'timesheet-submitted', {
+    includeOrganisers: true,
+  });
+
   res.status(200).json(serializeTimesheet(updated));
 });
 
@@ -564,6 +573,11 @@ exports.approveEntry = catchAsync(async (req, res, next) => {
     // notifier never throws (failures are logged in EmailLog), so a Resend
     // outage can never fail the approval request itself.
     notifyTimesheetApproved(approvedTimesheet).catch(() => {});
+
+    // The tutor's submitted item clears and the organiser queue shrinks.
+    emitDashboardChange([approvedTimesheet.user?.id], 'timesheet-approved', {
+      includeOrganisers: true,
+    });
   }
 
   res.status(200).json({ message: 'Entry approved', allApproved });
@@ -632,6 +646,11 @@ exports.rejectTimesheet = catchAsync(async (req, res, next) => {
   // the recorded reason. The notifier never throws, so a Resend outage can
   // never fail the rejection request itself.
   notifyTimesheetRejected(rejectedTimesheet).catch(() => {});
+
+  // The tutor gains an urgent fix-and-resubmit item; the review queue moves on.
+  emitDashboardChange([rejectedTimesheet.user?.id], 'timesheet-rejected', {
+    includeOrganisers: true,
+  });
 
   res.status(200).json({ message: 'Timesheet rejected', reason: reason.trim() });
 });

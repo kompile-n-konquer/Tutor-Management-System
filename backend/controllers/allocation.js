@@ -3,7 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const { notifyAssignmentAdded, notifyAssignmentRemoved } = require('../email/notifier');
 const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
 const { slotHours } = require('../utils/claimRules');
-const { emitToOrganisers } = require('../realtime/io');
+const { emitToOrganisers, emitDashboardChange } = require('../realtime/io');
 
 // Board mutations are attributed to the signed-in organiser so other
 // organisers see who changed what on the organiser board.
@@ -196,6 +196,9 @@ exports.assignTutor = catchAsync(async (req, res, next) => {
 
   const editor = await editorFromReq(req);
   broadcastAllocationChange('assign', application.courseId, editor);
+  // The newly assigned tutor's dashboard gains the course; an organiser
+  // sitting on the Dashboard (not the board) refreshes its staffing items.
+  emitDashboardChange([application.userId], 'assignment-added', { includeOrganisers: true });
 
   res.status(201).json({ assignment });
 });
@@ -318,6 +321,7 @@ exports.unassignTutor = catchAsync(async (req, res, next) => {
 
   const editor = await editorFromReq(req);
   broadcastAllocationChange('unassign', application.courseId, editor);
+  emitDashboardChange([application.userId], 'assignment-removed', { includeOrganisers: true });
 
   res.status(204).end();
 });
@@ -377,6 +381,7 @@ exports.removeTutor = catchAsync(async (req, res, next) => {
 
   const editor = await editorFromReq(req);
   broadcastAllocationChange('remove', application.courseId, editor);
+  emitDashboardChange([application.userId], 'assignment-removed', { includeOrganisers: true });
 
   res.status(204).end();
 });
@@ -606,6 +611,7 @@ exports.autoAssignTutors = catchAsync(async (req, res, next) => {
   if (createdAssignments.length > 0) {
     const editor = await editorFromReq(req);
     broadcastAllocationChange('auto-assign', course.id, editor);
+    emitDashboardChange(userIds, 'assignment-added', { includeOrganisers: true });
   }
 
   res.status(200).json({

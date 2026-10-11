@@ -7,6 +7,7 @@ const {
   notifySwapResponded,
   notifySwapReviewed,
 } = require('../email/notifier');
+const { emitDashboardChange } = require('../realtime/io');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -460,6 +461,10 @@ exports.createSwap = catchAsync(async (req, res, next) => {
   // Fire-and-forget: the partner is told a swap request is waiting for them
   notifySwapRequested(swap).catch(() => {});
 
+  // The partner's dashboard gains an urgent item; the requester sees the
+  // outgoing offer on theirs.
+  emitDashboardChange([user.id, recipient.id], 'swap-requested');
+
   res.status(201).json(serializeSwap(swap));
 });
 
@@ -523,6 +528,8 @@ exports.acceptSwap = catchAsync(async (req, res, next) => {
   // The requester learns the trade is agreed and now awaits organiser approval
   notifySwapResponded(updated).catch(() => {});
 
+  emitDashboardChange([updated.requesterId, updated.recipientId], 'swap-accepted');
+
   res.status(200).json(serializeSwap(updated));
 });
 
@@ -558,6 +565,8 @@ exports.declineSwap = catchAsync(async (req, res, next) => {
 
   notifySwapResponded(updated).catch(() => {});
 
+  emitDashboardChange([updated.requesterId, updated.recipientId], 'swap-declined');
+
   res.status(200).json(serializeSwap(updated));
 });
 
@@ -585,6 +594,9 @@ exports.cancelSwap = catchAsync(async (req, res, next) => {
     data: { status: 'CANCELLED' },
     include: SWAP_INCLUDE,
   });
+
+  // The partner's incoming item disappears along with the request.
+  emitDashboardChange([updated.requesterId, updated.recipientId], 'swap-cancelled');
 
   res.status(200).json(serializeSwap(updated));
 });
@@ -710,6 +722,11 @@ exports.approveSwap = catchAsync(async (req, res, next) => {
   // Both tutors are told the organiser approved and the sessions moved
   notifySwapReviewed(updated).catch(() => {});
 
+  // Both dashboards change (claims moved) and the organiser queue shrinks.
+  emitDashboardChange([updated.requesterId, updated.recipientId], 'swap-approved', {
+    includeOrganisers: true,
+  });
+
   res.status(200).json(serializeSwap(updated));
 });
 
@@ -749,6 +766,10 @@ exports.rejectSwap = catchAsync(async (req, res, next) => {
   });
 
   notifySwapReviewed(updated).catch(() => {});
+
+  emitDashboardChange([updated.requesterId, updated.recipientId], 'swap-rejected', {
+    includeOrganisers: true,
+  });
 
   res.status(200).json(serializeSwap(updated));
 });

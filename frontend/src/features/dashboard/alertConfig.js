@@ -8,8 +8,8 @@ export const ALERT_ACTIONS = {
   "swap-incoming": { to: "/swaps", actionLabel: "Respond" },
   "swap-outgoing": { to: "/swaps", actionLabel: "View swaps" },
   "swap-accepted": { to: "/swaps", actionLabel: "View swaps" },
-  "cover-awaiting": { to: "/volunteer", actionLabel: "Find cover" },
-  "cover-offered": { to: "/volunteer", actionLabel: "View offer" },
+  "cover-awaiting": { to: "/cover", actionLabel: "Find cover" },
+  "cover-offered": { to: "/cover", actionLabel: "View offer" },
   "timesheet-rejected": { to: "/timesheets", actionLabel: "Fix timesheet" },
   "timesheet-draft": { to: "/timesheets", actionLabel: "Submit hours" },
   // Lecturer items — cover decisions are made on the dashboard itself

@@ -154,6 +154,8 @@ const TimesheetDetails = () => {
   }
 
   const totalHours = entries.reduce((sum, e) => sum + Number(e.duration || 0), 0);
+  const approvedCount = entries.filter((e) => e.status === 'APPROVED').length;
+  const pendingCount = entries.length - approvedCount;
   const statusMessage = STATUS_MESSAGES[timesheet.status] || '';
 
   const pendingEntryIds = entries.filter(
@@ -298,6 +300,17 @@ const TimesheetDetails = () => {
               <span>
                 {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
               </span>
+              {isSubmitted && entries.length > 0 && (
+                <span className={`font-data-mono text-sm px-2 py-0.5 rounded-full ${
+                  approvedCount === entries.length
+                    ? 'bg-success/15 text-success'
+                    : approvedCount > 0
+                      ? 'bg-warning/15 text-warning'
+                      : 'bg-surface-container-high text-on-surface-variant'
+                }`}>
+                  {approvedCount}/{entries.length} approved
+                </span>
+              )}
             </div>
             {isReviewer && isSubmitted && (
               <div className="flex">
@@ -342,6 +355,7 @@ const TimesheetDetails = () => {
                     <th className="py-stack-sm px-stack-md">Date</th>
                     <th className="py-stack-sm px-stack-md">Description</th>
                     <th className="py-stack-sm px-stack-md">Hours</th>
+                    <th className="py-stack-sm px-stack-md">Status</th>
                   </tr>
                 </thead>
                 <tbody className="font-body-md">
@@ -358,6 +372,15 @@ const TimesheetDetails = () => {
                       <td data-label="Hours" className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         {Number(entry.duration)} {Number(entry.duration) === 1 ? 'hr' : 'hrs'}
                       </td>
+                      <td data-label="Status" className="py-stack-sm px-stack-md">
+                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          entry.status === 'APPROVED'
+                            ? 'bg-success/15 text-success'
+                            : 'bg-surface-container-high text-on-surface-variant'
+                        }`}>
+                          {entry.status}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -368,7 +391,11 @@ const TimesheetDetails = () => {
 
         {statusMessage && !isReviewer && (
           <div className="text-center py-stack-md">
-            <p className="font-body-md text-on-surface-variant font-semibold">{statusMessage}</p>
+            <p className="font-body-md text-on-surface-variant font-semibold">
+              {approvedCount > 0 && pendingCount > 0
+                ? `${approvedCount} of ${entries.length} entries approved — ${pendingCount} still awaiting review`
+                : statusMessage}
+            </p>
           </div>
         )}
 

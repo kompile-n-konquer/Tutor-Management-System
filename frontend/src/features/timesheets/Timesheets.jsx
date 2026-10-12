@@ -165,6 +165,16 @@ const Timesheets = () => {
                         >
                           {timesheet.status}
                         </span>
+                        {isLecturer && timesheet.status === 'SUBMITTED' && (() => {
+                          const total = (timesheet.entries || []).length;
+                          const approved = (timesheet.entries || []).filter((e) => e.status === 'APPROVED').length;
+                          if (total === 0 || approved === 0) return null;
+                          return (
+                            <span className="block text-xs text-on-surface-variant mt-1">
+                              {approved}/{total} entries approved
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-stack-sm px-stack-md font-data-mono text-body-sm">
                         <Button

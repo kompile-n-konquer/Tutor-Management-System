@@ -28,8 +28,10 @@ const TIME_RANGE_REGEX = /(\d{1,2})[:.](\d{2})\s*[-\u2013\u2014:]\s*(\d{1,2})[:.
 
 // Items whose baselines differ by at most this many points sit on one line
 const LINE_Y_TOLERANCE = 3;
-// A PDF time label matches a system time slot within this many minutes
-const MINUTE_TOLERANCE = 1;
+// A PDF time label matches a system time slot within this many minutes.
+// Wits periods (e.g. 08:00-08:50) differ from hourly system slots (08:00-09:00),
+// so 15 minutes tolerates the typical 10-minute end-time gap.
+const MINUTE_TOLERANCE = 15;
 // Fallback half-height for the first/last row band when only one row matched
 const EDGE_BAND_HEIGHT = 10;
 
@@ -106,7 +108,9 @@ const columnRanges = (dayColumns) => {
   return ranges;
 };
 
-// Finds the time-label rows that match system time slots, top-down
+// Finds the time-label rows that match system time slots, top-down.
+// Uses overlap detection instead of exact matching: a Wits period (e.g. 9:45-10:15)
+// overlaps with a system slot (e.g. 10:00-11:00) if the ranges intersect.
 const findTimeRows = (lines, timeSlots) => {
   const rows = [];
   for (const line of lines) {
@@ -116,13 +120,14 @@ const findTimeRows = (lines, timeSlots) => {
     while ((match = TIME_RANGE_REGEX.exec(text)) !== null) {
       const start = toMinutes(match[1], match[2]);
       const end = toMinutes(match[3], match[4]);
-      const slot = timeSlots.find(
-        (candidate) =>
-          Math.abs(candidate.startMinute - start) <= MINUTE_TOLERANCE &&
-          Math.abs(candidate.endMinute - end) <= MINUTE_TOLERANCE,
+      // Find system slots that overlap with this PDF period
+      const overlappingSlots = timeSlots.filter(
+        (candidate) => start < candidate.endMinute && end > candidate.startMinute,
       );
-      if (slot && !rows.some((row) => row.timeSlotId === slot.id)) {
-        rows.push({ timeSlotId: slot.id, y: line.y });
+      for (const slot of overlappingSlots) {
+        if (!rows.some((row) => row.timeSlotId === slot.id)) {
+          rows.push({ timeSlotId: slot.id, y: line.y });
+        }
       }
     }
   }

@@ -110,6 +110,11 @@ exports.uploadTimetablePdf = catchAsync(async (req, res, next) => {
       : extraction.warnings.length > 0
         ? `No available slots could be detected. ${extraction.warnings.join(' ')}`
         : 'No available slots could be detected in this PDF.';
+  console.log('[timetable-pdf] extraction result:', {
+    slots: extraction.slots.length,
+    cells: extraction.cells.length,
+    warnings: extraction.warnings,
+  });
   res.status(200).json({ timetablePdf: serializeTimetablePdf(row), extractionMessage: message });
 });
 

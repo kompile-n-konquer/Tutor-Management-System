@@ -1,10 +1,6 @@
 // Thin adapter around pdfjs-dist that pulls positioned text items out of a PDF
 // buffer. Kept separate from the grid logic in timetablePdf.js so the pure
 // parsing rules stay unit-testable without a PDF runtime.
-const path = require('path');
-
-// Standard-14 fonts (Helvetica etc.) need their metrics files at parse time
-const STANDARD_FONTS_DIR = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'standard_fonts');
 
 // Returns [{ str, x, y, width, height }] — PDF coordinates grow upwards, so a
 // smaller y sits lower on the page; x/y mark the text baseline start.
@@ -14,7 +10,7 @@ const readTextItems = async (buffer) => {
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     isEvalSupported: false,
-    standardFontDataUrl: `${STANDARD_FONTS_DIR.replace(/\\/g, '/')}/`,
+    useSystemFonts: true,
   });
 
   const doc = await loadingTask.promise;

@@ -81,6 +81,7 @@ exports.uploadTimetablePdf = catchAsync(async (req, res, next) => {
     extraction = await extractAvailabilityFromPdf(buffer, timeSlots);
   } catch (parseError) {
     await removeUpload(req.file.filename);
+    console.error('[timetable-pdf] extraction failed:', parseError.message);
     const error = new Error('The file could not be read as a PDF timetable');
     error.statusCode = 400;
     return next(error);

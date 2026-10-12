@@ -1,6 +1,8 @@
-# TutorFlow Project
+# TutorFlow — Tutor Management System
 
-Welcome to the TutorFlow repository! This document outlines our project architecture, Git workflow, database setup, local run instructions, and deployment processes.
+TutorFlow is a web-based Tutor Management System that coordinates tutors, lecturers, and organisers
+within a school of mathematics and statistics. It handles course assignments, session scheduling,
+cover requests, timesheets, and analytics — all in real time via Socket.IO.
 
 ## Team Members
 
@@ -11,64 +13,76 @@ Welcome to the TutorFlow repository! This document outlines our project architec
 - **Nhlamulo Mabuza (2819916)**
 - **Tlhalefo Sebaeng (2575338)**
 
+## Tech Stack
+
+| Layer       | Technology                                        |
+|-------------|---------------------------------------------------|
+| Frontend    | React 19, Vite 8, Tailwind CSS 4, Socket.IO Client |
+| Backend     | Node.js 20+, Express 5, Prisma 6, Socket.IO      |
+| Database    | SQL Server (Azure or local Docker container)      |
+| Auth        | Firebase Authentication (Google provider)         |
+| Email       | Resend                                            |
+| Docs        | Docusaurus 3                                      |
+| CI/CD       | Gitea Actions → Azure App Service + Vercel        |
+
+## Prerequisites
+
+- **Node.js 22 LTS** (20.19+ or 22.12+ required by Vite 8). Use `nvm` to manage versions.
+- **npm** (ships with Node.js)
+- **Docker Desktop** — only needed if running the database locally
+- A Firebase project with Authentication enabled (Google provider)
+
+---
+
 ## Project Structure
 
 ```text
 Tutor-Management-System/
-├── README.md
-├── .gitignore
-├── .gitea/
-│   └── workflows/
-│       ├── deploy-docs.yml
-│       └── test.yml
 ├── backend/
-│   └── .gitkeep
+│   ├── __tests__/            # Jest test suites
+│   ├── controllers/          # Express route handlers
+│   ├── email/                # Resend email templates & notifier
+│   ├── firebase/             # Firebase Admin SDK init
+│   ├── middleware/            # Auth, upload middleware
+│   ├── prisma/
+│   │   ├── migrations/       # Committed Prisma migrations
+│   │   ├── schema.prisma     # Database schema (single source of truth)
+│   │   ├── seed.js           # Seed data script
+│   │   └── client.js         # Prisma singleton
+│   ├── realtime/             # Socket.IO server setup & event emitters
+│   ├── routes/               # Express route definitions
+│   ├── utils/                # Claim rules, roles, settings helpers
+│   ├── docker-compose.yml    # Local SQL Server container
+│   ├── index.js              # Express app entry point
+│   └── package.json
 ├── docs/
-│   ├── docs/
-│   │   └── intro.mdx
-│   ├── src/
-│   │   ├── components/
-│   │   │   └── HomepageFeatures/
-│   │   │       ├── index.js
-│   │   │       └── styles.module.css
-│   │   ├── css/
-│   │   │   └── custom.css
-│   │   └── pages/
-│   │       ├── index.js
-│   │       ├── index.module.css
-│   │       └── markdown-page.mdx
-│   ├── static/
-│   │   └── img/
+│   ├── docs/                 # Docusaurus content pages (.mdx)
+│   ├── src/                  # Custom components, CSS, pages
+│   ├── static/               # Images, meeting notes
 │   ├── docusaurus.config.js
-│   ├── package.json
-│   ├── README.md
-│   └── sidebars.js
-└── frontend/
-    ├── .gitignore
-    ├── eslint.config.js
-    ├── index.html
-    ├── package.json
-    ├── README.md
-    ├── tsconfig.app.json
-    ├── tsconfig.json
-    ├── tsconfig.node.json
-    ├── vite.config.ts
-    ├── __tests__/
-    │   └── placeholder.test.js
-    ├── public/
-    └── src/
-        ├── App.css
-        ├── App.tsx
-        ├── assets/
-        ├── index.css
-        └── main.tsx
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # Shared UI components (layout, common)
+│   │   ├── config/           # navConfig, theme
+│   │   ├── features/         # Feature modules (dashboard, cover, etc.)
+│   │   ├── firebase/         # Firebase client SDK config
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── Router.jsx        # Route definitions
+│   │   └── App.jsx           # Root component
+│   ├── .example.env          # Template for Firebase env vars
+│   ├── index.html
+│   ├── vite.config.js
+│   └── package.json
+├── .gitea/workflows/         # CI/CD pipelines
+└── README.md
 ```
 
 ---
 
 # Git Workflow & Contribution Rules
 
-**CRITICAL:** The main branch is locked. **DO NOT push directly to main**. All code must go through a Pull Request (PR) and be approved by at least one team member.
+**CRITICAL:** The `main` branch is locked. **DO NOT push directly to `main`**. All code must go through a Pull Request (PR) and be approved by at least one team member.
 
 ### Step 1: Start with the freshest code
 
@@ -100,7 +114,7 @@ git add .
 git commit -m "feat/chore/fix: clear description of what you did"
 ```
 
-### Step 4: Push to GitHub
+### Step 4: Push to Gitea
 
 ```bash
 git push -u origin <prefix>/<your-branch-name>
@@ -116,20 +130,22 @@ git push -u origin <prefix>/<your-branch-name>
 
 # Database Setup (Prisma)
 
-We are using Prisma ORM with a relational database. To run the backend locally, you must connect to the database instance.
+The backend uses **Prisma ORM** with SQL Server. To run the backend locally you need a database
+connection. You can either use the shared Azure SQL instance (ask a teammate for the connection
+string) or spin up a local Docker container — see **Running the Project Locally** above.
 
-1. **Add the Database URL:**
-   Paste the connection string provided into your local `.env` configuration:
-   ```env
-   DATABASE_URL=""
-   ```
-2. **Generate the Prisma Client & Push Schema:**
-   Run the following commands to synchronize your local application tier with the database specifications:
-   ```bash
-   npm install
-   npx prisma generate
-   npx prisma db push
-   ```
+After setting `DATABASE_URL` in `backend/.env`:
+
+```bash
+cd backend
+npm install
+npx prisma generate       # Generate the Prisma client
+npx prisma migrate deploy # Apply schema to your database
+npm run seed              # Seed sample data (optional)
+```
+
+> **Important:** Only ever run `prisma migrate dev` against your own local database — never against
+> the shared Azure instance. `migrate dev` can prompt for destructive resets.
 
 ---
 
@@ -229,15 +245,133 @@ http://localhost:9000/dashboard?id=YOUR_PROJECT_KEY
 
 # Running the Project Locally
 
-Follow these step-by-step procedures to boot the server instance
+## 1. Clone and install dependencies
 
-### 1. Launching the Backend
+```bash
+git clone https://sdp.ms.wits.ac.za/kompile-n-konquer/Tutor-Management-System.git
+cd Tutor-Management-System
 
-### 2. Launching
+# Install backend dependencies
+cd backend
+npm install
+
+# Install frontend dependencies
+cd ../frontend
+npm install
+
+# (Optional) Install docs dependencies
+cd ../docs
+npm install
+```
+
+## 2. Configure environment variables
+
+### Backend (`backend/.env`)
+
+Create a `backend/.env` file with the following variables:
+
+```env
+# Database — use the shared Azure SQL string, or a local Docker container
+DATABASE_URL="sqlserver://localhost:1433;database=Tutor_DB;user=sa;password=Tutor-pass;trustServerCertificate=true"
+
+# Firebase Admin SDK (server-side token verification)
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----\n"
+
+# Server
+SERVER_PORT=3001
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+
+# Email (optional — only needed for notification features)
+RESEND_API_KEY=re_xxxxx
+EMAIL_FROM=noreply@your-domain.com
+```
+
+### Frontend (`frontend/.env`)
+
+Copy `frontend/.example.env` to `frontend/.env` and fill in your Firebase web-app credentials:
+
+```bash
+cp frontend/.example.env frontend/.env
+```
+
+```env
+VITE_FIREBASE_API_KEY=your-actual-key
+VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project-id.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+VITE_FIREBASE_APP_ID=your-app-id
+VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+## 3. Set up the database
+
+You can either use the **shared Azure SQL database** (ask a teammate for the connection string)
+or run a **local SQL Server container**:
+
+```bash
+# From the backend/ directory
+cd backend
+docker compose up -d            # Start local SQL Server on localhost:1433
+npx prisma migrate deploy       # Apply schema migrations
+npx prisma generate             # Generate the Prisma client
+npm run seed                    # Seed sample data (optional)
+```
+
+> See `backend/LOCAL_DB_SETUP.md` for troubleshooting and reset instructions.
+
+## 4. Start the development servers
+
+Open **two terminals** — one for the backend, one for the frontend:
+
+```bash
+# Terminal 1 — Backend (Express API on port 3001)
+cd backend
+npm run dev
+
+# Terminal 2 — Frontend (Vite dev server on port 5173)
+cd frontend
+npm run dev
+```
+
+The app will be available at **http://localhost:5173**.
+
+## 5. Preview the documentation site (optional)
+
+```bash
+cd docs
+npm run start
+```
+
+Opens at **http://localhost:3000** with hot reload.
+
+---
+
+# Testing
+
+Run the full test suites before pushing or opening a Pull Request.
+
+### Backend (Jest)
+
+```bash
+cd backend
+npm test                  # Run all backend tests
+npm run test:coverage     # With coverage report
+```
+
+### Frontend (Vitest)
+
+```bash
+cd frontend
+npm test                  # Run all frontend tests
+npm run test:coverage     # With coverage report (enforces 90% gate)
+```
+
+---
 
 # CI/CD Pipeline
-
-## Runners
 
 Our CI/CD pipelines run on **Gitea Actions**, which — unlike GitHub Actions — does not provide free
 hosted runners. Jobs only execute while a registered runner is online.
@@ -308,16 +442,3 @@ This opens the site at `http://localhost:3000` with hot reload, so you can see e
 Create a new `.md` or `.mdx` file in `docs/docs/`, add frontmatter at the top (e.g. `sidebar_position: 2`),
 and it will appear in the sidebar automatically. To control its position or grouping manually, edit
 `docs/sidebars.js`.
-
----
-
----
-
-# Testing
-
-To run the complete validation test suite locally before pushing or opening a Pull Request, run the following commands:
-
-```bash
-npm run test
-npm run test -- --coverage
-```

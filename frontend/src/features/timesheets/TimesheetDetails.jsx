@@ -274,7 +274,7 @@ const TimesheetDetails = () => {
           </div>
         )}
 
-        {isLecturer && isSubmitted && missingRegister.length > 0 && (
+        {isSupervisor && isSubmitted && missingRegister.length > 0 && (
           <div className="bg-error/10 border border-error/30 rounded-xl px-stack-md py-stack-sm flex items-start gap-stack-sm">
             <span className="material-symbols-outlined text-[18px] mt-0.5 text-error">warning</span>
             <p className="text-error font-body-sm">

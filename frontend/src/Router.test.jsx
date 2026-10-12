@@ -9,6 +9,8 @@ vi.mock('./firebase/googleProvider', () => ({ default: {} }));
 import router from './Router.jsx';
 import RootLayout from './RootLayout.jsx';
 import ErrorPage from './components/error-page/ErrorPage.jsx';
+import Dashboard from './features/dashboard/Dashboard.jsx';
+import { Navigate } from 'react-router-dom';
 
 describe('Router — application route table', () => {
   test('mounts the root layout with the error boundary', () => {
@@ -28,6 +30,7 @@ describe('Router — application route table', () => {
       'login',
       'forgot-password',
       'confirmation-message',
+      'dashboard',
       'organiser',
       'organiser-analytics',
       'tutor-dashboard',
@@ -62,5 +65,21 @@ describe('Router — application route table', () => {
     });
     // The landing page is the index route.
     expect(children[0].index).toBe(true);
+  });
+
+  test('the unified dashboard replaces the old role dashboards', () => {
+    const children = router.routes[0].children;
+    const byPath = Object.fromEntries(children.map((route) => [route.path, route]));
+
+    // /dashboard mounts the unified page for every staff role.
+    expect(byPath.dashboard.element.type).toBe(Dashboard);
+
+    // The legacy role-dashboard routes are permanent redirects — in-app
+    // navigate() calls and old bookmarks land on the unified page.
+    for (const legacy of ['tutor-dashboard', 'lecturer-view', 'admin-view']) {
+      const element = byPath[legacy].element;
+      expect(element.type).toBe(Navigate);
+      expect(element.props).toMatchObject({ to: '/dashboard', replace: true });
+    }
   });
 });

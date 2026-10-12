@@ -5,7 +5,7 @@ describe('navConfig — sidebar link source of truth', () => {
   test('tutors see the dashboard, events, cover requests, applications, volunteering, timesheets and timetable', () => {
     const labels = getNavLinksForRole('tutor').map((link) => link.label);
     expect(labels).toEqual([
-      'Tutor Dashboard',
+      'Dashboard',
       'Events',
       'Cover Requests',
       'Applications',
@@ -15,26 +15,26 @@ describe('navConfig — sidebar link source of truth', () => {
     ]);
   });
 
-  test('lecturers see courses, events, cover requests, timesheets and the lecturer view', () => {
+  test('lecturers see the dashboard, courses, events, cover requests and timesheets', () => {
     const labels = getNavLinksForRole('lecturer').map((link) => link.label);
-    expect(labels).toEqual(['Courses', 'Events', 'Cover Requests', 'Timesheets', 'Lecturer View']);
+    expect(labels).toEqual(['Dashboard', 'Courses', 'Events', 'Cover Requests', 'Timesheets']);
   });
 
-  test('organisers see courses, events, their board, configurations, application review, analytics and timesheets', () => {
+  test('organisers see the dashboard, allocation, analytics, configurations and applications', () => {
     const labels = getNavLinksForRole('organiser').map((link) => link.label);
-    // Order follows NAV_LINKS: configurations sits directly under the board.
     expect(labels).toEqual([
+      'Dashboard',
+      'Allocation',
+      'Analytics',
       'Courses',
       'Events',
       'Timesheets',
-      'Organiser Board',
       'Configurations',
       'Applications',
-      'Analytics',
     ]);
   });
 
-  test('students see applications, their timetable and onboarding — volunteering is tutor-only', () => {
+  test('students see applications, their timetable and onboarding — no dashboard and no volunteering', () => {
     const labels = getNavLinksForRole('student').map((link) => link.label);
     expect(labels).toEqual([
       'Applications',
@@ -43,9 +43,18 @@ describe('navConfig — sidebar link source of truth', () => {
     ]);
   });
 
-  test('admins only see the admin view', () => {
+  test('admins see the unified dashboard (it replaces the old Admin View)', () => {
     const labels = getNavLinksForRole('admin').map((link) => link.label);
-    expect(labels).toEqual(['Admin View']);
+    expect(labels).toEqual(['Dashboard']);
+  });
+
+  test('every staff role shares one Dashboard entry pointing at /dashboard', () => {
+    for (const role of ['tutor', 'lecturer', 'organiser', 'admin']) {
+      const dashboard = getNavLinksForRole(role).find((link) => link.label === 'Dashboard');
+      expect(dashboard).toMatchObject({ to: '/dashboard', section: 'main' });
+    }
+    // Students have no dashboard items — they keep the volunteer view home.
+    expect(getNavLinksForRole('student').find((link) => link.label === 'Dashboard')).toBeUndefined();
   });
 
   test('returns an empty list for a missing or unknown role', () => {

@@ -3,7 +3,9 @@ const getFirebaseAdmin = require('../firebase/admin');
 const prisma = require('../prisma/client');
 const { normaliseRole } = require('../utils/roles');
 
-// Organisers connected to the board right now: socketId -> { id, name, email }
+// Organisers connected to the board right now: socketId -> { id, name, email }.
+// Presence stays organiser-only — it powers the board's "who else is dragging"
+// indicator, which only makes sense for the roles that share the board.
 const presence = new Map();
 
 let io = null;
@@ -30,7 +32,9 @@ function initSocketServer(httpServer) {
 
   // Authenticate the handshake the same way the REST middleware does: a
   // Firebase ID token in socket.handshake.auth.token, looked up against the
-  // User table, gated to ORGANISER/ADMIN roles.
+  // User table. Every authenticated role is admitted — each socket joins its
+  // own `user:{id}` room so controllers can push dashboard refresh signals to
+  // exactly the people a change affects, on every device they have open.
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
@@ -42,15 +46,11 @@ function initSocketServer(httpServer) {
       const user = await prisma.user.findUnique({ where: { firebaseUid: decoded.uid } });
       if (!user) return next(new Error('User not found'));
 
-      const role = normaliseRole(user.role);
-      if (role !== 'ORGANISER' && role !== 'ADMIN') {
-        return next(new Error('Only organisers can join the board'));
-      }
-
       socket.data.user = {
         id: user.id,
         name: `${user.firstName} ${user.lastName}`.trim(),
         email: user.email,
+        role: normaliseRole(user.role),
       };
       next();
     } catch (error) {
@@ -60,13 +60,24 @@ function initSocketServer(httpServer) {
 
   io.on('connection', (socket) => {
     const user = socket.data.user;
-    presence.set(socket.id, user);
-    socket.join('organisers');
-    broadcastPresence();
+
+    // Everyone gets their own room: targeted events land on every device the
+    // user has open without ever reaching anyone else.
+    socket.join(`user:${user.id}`);
+
+    // The board room and its presence list stay organiser/admin-only — tutors
+    // and lecturers never receive board drag events.
+    const isOrganiser = user.role === 'ORGANISER' || user.role === 'ADMIN';
+    if (isOrganiser) {
+      presence.set(socket.id, user);
+      socket.join('organisers');
+      broadcastPresence();
+    }
 
     // Drag presence: tell every OTHER organiser that this user started or
     // stopped dragging a tutor card.
     socket.on('board:drag', ({ applicantId, applicantName, courseId, pool } = {}) => {
+      if (!isOrganiser) return;
       socket.to('organisers').emit('presence:drag', {
         userId: user.id,
         name: user.name,
@@ -78,12 +89,13 @@ function initSocketServer(httpServer) {
     });
 
     socket.on('board:drag-end', () => {
+      if (!isOrganiser) return;
       socket.to('organisers').emit('presence:drag-end', { userId: user.id });
     });
 
     socket.on('disconnect', () => {
-      presence.delete(socket.id);
-      broadcastPresence();
+      // Only organisers were tracked in the presence map.
+      if (presence.delete(socket.id)) broadcastPresence();
     });
   });
 

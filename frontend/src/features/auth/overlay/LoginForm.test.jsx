@@ -43,7 +43,7 @@ const renderLoginForm = () =>
       <MemoryRouter initialEntries={['/login']}>
         <Routes>
           <Route path="*" element={<LoginForm />} />
-          <Route path="/tutor-dashboard" element={<div>tutor-dashboard-page</div>} />
+          <Route path="/dashboard" element={<div>dashboard-page</div>} />
         </Routes>
       </MemoryRouter>
     </AuthOverlayProvider>,
@@ -58,7 +58,7 @@ const renderLoginFormWithSession = (session) =>
         <MemoryRouter initialEntries={['/login']}>
           <Routes>
             <Route path="*" element={<LoginForm />} />
-            <Route path="/tutor-dashboard" element={<div>tutor-dashboard-page</div>} />
+            <Route path="/dashboard" element={<div>dashboard-page</div>} />
           </Routes>
         </MemoryRouter>
       </AuthOverlayProvider>
@@ -105,7 +105,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     expect(signInWithEmailAndPassword).not.toHaveBeenCalled();
   });
 
-  test('signs in with Firebase and navigates to the tutor dashboard', async () => {
+  test('signs in with Firebase and navigates to the unified dashboard', async () => {
     signInWithEmailAndPassword.mockResolvedValue({ user: { uid: 'user-1' } });
     mockGet.mockResolvedValue({ status: 200, data: { role: 'tutor' } });
     renderLoginForm();
@@ -113,7 +113,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     submitLoginForm('tutor@wits.ac.za', 'password123');
 
     await waitFor(() => expect(signInWithEmailAndPassword).toHaveBeenCalledWith(mockAuth, 'tutor@wits.ac.za', 'password123'));
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
   });
 
   test('holds the overlay on a skeleton while the profile role is resolved', async () => {
@@ -134,7 +134,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
 
     resolveProfile({ status: 200, data: { role: 'tutor' } });
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
   });
 
   test('does not navigate away when the profile lookup fails', async () => {
@@ -145,7 +145,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     submitLoginForm('tutor@wits.ac.za', 'password123');
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/me'));
-    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument();
     // The skeleton hands control back to the login form.
     expect(await screen.findByRole('button', { name: /^log in/i })).toBeInTheDocument();
     expect(screen.queryByText('Preparing your dashboard…')).not.toBeInTheDocument();
@@ -159,17 +159,17 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     submitLoginForm('tutor@wits.ac.za', 'password123');
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/me'));
-    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument();
   });
 
-  test('routes an unknown role to the tutor dashboard fallback', async () => {
+  test('routes an unknown role to the unified dashboard fallback', async () => {
     signInWithEmailAndPassword.mockResolvedValue({ user: { uid: 'user-1' } });
     mockGet.mockResolvedValue({ status: 200, data: { role: 'wizard' } });
     renderLoginForm();
 
     submitLoginForm('wizard@wits.ac.za', 'password123');
 
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
   });
 
   test('shows the mapped Firebase error when the credentials are wrong', async () => {
@@ -181,7 +181,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     submitLoginForm('tutor@wits.ac.za', 'wrong-password');
 
     expect(await screen.findByText('The email or password you entered is incorrect.')).toBeInTheDocument();
-    expect(screen.queryByText('tutor-dashboard-page')).not.toBeInTheDocument();
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument();
   });
 
   test('signs in with Google via a popup when the Google button is clicked', async () => {
@@ -192,7 +192,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
     fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }));
 
     await waitFor(() => expect(signInWithPopup).toHaveBeenCalledWith(mockAuth, mockProvider));
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
   });
 
   test('shows a friendly error when the Google popup is dismissed', async () => {
@@ -274,7 +274,7 @@ describe('LoginForm — overlay email/password + Google sign-in', () => {
 
     // The bypass still re-resolves the role, then jumps straight to the dashboard.
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/users/me'));
-    expect(await screen.findByText('tutor-dashboard-page')).toBeInTheDocument();
+    expect(await screen.findByText('dashboard-page')).toBeInTheDocument();
     expect(signInWithEmailAndPassword).not.toHaveBeenCalled();
   });
 

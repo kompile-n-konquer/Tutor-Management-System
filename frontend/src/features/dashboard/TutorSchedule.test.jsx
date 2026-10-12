@@ -1,12 +1,10 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import ThemeProvider from '../context/ThemeProvider.jsx';
 
-const { mockGet, mockPatch, authState, firstVisitState, mockMarkSeen, mockNavigate } = vi.hoisted(() => ({
+const { mockGet, mockPatch, authState, firstVisitState, mockMarkSeen } = vi.hoisted(() => ({
   mockGet: vi.fn(),
   mockPatch: vi.fn(),
-  mockNavigate: vi.fn(),
   authState: { userProfile: { firstName: 'Thabo' } },
   firstVisitState: { isFirstVisit: false },
   mockMarkSeen: vi.fn(),
@@ -25,23 +23,12 @@ vi.mock('../../hooks/useAuth.js', () => ({
   }),
 }));
 // The walkthrough modal itself is excluded from this branch's coverage scope;
-// stub the hook so tests control whether the dashboard shows it.
+// stub the hook so tests control whether the section shows it.
 vi.mock('../../hooks/useFirstVisit.js', () => ({
   useFirstVisit: () => ({ isFirstVisit: firstVisitState.isFirstVisit, markSeen: mockMarkSeen }),
 }));
-// The layout's global search fetches (/applications or /courses) on mount,
-// which would consume the per-call mock queues these tests rely on.
-vi.mock('../../components/search/GlobalSearch', () => ({
-  default: () => null,
-}));
-// Navigation is spied so tests can assert where buttons route to, while
-// MemoryRouter/Link keep working through the real module.
-vi.mock('react-router-dom', async (importOriginal) => ({
-  ...(await importOriginal()),
-  useNavigate: () => mockNavigate,
-}));
 
-import TutorDashboard from './TutorDashboard.jsx';
+import TutorSchedule from './TutorSchedule.jsx';
 
 // The ledger only shows sessions from today onwards, so fixtures anchor on
 // tomorrow to stay date-independent.
@@ -59,7 +46,7 @@ const makeSession = (overrides = {}) => ({
 });
 
 // The /sessions/mine feed: the courses the tutor leads, their own session
-// ledger, and the weekly-hours figures the dashboard cards are drawn from.
+// ledger, and the weekly-hours figures the cards are drawn from.
 const makeFeed = (overrides = {}) => ({
   courses: [
     {
@@ -78,17 +65,16 @@ const makeFeed = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderDashboard = () =>
+const renderSchedule = () =>
   render(
-    // The page chrome includes the theme toggle, so mount the real provider like the app does.
-    <ThemeProvider>
-      <MemoryRouter>
-        <TutorDashboard />
-      </MemoryRouter>
-    </ThemeProvider>,
+    // The section is embedded in the Dashboard's layout — only the /volunteer
+    // link needs a router.
+    <MemoryRouter>
+      <TutorSchedule />
+    </MemoryRouter>,
   );
 
-describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
+describe('TutorSchedule — the tutor section of the unified Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState.userProfile = { firstName: 'Thabo' };
@@ -98,32 +84,25 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('shows skeleton cards while the sessions are fetched', () => {
     mockGet.mockReturnValue(new Promise(() => {})); // never settles
 
-    const { container } = renderDashboard();
+    const { container } = renderSchedule();
 
     expect(container.querySelectorAll('.animate-pulse')).toHaveLength(2);
     expect(mockGet).toHaveBeenCalledWith('/sessions/mine');
   });
 
-  test('greets the tutor by profile name and offers the first-visit walkthrough', async () => {
+  test('offers the first-visit walkthrough without a page heading of its own', async () => {
     firstVisitState.isFirstVisit = true;
     mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
 
-    renderDashboard();
+    renderSchedule();
 
-    expect(await screen.findByText("Thabo's tutoring schedule")).toBeInTheDocument();
-    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
+    expect(await screen.findByText('Step 1 of 4')).toBeInTheDocument();
+    // Embedded mode: the Dashboard owns the header, so the section renders no
+    // greeting of its own.
+    expect(screen.queryByText(/tutoring schedule/i)).not.toBeInTheDocument();
   });
 
-  test('falls back to a generic heading when the profile has no name', async () => {
-    authState.userProfile = null;
-    mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
-
-    renderDashboard();
-
-    expect(await screen.findByText('Your tutoring schedule')).toBeInTheDocument();
-  });
-
-  test("renders the course context, session ledger and this week's hours", async () => {
+  test('renders the course context, session ledger and this week\'s hours', async () => {
     mockGet.mockResolvedValue({
       status: 200,
       data: makeFeed({
@@ -144,11 +123,10 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
-    expect(await screen.findByText("Thabo's tutoring schedule")).toBeInTheDocument();
     // Course context card: allocated hours and the lecturer.
-    expect(screen.getByText('3 hrs allocated')).toBeInTheDocument();
+    expect(await screen.findByText('3 hrs allocated')).toBeInTheDocument();
     expect(screen.getByText('Lecturer: Sarah Van Wyk')).toBeInTheDocument();
     // The ledger: SCHEDULED rows lead, excused and pending rows carry their
     // chips, and the excuse reason is quoted back. The slot-less PENDING row
@@ -169,7 +147,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       data: makeFeed({ maxHoursPerWeek: null }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     // Without a cap there is no bar to draw — the card says so instead of
     // showing "of —h scheduled" beside an empty progress track.
@@ -185,7 +163,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       data: makeFeed({ sessions: [makeSession(), makeSession({ id: 2, isMine: false })] }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText('You lead')).toBeInTheDocument();
     expect(screen.getByText('1 to lead · 1 total')).toBeInTheDocument();
@@ -197,7 +175,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       data: makeFeed({ sessions: [makeSession(), makeSession({ id: 2, status: 'UNASSIGNED' })] }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     const excuseButtons = await screen.findAllByRole('button', { name: /excuse myself/i });
     expect(excuseButtons).toHaveLength(1);
@@ -206,7 +184,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('shows the empty state when the tutor has no course assignments', async () => {
     mockGet.mockResolvedValue({ status: 200, data: makeFeed({ courses: [], sessions: [] }) });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText('No course assignments yet')).toBeInTheDocument();
   });
@@ -214,7 +192,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('explains the event-driven schedule when the tutor has courses but no sessions', async () => {
     mockGet.mockResolvedValue({ status: 200, data: makeFeed({ sessions: [] }) });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText('No sessions scheduled yet for CS101.')).toBeInTheDocument();
     expect(screen.getByText(/Your lecturer posts events for your courses/i)).toBeInTheDocument();
@@ -228,7 +206,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(
       await screen.findByText('You excused 1 session that still needs a volunteer.'),
@@ -248,7 +226,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText(/No sessions for you to lead right now/i)).toBeInTheDocument();
     expect(screen.queryByText(/Lecturer:/)).not.toBeInTheDocument();
@@ -257,17 +235,30 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('shows the server message on a non-200 load response', async () => {
     mockGet.mockResolvedValue({ status: 403, data: { message: 'Only tutors can view their assigned sessions' } });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(
       await screen.findByText('Only tutors can view their assigned sessions'),
     ).toBeInTheDocument();
   });
 
+  test('retries the load when Try again is clicked', async () => {
+    mockGet
+      .mockResolvedValueOnce({ status: 500, data: {} })
+      .mockResolvedValueOnce({ status: 200, data: makeFeed() });
+
+    renderSchedule();
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('You lead')).toBeInTheDocument();
+  });
+
   test('shows a friendly error when the load request throws', async () => {
     mockGet.mockRejectedValue(new Error('network down'));
 
-    renderDashboard();
+    renderSchedule();
 
     expect(
       await screen.findByText('Could not load your sessions. Please try again later.'),
@@ -277,7 +268,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   describe('excuse flow', () => {
     test('opens an inline reason form when Excuse Myself is clicked and cancels cleanly', async () => {
       mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
-      renderDashboard();
+      renderSchedule();
 
       fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
 
@@ -292,7 +283,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
 
     test('requires a reason before submitting', async () => {
       mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
-      renderDashboard();
+      renderSchedule();
 
       fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
       // The textarea is required, so jsdom blocks a button click on the empty
@@ -312,7 +303,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       mockGet.mockResolvedValueOnce({ status: 200, data: makeFeed({ sessions: [excused] }) });
       mockPatch.mockResolvedValue({ status: 200, data: excused });
 
-      renderDashboard();
+      renderSchedule();
       fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
 
       fireEvent.change(screen.getByLabelText(/reason for excusing yourself/i), {
@@ -329,10 +320,6 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       expect(await screen.findByText('Excused — awaiting volunteer')).toBeInTheDocument();
       // The inline form is closed again after a successful excuse.
       expect(screen.queryByLabelText(/reason for excusing yourself/i)).not.toBeInTheDocument();
-      // The excuse lands with a direct jump into the cover-offer flow.
-      expect(await screen.findByRole('status')).toHaveTextContent(/session excused/i);
-      fireEvent.click(screen.getByRole('button', { name: /set up cover/i }));
-      expect(mockNavigate).toHaveBeenCalledWith('/cover');
     });
 
     test('shows the server message when the excuse is rejected', async () => {
@@ -342,7 +329,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
         data: { message: 'This session has already been excused or has a pending volunteer' },
       });
 
-      renderDashboard();
+      renderSchedule();
       fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
       fireEvent.change(screen.getByLabelText(/reason for excusing yourself/i), {
         target: { value: 'Sick' },
@@ -360,7 +347,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
       mockPatch.mockRejectedValue(new Error('network down'));
 
-      renderDashboard();
+      renderSchedule();
       fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
       fireEvent.change(screen.getByLabelText(/reason for excusing yourself/i), {
         target: { value: 'Sick' },
@@ -376,7 +363,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       mockGet.mockResolvedValue({ status: 200, data: makeFeed() });
       mockPatch.mockResolvedValue({ status: 400, data: {} });
 
-      renderDashboard();
+      renderSchedule();
       fireEvent.click(await screen.findByRole('button', { name: /excuse myself/i }));
       fireEvent.change(screen.getByLabelText(/reason for excusing yourself/i), {
         target: { value: 'Sick' },
@@ -411,7 +398,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     // Both future sessions lead — one chip each.
     expect(await screen.findAllByText('You lead')).toHaveLength(2);
@@ -432,7 +419,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('turns the weekly bar orange once the cap is exceeded', async () => {
     mockGet.mockResolvedValue({ status: 200, data: makeFeed({ weekScheduledHours: 12 }) });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText('12h')).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: 'Scheduled hours this week' })).toHaveClass(
@@ -443,7 +430,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('drops the cap suffix and progress track when no weekly cap is configured', async () => {
     mockGet.mockResolvedValue({ status: 200, data: makeFeed({ maxHoursPerWeek: null }) });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText('scheduled this week')).toBeInTheDocument();
     expect(screen.getByText('No weekly hour limit is on file for you yet.')).toBeInTheDocument();
@@ -463,7 +450,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
       }),
     });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(
       await screen.findByText('You excused 2 sessions that still need a volunteer.'),
@@ -474,7 +461,7 @@ describe('TutorDashboard — tutor sessions with the excuse flow (#37)', () => {
   test('treats an empty 200 payload as no assignments', async () => {
     mockGet.mockResolvedValue({ status: 200 });
 
-    renderDashboard();
+    renderSchedule();
 
     expect(await screen.findByText('No course assignments yet')).toBeInTheDocument();
   });

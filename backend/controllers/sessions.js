@@ -2,6 +2,7 @@ const prisma = require('../prisma/client');
 const catchAsync = require('../utils/catchAsync');
 const { dayOfWeekFor, deriveTimes } = require('../utils/claimRules');
 const { getTutorMonthlyClaimableHours } = require('../utils/systemSettings');
+const { emitDashboardChange } = require('../realtime/io');
 
 // Session lifecycle:
 //   SCHEDULED  — derived from an Event on the tutor's assigned course (never stored)
@@ -717,6 +718,10 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
       },
     });
 
+    // The excusing tutor's dashboard gains a "needs a cover" item and the
+    // organiser queue counts one more uncovered session.
+    emitDashboardChange([requestingUser.id], 'session-excused', { includeOrganisers: true });
+
     return res.json(createdSession);
   }
 
@@ -742,6 +747,8 @@ exports.excuseSession = catchAsync(async (req, res, next) => {
     where: { id: sessionId },
     data: { status: 'UNASSIGNED', excuseReason: reason.trim() },
   });
+
+  emitDashboardChange([requestingUser.id], 'session-excused', { includeOrganisers: true });
 
   res.json(updatedSession);
 });
@@ -824,12 +831,13 @@ exports.volunteerForSession = catchAsync(async (req, res, next) => {
     // The request record and the session status flip happen atomically. The
     // unique constraint on SessionVolunteer.sessionId keeps a single request
     // per session while it is open (or awaiting the lecturer's decision).
+    let lecturerId = null;
     const volunteerRequest = await prisma.$transaction(async (tx) => {
       const session = await tx.session.findUnique({
         where: { id: sessionId },
         include: {
           assignment: { select: { userId: true } },
-          courseSlot: { include: { course: { select: { id: true, minimumMark: true } } } },
+          courseSlot: { include: { course: { select: { id: true, userId: true, minimumMark: true } } } },
         },
       });
       if (!session) {
@@ -873,8 +881,13 @@ exports.volunteerForSession = catchAsync(async (req, res, next) => {
 
       await tx.session.update({ where: { id: sessionId }, data: { status: 'PENDING' } });
 
+      lecturerId = course.userId;
       return request;
     });
+
+    // The course's lecturer now has a cover decision to make; the volunteer
+    // sees their pending offer on their own dashboard.
+    emitDashboardChange([lecturerId, requestingUser.id], 'cover-offered');
 
     res.status(201).json(volunteerRequest);
   } catch (error) {
@@ -912,11 +925,16 @@ exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
     return next(createHttpError(403, 'Only lecturers can decide on volunteer requests'));
   }
 
+  // Whoever the decision touches — the volunteer (offer accepted or turned
+  // down), the excusing tutor (their session's cover state moved) and the
+  // deciding lecturer themselves, so other open tabs stay in sync — collected
+  // for the post-commit emit without leaking into the API response.
+  let affectedUserIds = [];
   const result = await prisma.$transaction(async (tx) => {
     const session = await tx.session.findUnique({
       where: { id: sessionId },
       include: {
-        assignment: { select: { semester: true } },
+        assignment: { select: { semester: true, userId: true } },
         courseSlot: { include: { course: { select: { id: true, userId: true } } } },
         volunteerRequest: true,
       },
@@ -934,6 +952,12 @@ exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
     ) {
       throw createHttpError(409, 'This session has no volunteer request awaiting a decision');
     }
+
+    affectedUserIds = [
+      session.volunteerRequest.userId,
+      session.assignment.userId,
+      session.courseSlot.course.userId,
+    ];
 
     if (decision === 'REJECTED') {
       // The rejected record stays for history; the session returns to the open
@@ -974,6 +998,12 @@ exports.decideVolunteerRequest = catchAsync(async (req, res, next) => {
       data: { assignmentId: coverAssignment.id, status: 'SCHEDULED' },
     });
     return { decision, session: updatedSession, assignmentId: coverAssignment.id };
+  });
+
+  // The volunteer takes the session (or the pool reopens) — refresh every
+  // affected dashboard, plus the organiser queue counts.
+  emitDashboardChange(affectedUserIds, `cover-${decision.toLowerCase()}`, {
+    includeOrganisers: true,
   });
 
   res.json(result);

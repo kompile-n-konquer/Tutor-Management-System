@@ -76,7 +76,7 @@ export default function LoginForm() {
       const role = meResponse.data.role.toLowerCase();
       // Navigate before closing so the route swap and the overlay removal
       // commit together instead of exposing the landing page mid-flight.
-      navigate(ROLE_HOME_ROUTE[role] || "/tutor-dashboard");
+      navigate(ROLE_HOME_ROUTE[role] || "/dashboard");
       closeAuthOverlay();
     } else {
       // No profile or role yet — hand control back to the form.

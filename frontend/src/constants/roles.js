@@ -7,9 +7,11 @@ export const ROLES = Object.freeze({
 });
 
 export const ROLE_HOME_ROUTE = Object.freeze({
-  [ROLES.ORGANISER]: '/organiser',
-  [ROLES.TUTOR]: '/tutor-dashboard',
+  // Every staff role lands on the unified Dashboard; students still start
+  // from the volunteer view where their timetable and applications live.
+  [ROLES.ORGANISER]: '/dashboard',
+  [ROLES.TUTOR]: '/dashboard',
   [ROLES.STUDENT]: '/volunteer',
-  [ROLES.LECTURER]: '/lecturer-view',
-  [ROLES.ADMIN]: '/admin-view',
+  [ROLES.LECTURER]: '/dashboard',
+  [ROLES.ADMIN]: '/dashboard',
 });

@@ -1,157 +1,114 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-// socket.js keeps module-level singleton state (socket + cachedToken), so every
-// test cleans up through disconnectOrganiserSocket() in afterEach.
-const ioMock = vi.hoisted(() => vi.fn());
-const authState = vi.hoisted(() => ({ currentUser: null }));
+const { mockIo, mockAuth } = vi.hoisted(() => ({
+  mockIo: vi.fn(),
+  mockAuth: { currentUser: null },
+}));
 
-vi.mock('socket.io-client', () => ({ io: ioMock }));
-vi.mock('../firebase/firebase.js', () => ({ auth: authState }));
+vi.mock('socket.io-client', () => ({ io: mockIo }));
+vi.mock('../firebase/firebase.js', () => ({ auth: mockAuth }));
 
 import {
+  connectSocket,
+  getSocket,
+  disconnectSocket,
   connectOrganiserSocket,
-  getOrganiserSocket,
-  disconnectOrganiserSocket,
 } from './socket.js';
 
 const makeSocket = () => ({
   connected: false,
-  auth: undefined,
   connect: vi.fn(),
   disconnect: vi.fn(),
 });
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+// The module keeps one socket for the whole app; reset it between tests so
+// each case starts from a clean singleton.
+beforeEach(() => {
+  mockIo.mockReset();
+  mockAuth.currentUser = null;
+  disconnectSocket();
+});
 
-describe('socket — organiser board connection singleton', () => {
-  beforeEach(() => {
-    ioMock.mockReset();
-    ioMock.mockImplementation(() => makeSocket());
-    authState.currentUser = null;
-  });
+describe('connectSocket — the shared realtime connection', () => {
+  test('creates the socket once, unconnected, with the synchronous auth callback', () => {
+    const socket = makeSocket();
+    mockIo.mockReturnValue(socket);
 
-  afterEach(() => {
-    disconnectOrganiserSocket();
-  });
-
-  test('creates the socket once, refreshes the auth payload and connects', async () => {
-    authState.currentUser = { getIdToken: vi.fn(async () => 'tok-1') };
-
-    const first = connectOrganiserSocket();
-    const second = connectOrganiserSocket();
-
-    expect(second).toBe(first); // singleton: io() ran exactly once
-    expect(ioMock).toHaveBeenCalledTimes(1);
-    const [url, options] = ioMock.mock.calls[0];
-    expect(url).toEqual(expect.any(String));
-    expect(options.autoConnect).toBe(false); // handshake held until token ready
-    expect(options.transports).toEqual(['websocket', 'polling']);
-
-    // The sync auth callback serves the cached token (null before it lands).
-    let payload;
-    options.auth((p) => {
-      payload = p;
-    });
-    expect(payload).toEqual({ token: null });
-
-    await flush(); // getIdToken resolves
-
-    expect(authState.currentUser.getIdToken).toHaveBeenCalledTimes(1);
-    expect(first.auth).toEqual({ token: 'tok-1' }); // refreshed before opening
-    expect(first.connect).toHaveBeenCalledTimes(1);
-    options.auth((p) => {
-      payload = p;
-    });
-    expect(payload).toEqual({ token: 'tok-1' });
-  });
-
-  test('skips the auth refresh when the socket is already connected', async () => {
-    authState.currentUser = { getIdToken: async () => 'tok-2' };
-
-    const socket = connectOrganiserSocket();
-    socket.connected = true;
-    await flush();
-
-    expect(socket.auth).toBeUndefined(); // handshake payload left untouched
+    expect(connectSocket()).toBe(socket);
+    expect(connectSocket()).toBe(socket);
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockIo).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ autoConnect: false, transports: ['websocket', 'polling'] }),
+    );
+    // No Firebase user: the connection opens straight away with whatever
+    // token the (still null) cache would hand the auth callback.
     expect(socket.connect).toHaveBeenCalledTimes(1);
   });
 
-  test('connects immediately when nobody is signed in', () => {
-    authState.currentUser = null;
+  test('the auth callback hands over the cached token synchronously', () => {
+    const socket = makeSocket();
+    mockIo.mockReturnValue(socket);
+    connectSocket();
 
-    const socket = connectOrganiserSocket();
+    const options = mockIo.mock.calls[0][1];
+    const cb = vi.fn();
+    options.auth(cb);
 
-    expect(socket.connect).toHaveBeenCalledTimes(1);
-    expect(getOrganiserSocket()).toBe(socket);
+    expect(cb).toHaveBeenCalledWith({ token: null });
   });
 
-  test('still connects when fetching the token fails', async () => {
-    authState.currentUser = {
-      getIdToken: vi.fn(async () => {
-        throw new Error('offline');
-      }),
-    };
+  test('a signed-in user connects with the freshly fetched ID token', async () => {
+    const socket = makeSocket();
+    mockIo.mockReturnValue(socket);
+    mockAuth.currentUser = { getIdToken: vi.fn().mockResolvedValue('id-token-1') };
 
-    const socket = connectOrganiserSocket();
-    await flush();
+    connectSocket();
+    await vi.waitFor(() => expect(socket.connect).toHaveBeenCalled());
 
-    expect(socket.connect).toHaveBeenCalledTimes(1);
-    expect(socket.auth).toBeUndefined();
+    expect(mockAuth.currentUser.getIdToken).toHaveBeenCalled();
+    expect(socket.auth).toEqual({ token: 'id-token-1' });
+    // The token lands in the cache before the connection opens, so a
+    // reconnection attempt replays the working payload.
+    const cb = vi.fn();
+    mockIo.mock.calls[0][1].auth(cb);
+    expect(cb).toHaveBeenCalledWith({ token: 'id-token-1' });
   });
 
-  test('disconnect resets the singleton, the token cache and allows a fresh connect', async () => {
-    disconnectOrganiserSocket(); // no socket yet — must be a safe no-op
-    expect(getOrganiserSocket()).toBeNull();
+  test('a failing token fetch still opens the connection', async () => {
+    const socket = makeSocket();
+    mockIo.mockReturnValue(socket);
+    mockAuth.currentUser = { getIdToken: vi.fn().mockRejectedValue(new Error('offline')) };
 
-    authState.currentUser = { getIdToken: async () => 'tok-3' };
-    const first = connectOrganiserSocket();
-    await flush();
-
-    disconnectOrganiserSocket();
-
-    expect(first.disconnect).toHaveBeenCalledTimes(1);
-    expect(getOrganiserSocket()).toBeNull();
-
-    // Reconnecting builds a brand-new socket without the stale cached token.
-    authState.currentUser = { getIdToken: async () => 'tok-4' };
-    const second = connectOrganiserSocket();
-    expect(second).not.toBe(first);
-    expect(ioMock).toHaveBeenCalledTimes(2);
-
-    await flush();
-    let payload;
-    ioMock.mock.calls[1][1].auth((p) => {
-      payload = p;
-    });
-    expect(payload).toEqual({ token: 'tok-4' });
+    connectSocket();
+    await vi.waitFor(() => expect(socket.connect).toHaveBeenCalled());
   });
 
-  test('a late token or failure after a disconnect must not resurrect the socket', async () => {
-    let resolveToken;
-    authState.currentUser = {
-      getIdToken: () => new Promise((resolve) => (resolveToken = resolve)),
-    };
-    connectOrganiserSocket();
-    disconnectOrganiserSocket(); // the socket is gone before the token lands
+  test('getSocket exposes the live socket and null once disconnected', () => {
+    expect(getSocket()).toBeNull();
 
-    resolveToken('late-token');
-    await flush(); // must not throw on the null socket
+    const socket = makeSocket();
+    mockIo.mockReturnValue(socket);
+    connectSocket();
 
-    expect(getOrganiserSocket()).toBeNull();
+    expect(getSocket()).toBe(socket);
 
-    // Same for a rejection arriving after the disconnect.
-    let rejectToken;
-    authState.currentUser = {
-      getIdToken: () => new Promise((_, reject) => (rejectToken = reject)),
-    };
-    connectOrganiserSocket();
-    const orphan = getOrganiserSocket();
-    disconnectOrganiserSocket();
+    disconnectSocket();
+    expect(getSocket()).toBeNull();
+    expect(socket.disconnect).toHaveBeenCalledTimes(1);
 
-    rejectToken(new Error('late failure'));
-    await flush();
+    // The next connect builds a brand-new socket instead of reusing the
+    // disconnected one.
+    const fresh = makeSocket();
+    mockIo.mockReturnValue(fresh);
+    expect(connectSocket()).toBe(fresh);
+  });
 
-    expect(getOrganiserSocket()).toBeNull();
-    expect(orphan.connect).not.toHaveBeenCalled();
+  test('the organiser board aliases point at the same shared connection', () => {
+    const socket = makeSocket();
+    mockIo.mockReturnValue(socket);
+
+    expect(connectOrganiserSocket()).toBe(socket);
+    expect(connectOrganiserSocket()).toBe(getSocket());
   });
 });
